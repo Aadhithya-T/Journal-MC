@@ -1,7 +1,15 @@
-@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap");
+
+@font-face {
+  font-family: "Minecraft";
+  src: url("/fonts/Monocraft.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
-  --mc-font-pixel: "Press Start 2P", monospace;
+  --mc-font-pixel: "Minecraft", "Press Start 2P", monospace;
   --mc-font-vt: "VT323", monospace;
 
   /* Minecraft Palette */
@@ -50,6 +58,16 @@ body {
   color: var(--mc-text-white);
   min-height: 100vh;
   overflow-x: hidden;
+  letter-spacing: 0.5px;
+}
+
+/* Pixelated rendering only for Minecraft UI elements, NOT video */
+.mc-panel,
+.mc-panel-dark,
+.mc-button,
+.mc-slot,
+.mc-slot-grid,
+.mc-input {
   image-rendering: pixelated;
 }
 
@@ -67,15 +85,10 @@ body {
 }
 
 .mc-video-bg-player {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  min-width: 100%;
-  min-height: 100%;
-  width: auto;
-  height: auto;
-  transform: translate(-50%, -50%);
+  width: 100vw;
+  height: 100vh;
   object-fit: cover;
+  image-rendering: auto;
 }
 
 /* Dark Vignette Overlay for rich contrast */
@@ -85,8 +98,8 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(circle at center, rgba(0, 0, 0, 0.25) 30%, rgba(0, 0, 0, 0.8) 100%),
-              linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 25%, transparent 75%, rgba(0,0,0,0.7) 100%);
+  background: radial-gradient(circle at center, rgba(0, 0, 0, 0.15) 30%, rgba(0, 0, 0, 0.75) 100%),
+              linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.6) 100%);
   pointer-events: none;
   z-index: 1;
 }
@@ -151,90 +164,116 @@ body {
   box-shadow: inset -4px -4px 0px #0a0a0a, inset 4px 4px 0px #333;
 }
 
-/* Buttons */
+/* Authentic Minecraft Buttons */
 .mc-button {
   font-family: var(--mc-font-pixel);
-  font-size: 14px;
+  font-size: 18px;
+  line-height: 1;
   color: #e0e0e0;
-  text-shadow: 2px 2px 0px #000;
-  background-color: var(--mc-btn-bg);
-  border: 3px solid #000;
-  border-top-color: var(--mc-btn-border-light);
-  border-left-color: var(--mc-btn-border-light);
-  border-right-color: var(--mc-btn-border-dark);
-  border-bottom-color: var(--mc-btn-border-dark);
-  padding: 12px 24px;
+  text-shadow: 2px 2px 0px #2a2a2a;
+  background: #737373;
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 0%, rgba(0, 0, 0, 0.08) 100%);
+  border: 2px solid #000000;
+  border-top-color: #8b8b8b;
+  border-left-color: #8b8b8b;
+  border-right-color: #373737;
+  border-bottom-color: #373737;
+  box-shadow: inset -2px -2px 0px #222222, inset 2px 2px 0px rgba(255, 255, 255, 0.15);
+  padding: 12px 20px;
+  min-height: 44px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   text-decoration: none;
-  transition: background-color 0.1s, transform 0.05s;
-  box-shadow: inset -2px -2px 0px rgba(0, 0, 0, 0.4);
+  transition: none;
+  box-sizing: border-box;
 }
 
 .mc-button:hover:not(:disabled) {
-  background-color: var(--mc-btn-hover);
-  color: #ffffff;
+  background: #8b8b8b;
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.18) 0%, rgba(0, 0, 0, 0.05) 100%);
+  color: #ffffa0;
+  text-shadow: 2px 2px 0px #3f3f3f;
+  border-top-color: #c6c6c6;
+  border-left-color: #c6c6c6;
+  border-right-color: #4a4a4a;
+  border-bottom-color: #4a4a4a;
+  box-shadow: inset -2px -2px 0px #2a2a2a, inset 2px 2px 0px rgba(255, 255, 255, 0.35);
 }
 
 .mc-button:active:not(:disabled) {
-  border-top-color: var(--mc-btn-border-dark);
-  border-left-color: var(--mc-btn-border-dark);
-  border-right-color: var(--mc-btn-border-light);
-  border-bottom-color: var(--mc-btn-border-light);
-  transform: translateY(2px);
+  background: #555555;
+  border-top-color: #222222;
+  border-left-color: #222222;
+  border-right-color: #8b8b8b;
+  border-bottom-color: #8b8b8b;
+  box-shadow: inset 2px 2px 0px #111111;
+  transform: translateY(1px);
 }
 
 .mc-button-green {
-  background-color: var(--mc-btn-green-bg);
-  border-top-color: var(--mc-btn-green-border-light);
-  border-left-color: var(--mc-btn-green-border-light);
-  border-right-color: var(--mc-btn-green-border-dark);
-  border-bottom-color: var(--mc-btn-green-border-dark);
+  background: #2e7d32;
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 0%, rgba(0, 0, 0, 0.1) 100%);
+  border-top-color: #4caf50;
+  border-left-color: #4caf50;
+  border-right-color: #1b5e20;
+  border-bottom-color: #1b5e20;
 }
 
 .mc-button-green:hover:not(:disabled) {
-  background-color: var(--mc-btn-green-hover);
+  background: #388e3c;
+  border-top-color: #81c784;
+  border-left-color: #81c784;
 }
 
 .mc-button-disabled,
 .mc-button:disabled {
-  background-color: #4a4a4a !important;
+  background: #4a4a4a !important;
   color: #888888 !important;
-  border-top-color: #666666 !important;
-  border-left-color: #666666 !important;
+  border-top-color: #5a5a5a !important;
+  border-left-color: #5a5a5a !important;
   border-right-color: #222222 !important;
   border-bottom-color: #222222 !important;
-  text-shadow: 2px 2px 0px #111 !important;
+  text-shadow: 2px 2px 0px #111111 !important;
+  box-shadow: none !important;
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
-/* Minecraft Inputs */
-.mc-input {
+/* Authentic Minecraft Inputs & Textareas */
+.mc-input, textarea.mc-input {
   font-family: var(--mc-font-pixel);
-  font-size: 14px;
+  font-size: 16px;
   background-color: #000000;
   color: #ffffff;
-  border: 3px solid #a0a0a0;
+  text-shadow: 1px 1px 0px #222222;
+  border: 2px solid #000000;
   border-top-color: #373737;
   border-left-color: #373737;
-  border-bottom-color: #ffffff;
-  border-right-color: #ffffff;
-  padding: 12px 16px;
+  border-bottom-color: #8b8b8b;
+  border-right-color: #8b8b8b;
+  box-shadow: inset 2px 2px 0px #1a1a1a;
+  padding: 10px 14px;
   outline: none;
   width: 100%;
+  box-sizing: border-box;
 }
 
-.mc-input:focus {
-  border-color: #ffff55;
+.mc-input:focus, textarea.mc-input:focus {
+  border-color: #ffffff;
+  box-shadow: inset 2px 2px 0px #1a1a1a, 0 0 0 1px #ffffff;
+}
+
+.mc-input::placeholder {
+  color: #777777;
 }
 
 /* Minecraft Header Typography */
 .mc-title {
-  font-size: 32px;
+  font-family: var(--mc-font-pixel);
+  font-size: 36px;
   color: var(--mc-text-yellow);
   text-shadow: 4px 4px 0px #3f3f00, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 2px 2px 0px #000;
   letter-spacing: 2px;
