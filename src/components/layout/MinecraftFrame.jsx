@@ -1,7 +1,6 @@
 import React from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useWorld } from "../../hooks/useWorld";
-import { VideoSelector } from "../background/VideoSelector";
 
 export function MinecraftFrame({ children, title }) {
   const { currentWorld, selectWorld, worlds } = useWorld();
@@ -58,7 +57,6 @@ export function MinecraftFrame({ children, title }) {
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <VideoSelector compact={true} />
 
               {currentWorld && (
                 <>

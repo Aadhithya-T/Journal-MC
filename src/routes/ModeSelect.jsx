@@ -1,7 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
-import { VideoSelector } from "../components/background/VideoSelector";
 
 export function ModeSelect() {
   const navigate = useNavigate();
@@ -9,8 +8,8 @@ export function ModeSelect() {
   return (
     <div className="mc-dirt-background" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
       {/* Top Banner / Logo Area */}
-      <div className="mc-container" style={{ justifyContent: "center", paddingTop: "60px", paddingBottom: "40px" }}>
-        <div style={{ textAlign: "center", marginBottom: "36px" }}>
+      <div className="mc-container" style={{ justifyContent: "center", paddingTop: "80px", paddingBottom: "40px" }}>
+        <div style={{ textAlign: "center", marginBottom: "40px" }}>
           <div
             style={{
               fontSize: "14px",
@@ -22,7 +21,7 @@ export function ModeSelect() {
           >
             MINECRAFT
           </div>
-          <h1 className="mc-title" style={{ fontSize: "38px", lineHeight: "1.2", margin: "0 auto" }}>
+          <h1 className="mc-title" style={{ fontSize: "40px", lineHeight: "1.2", margin: "0 auto" }}>
             JOURNAL APP
           </h1>
           <div
@@ -42,7 +41,7 @@ export function ModeSelect() {
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: "10px",
+            gap: "12px",
             width: "100%",
             maxWidth: "400px",
             alignItems: "center"
@@ -62,13 +61,6 @@ export function ModeSelect() {
           >
             Multiplayer
           </Button>
-
-          {/* Bottom Row Buttons (Options / Switch Wallpaper) */}
-          <div style={{ display: "flex", gap: "10px", width: "100%", marginTop: "6px" }}>
-            <div style={{ flex: 1 }}>
-              <VideoSelector />
-            </div>
-          </div>
         </div>
       </div>
 
