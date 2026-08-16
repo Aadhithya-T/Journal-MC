@@ -37,36 +37,33 @@ export function MinecraftFrame({ children, title }) {
               <button
                 onClick={() => navigate("/")}
                 className="mc-button"
-                style={{ padding: "6px 12px", fontSize: "11px" }}
+                style={{ padding: "8px 14px", fontSize: "15px" }}
               >
                 🏠 Main Menu
               </button>
 
               {currentWorld && (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "#ffff55", fontSize: "12px" }}>
+                  <span style={{ color: "#ffff55", fontSize: "15px", textShadow: "1px 1px 0 #000" }}>
                     🌍 World: <strong>{currentWorld.name}</strong>
                   </span>
-                  {currentWorld.hardcore && (
-                    <span style={{ color: "#ff5555", fontSize: "10px" }} title="Hardcore Mode Enabled">
-                      🖤 Hardcore
-                    </span>
-                  )}
+                  <span style={{ color: "#ff5555", fontSize: "14px", textShadow: "1px 1px 0 #2a0000" }} title="Hardcore Mode Enabled">
+                    🖤 Hardcore
+                  </span>
                 </div>
               )}
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-
               {currentWorld && (
                 <>
                   <Link
                     to="/journal"
                     className="mc-button"
                     style={{
-                      padding: "6px 12px",
-                      fontSize: "11px",
-                      backgroundColor: location.pathname === "/journal" ? "#388e3c" : "#707070"
+                      padding: "8px 14px",
+                      fontSize: "15px",
+                      backgroundColor: location.pathname === "/journal" ? "#388e3c" : "#737373"
                     }}
                   >
                     📖 Journal
@@ -76,9 +73,9 @@ export function MinecraftFrame({ children, title }) {
                     to="/journal/profile"
                     className="mc-button"
                     style={{
-                      padding: "6px 12px",
-                      fontSize: "11px",
-                      backgroundColor: location.pathname === "/journal/profile" ? "#388e3c" : "#707070"
+                      padding: "8px 14px",
+                      fontSize: "15px",
+                      backgroundColor: location.pathname === "/journal/profile" ? "#388e3c" : "#737373"
                     }}
                   >
                     👤 Profile
@@ -89,7 +86,7 @@ export function MinecraftFrame({ children, title }) {
               <button
                 onClick={() => navigate("/setup")}
                 className="mc-button"
-                style={{ padding: "6px 12px", fontSize: "11px" }}
+                style={{ padding: "8px 14px", fontSize: "15px" }}
               >
                 ➕ New World
               </button>

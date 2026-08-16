@@ -1,18 +1,14 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MinecraftFrame } from "../components/layout/MinecraftFrame";
 import { Button } from "../components/ui/Button";
-import { Toggle } from "../components/ui/Toggle";
 import { useWorld } from "../hooks/useWorld";
-import { BIOME_METADATA } from "../lib/biome";
 
 export function WorldSetup() {
   const navigate = useNavigate();
   const { createWorld, loading } = useWorld();
 
   const [name, setName] = useState("New World");
-  const [hardcore, setHardcore] = useState(false);
-  const [biome, setBiome] = useState("plains");
   const [validationError, setValidationError] = useState("");
 
   const handleSubmit = async (e) => {
@@ -23,7 +19,8 @@ export function WorldSetup() {
     }
 
     try {
-      await createWorld({ name, hardcore, biome });
+      // Hardcoded Hardcore mode & default plains biome
+      await createWorld({ name, hardcore: true, biome: "plains" });
       navigate("/journal");
     } catch (err) {
       console.error("World creation failed", err);
@@ -31,21 +28,24 @@ export function WorldSetup() {
   };
 
   return (
-    <MinecraftFrame title="CREATE NEW WORLD">
+    <MinecraftFrame title="Create New World">
       <div
         className="mc-panel"
         style={{
-          maxWidth: "600px",
+          maxWidth: "520px",
           width: "100%",
           display: "flex",
           flexDirection: "column",
-          gap: "24px"
+          gap: "24px",
+          padding: "32px 28px"
         }}
       >
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           {/* World Name Input */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <label style={{ fontSize: "12px", color: "#222" }}>World Name</label>
+            <label style={{ fontSize: "16px", color: "#373737", textShadow: "1px 1px 0 #ffffff" }}>
+              World Name
+            </label>
             <input
               type="text"
               className="mc-input"
@@ -54,82 +54,64 @@ export function WorldSetup() {
                 setName(e.target.value);
                 setValidationError("");
               }}
-              placeholder="e.g. My Survival Journal"
+              placeholder="Enter world name..."
               maxLength={32}
               autoFocus
+              style={{ fontSize: "18px", padding: "12px 14px" }}
             />
             {validationError && (
-              <span style={{ color: "#aa0000", fontSize: "10px" }}>{validationError}</span>
+              <span style={{ color: "#aa0000", fontSize: "13px" }}>{validationError}</span>
             )}
           </div>
 
-          {/* Game Mode / Hardcore Toggle */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <label style={{ fontSize: "12px", color: "#222" }}>Game Mode</label>
-            <Toggle
-              label={hardcore ? "Hardcore Mode (1 Life)" : "Survival Mode"}
-              checked={hardcore}
-              onChange={(val) => setHardcore(val)}
-              description={
-                hardcore
-                  ? "WARNING: World locks on death! Ultra dark styling and high stakes."
-                  : "Standard survival journal with respawn enabled."
-              }
-            />
-          </div>
-
-          {/* Biome Selector */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <label style={{ fontSize: "12px", color: "#222" }}>Starting Biome</label>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-                gap: "10px"
-              }}
-            >
-              {Object.entries(BIOME_METADATA).map(([key, data]) => {
-                const isSelected = biome === key;
-                return (
-                  <div
-                    key={key}
-                    onClick={() => setBiome(key)}
-                    style={{
-                      border: "3px solid #000",
-                      borderColor: isSelected ? "#ffff55" : "#373737",
-                      backgroundColor: isSelected ? "#4a4a4a" : "#222222",
-                      color: "#ffffff",
-                      padding: "10px",
-                      cursor: "pointer",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px"
-                    }}
-                  >
-                    <span style={{ fontSize: "14px" }}>
-                      {data.icon} {data.name}
-                    </span>
-                    <span style={{ fontSize: "9px", color: "#aaaaaa" }}>{data.temperature}</span>
-                  </div>
-                );
-              })}
+          {/* Hardcore Mode Status Card (Fixed to Hardcore) */}
+          <div
+            style={{
+              backgroundColor: "#1b1b1b",
+              border: "2px solid #000000",
+              borderTopColor: "#373737",
+              borderLeftColor: "#373737",
+              borderRightColor: "#555555",
+              borderBottomColor: "#555555",
+              padding: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "20px" }}>🖤</span>
+              <span style={{ fontSize: "17px", color: "#ff5555", textShadow: "2px 2px 0 #2a0000" }}>
+                Game Mode: Hardcore
+              </span>
+            </div>
+            <div style={{ fontSize: "13px", color: "#aaaaaa", lineHeight: "1.4", marginLeft: "28px" }}>
+              Same as Survival mode, locked at hardest difficulty and one life only.
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Actions: Create New World & Cancel */}
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              gap: "16px",
-              marginTop: "12px"
+              gap: "14px",
+              marginTop: "8px"
             }}
           >
-            <Button variant="green" type="submit" disabled={loading} style={{ flex: 1 }}>
-              {loading ? "Generating..." : "⚡ Create New World"}
+            <Button
+              type="submit"
+              disabled={loading}
+              style={{ flex: 1, height: "46px", fontSize: "17px" }}
+            >
+              {loading ? "Generating..." : "Create New World"}
             </Button>
 
-            <Button onClick={() => navigate("/")} style={{ flex: 1 }}>
+            <Button
+              type="button"
+              onClick={() => navigate("/")}
+              style={{ flex: 1, height: "46px", fontSize: "17px" }}
+            >
               Cancel
             </Button>
           </div>
