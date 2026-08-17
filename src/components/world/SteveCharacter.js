@@ -14,6 +14,7 @@ function createSteveTextures() {
     const texture = new THREE.CanvasTexture(canvas);
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
+    texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
   };
 
@@ -127,7 +128,6 @@ export class SteveCharacter {
     this.group.add(this.torso);
 
     // --- HEAD (y = 1.50 to 2.00) ---
-    // Materials: [+X, -X, +Y, -Y, +Z (Front), -Z (Back)]
     this.head = new THREE.Mesh(headGeo, [
       hairMat, hairMat, hairMat, skinMat, headFrontMat, hairMat
     ]);
@@ -173,12 +173,33 @@ export class SteveCharacter {
     this.group.rotation.y = yRad;
   }
 
+  setVisible(visible) {
+    this.group.visible = visible;
+  }
+
   triggerMining() {
     this.isMiningAnim = true;
     this.miningTime = 0;
   }
 
-  updateAnimation(deltaTime, isMoving, isGrounded = true) {
+  updateAnimation(deltaTime, isMoving, isGrounded = true, isSneaking = false) {
+    // Crouch pose when sneaking
+    if (isSneaking) {
+      this.torso.position.y = 1.0;
+      this.head.position.y = 1.6;
+      this.leftArmGroup.position.y = 1.35;
+      this.rightArmGroup.position.y = 1.35;
+      this.torso.rotation.x = 0.25;
+      this.head.rotation.x = -0.15;
+    } else {
+      this.torso.position.y = 1.125;
+      this.head.position.y = 1.75;
+      this.leftArmGroup.position.y = 1.50;
+      this.rightArmGroup.position.y = 1.50;
+      this.torso.rotation.x = 0;
+      this.head.rotation.x = 0;
+    }
+
     if (!isGrounded) {
       this.leftLegGroup.rotation.x = THREE.MathUtils.lerp(this.leftLegGroup.rotation.x, -0.4, 0.2);
       this.rightLegGroup.rotation.x = THREE.MathUtils.lerp(this.rightLegGroup.rotation.x, 0.4, 0.2);
@@ -187,8 +208,9 @@ export class SteveCharacter {
         this.rightArmGroup.rotation.x = THREE.MathUtils.lerp(this.rightArmGroup.rotation.x, -0.5, 0.2);
       }
     } else if (isMoving) {
-      this.walkAnimTime += deltaTime * 8;
-      const angle = Math.sin(this.walkAnimTime) * 0.6;
+      const animSpeed = isSneaking ? 5 : 8;
+      this.walkAnimTime += deltaTime * animSpeed;
+      const angle = Math.sin(this.walkAnimTime) * (isSneaking ? 0.35 : 0.6);
 
       this.leftLegGroup.rotation.x = angle;
       this.rightLegGroup.rotation.x = -angle;
@@ -209,7 +231,7 @@ export class SteveCharacter {
     }
 
     if (this.isMiningAnim) {
-      this.miningTime += deltaTime * 12;
+      this.miningTime += deltaTime * 14;
       this.rightArmGroup.rotation.x = -Math.abs(Math.sin(this.miningTime)) * 1.5 - 0.3;
       if (this.miningTime > Math.PI * 2) {
         this.isMiningAnim = false;
