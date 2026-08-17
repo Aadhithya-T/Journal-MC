@@ -6,7 +6,6 @@ import { VideoBackground } from "./components/background/VideoBackground";
 import { ModeSelect } from "./routes/ModeSelect";
 import { WorldSetup } from "./routes/WorldSetup";
 import { Journal } from "./routes/Journal";
-import { Profile } from "./routes/Profile";
 import "./styles/theme.css";
 
 export default function App() {
@@ -19,7 +18,6 @@ export default function App() {
             <Route path="/" element={<ModeSelect />} />
             <Route path="/setup" element={<WorldSetup />} />
             <Route path="/journal" element={<Journal />} />
-            <Route path="/journal/profile" element={<Profile />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

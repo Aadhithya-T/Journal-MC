@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Texture Packs & Downloads
+Faithful*
+*Release*
+public/texturepacks
+*.zip
