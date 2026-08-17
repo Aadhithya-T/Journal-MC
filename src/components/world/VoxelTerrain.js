@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { TEXTURE_PACKS } from './texturePacks';
 
 export class VoxelTerrain {
-  constructor(size = 80, texturePackId = 'vanilla') {
+  constructor(size = 80, texturePackId = 'faithful64') {
     this.size = size;
     this.half = Math.floor(size / 2);
     this.currentTexturePack = texturePackId;
@@ -10,34 +10,81 @@ export class VoxelTerrain {
     this.group.name = 'MultiChunkVoxelTerrain';
 
     this.heightMap = new Map();
+    this.blockTypeMap = new Map();
     this.pois = [];
-    this.solidBlocks = new Set(); // Key: "x,y,z" for 1x1x1 solid obstacle blocks
+    this.solidBlocks = new Set(); // Key: "x,y,z"
     this.instancedMeshes = {};
+    this.waterMeshes = [];
 
     this.initTerrain();
   }
 
   computeTerrainHeight(x, z) {
     const dCenter = Math.sqrt(x * x + z * z);
-    if (dCenter < 5) return 0; // Flat spawn
+    if (dCenter < 4) return 0; // Flat spawn
 
-    const wave1 = Math.sin(x * 0.12) * Math.cos(z * 0.12) * 2.2;
-    const wave2 = Math.sin(x * 0.05 + 1.2) * Math.cos(z * 0.05 - 0.8) * 3.5;
-    const wave3 = Math.sin(x * 0.25) * Math.sin(z * 0.25) * 0.8;
+    const wave1 = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 2.5;
+    const wave2 = Math.sin(x * 0.04 + 1.2) * Math.cos(z * 0.04 - 0.8) * 3.8;
+    const wave3 = Math.sin(x * 0.22) * Math.sin(z * 0.22) * 0.9;
 
     let h = Math.round(wave1 + wave2 + wave3);
 
-    const dLake1 = Math.sqrt((x - 14) ** 2 + (z - 28) ** 2);
-    if (dLake1 < 6) h = -1;
+    // Lake 1 (Crystal Lake)
+    const dLake1 = Math.sqrt((x - 12) ** 2 + (z - 26) ** 2);
+    if (dLake1 < 6.5) h = -1;
 
-    const dLake2 = Math.sqrt((x + 20) ** 2 + (z + 16) ** 2);
-    if (dLake2 < 5) h = -1;
+    // Lake 2 (Misty Hollow)
+    const dLake2 = Math.sqrt((x + 18) ** 2 + (z + 14) ** 2);
+    if (dLake2 < 5.5) h = -1;
 
-    return THREE.MathUtils.clamp(h, -2, 6);
+    return THREE.MathUtils.clamp(h, -1, 7);
   }
 
-  createMaterials(packId = 'vanilla') {
-    const pack = TEXTURE_PACKS[packId] || TEXTURE_PACKS.vanilla;
+  isNearWater(x, z) {
+    const dLake1 = Math.sqrt((x - 12) ** 2 + (z - 26) ** 2);
+    const dLake2 = Math.sqrt((x + 18) ** 2 + (z + 14) ** 2);
+    return (dLake1 >= 6.5 && dLake1 <= 8.5) || (dLake2 >= 5.5 && dLake2 <= 7.2);
+  }
+
+  createCrossGeometry() {
+    const geo = new THREE.BufferGeometry();
+    const w = 0.45;
+    const h = 0.85;
+
+    // 2 intersecting quads at 45° and 135° (X-shape)
+    const vertices = new Float32Array([
+      // Quad 1
+      -w, 0, -w,   w, 0,  w,   w, h,  w,
+      -w, 0, -w,   w, h,  w,  -w, h, -w,
+       w, 0,  w,  -w, 0, -w,  -w, h, -w,
+       w, 0,  w,  -w, h, -w,   w, h,  w,
+      // Quad 2
+      -w, 0,  w,   w, 0, -w,   w, h, -w,
+      -w, 0,  w,   w, h, -w,  -w, h,  w,
+       w, 0, -w,  -w, 0,  w,  -w, h,  w,
+       w, 0, -w,  -w, h,  w,   w, h, -w
+    ]);
+
+    const uvs = new Float32Array([
+      0, 0,  1, 0,  1, 1,
+      0, 0,  1, 1,  0, 1,
+      1, 0,  0, 0,  0, 1,
+      1, 0,  0, 1,  1, 1,
+
+      0, 0,  1, 0,  1, 1,
+      0, 0,  1, 1,  0, 1,
+      1, 0,  0, 0,  0, 1,
+      1, 0,  0, 1,  1, 1
+    ]);
+
+    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  createMaterials(packId = 'faithful64') {
+    const pack = TEXTURE_PACKS[packId] || TEXTURE_PACKS.faithful64 || TEXTURE_PACKS.vanilla;
     const textures = pack.getTextures();
 
     const grassTopMat = new THREE.MeshLambertMaterial({ map: textures.grassTopTex });
@@ -45,14 +92,65 @@ export class VoxelTerrain {
     const dirtMat = new THREE.MeshLambertMaterial({ map: textures.dirtTex });
     const stoneMat = new THREE.MeshLambertMaterial({ map: textures.stoneTex });
     const cobbleMat = new THREE.MeshLambertMaterial({ map: textures.cobbleTex });
+    const sandMat = new THREE.MeshLambertMaterial({ map: textures.sandTex });
+    const bedrockMat = new THREE.MeshLambertMaterial({ map: textures.bedrockTex });
     const oakLogMat = new THREE.MeshLambertMaterial({ map: textures.oakLogTex });
-    const leavesMat = new THREE.MeshLambertMaterial({ map: textures.leavesTex, color: 0x5fa832, transparent: true, opacity: 0.95 });
+    const leavesMat = new THREE.MeshLambertMaterial({
+      map: textures.leavesTex,
+      color: 0x5fa832,
+      transparent: true,
+      opacity: 0.96,
+      alphaTest: 0.2
+    });
     const diamondMat = new THREE.MeshLambertMaterial({ map: textures.diamondOreTex });
-    const waterMat = new THREE.MeshLambertMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.75 });
+    
+    // Animated semi-translucent Minecraft Water
+    const waterMat = new THREE.MeshLambertMaterial({
+      color: 0x2563eb,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false
+    });
+
+    // Foliage materials
+    const tallGrassMat = new THREE.MeshLambertMaterial({
+      map: textures.tallGrassTex,
+      transparent: true,
+      alphaTest: 0.3,
+      side: THREE.DoubleSide
+    });
+
+    const poppyMat = new THREE.MeshLambertMaterial({
+      map: textures.poppyTex,
+      transparent: true,
+      alphaTest: 0.3,
+      side: THREE.DoubleSide
+    });
+
+    const dandelionMat = new THREE.MeshLambertMaterial({
+      map: textures.dandelionTex,
+      transparent: true,
+      alphaTest: 0.3,
+      side: THREE.DoubleSide
+    });
 
     const grassBlockMats = [grassSideMat, grassSideMat, grassTopMat, dirtMat, grassSideMat, grassSideMat];
 
-    return { grassBlockMats, dirtMat, stoneMat, cobbleMat, oakLogMat, leavesMat, diamondMat, waterMat };
+    return {
+      grassBlockMats,
+      dirtMat,
+      stoneMat,
+      cobbleMat,
+      sandMat,
+      bedrockMat,
+      oakLogMat,
+      leavesMat,
+      diamondMat,
+      waterMat,
+      tallGrassMat,
+      poppyMat,
+      dandelionMat
+    };
   }
 
   switchTexturePack(packId) {
@@ -63,46 +161,104 @@ export class VoxelTerrain {
     if (this.instancedMeshes.grass) this.instancedMeshes.grass.material = mats.grassBlockMats;
     if (this.instancedMeshes.dirt) this.instancedMeshes.dirt.material = mats.dirtMat;
     if (this.instancedMeshes.stone) this.instancedMeshes.stone.material = mats.stoneMat;
+    if (this.instancedMeshes.sand) this.instancedMeshes.sand.material = mats.sandMat;
+    if (this.instancedMeshes.bedrock) this.instancedMeshes.bedrock.material = mats.bedrockMat;
     if (this.instancedMeshes.water) this.instancedMeshes.water.material = mats.waterMat;
     if (this.instancedMeshes.logs) this.instancedMeshes.logs.material = mats.oakLogMat;
     if (this.instancedMeshes.leaves) this.instancedMeshes.leaves.material = mats.leavesMat;
+    if (this.instancedMeshes.tallGrass) this.instancedMeshes.tallGrass.material = mats.tallGrassMat;
+    if (this.instancedMeshes.poppy) this.instancedMeshes.poppy.material = mats.poppyMat;
+    if (this.instancedMeshes.dandelion) this.instancedMeshes.dandelion.material = mats.dandelionMat;
   }
 
   initTerrain() {
     this.solidBlocks.clear();
     const mats = this.createMaterials(this.currentTexturePack);
     const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const crossGeo = this.createCrossGeometry();
 
     const grassTransforms = [];
     const dirtTransforms = [];
     const stoneTransforms = [];
+    const sandTransforms = [];
+    const bedrockTransforms = [];
     const waterTransforms = [];
 
+    const tallGrassTransforms = [];
+    const poppyTransforms = [];
+    const dandelionTransforms = [];
+
     const dummy = new THREE.Object3D();
+    const BEDROCK_Y = -4;
 
     for (let x = -this.half; x <= this.half; x++) {
       for (let z = -this.half; z <= this.half; z++) {
-        const h = this.computeTerrainHeight(x, z);
-        this.heightMap.set(`${x},${z}`, h);
+        const surfaceH = this.computeTerrainHeight(x, z);
+        this.heightMap.set(`${x},${z}`, surfaceH);
 
-        dummy.position.set(x, h, z);
+        const isWater = surfaceH < 0;
+        const isSand = !isWater && this.isNearWater(x, z);
+
+        // Bedrock Bottom Layer
+        dummy.position.set(x, BEDROCK_Y, z);
         dummy.updateMatrix();
+        bedrockTransforms.push(dummy.matrix.clone());
 
-        if (h < 0) {
+        // Stone Core Column (from BEDROCK_Y + 1 up to surfaceH - 2)
+        const stoneTop = isWater ? -2 : surfaceH - 2;
+        for (let y = BEDROCK_Y + 1; y <= stoneTop; y++) {
+          dummy.position.set(x, y, z);
+          dummy.updateMatrix();
+          stoneTransforms.push(dummy.matrix.clone());
+        }
+
+        if (isWater) {
+          // Water surface block at y = 0
+          dummy.position.set(x, 0, z);
+          dummy.updateMatrix();
           waterTransforms.push(dummy.matrix.clone());
-          dummy.position.set(x, h - 1, z);
-          dummy.updateMatrix();
-          dirtTransforms.push(dummy.matrix.clone());
-        } else {
-          grassTransforms.push(dummy.matrix.clone());
-          dummy.position.set(x, h - 1, z);
-          dummy.updateMatrix();
-          dirtTransforms.push(dummy.matrix.clone());
 
-          if (h > 1) {
-            dummy.position.set(x, h - 2, z);
+          // Dirt beneath water
+          dummy.position.set(x, -1, z);
+          dummy.updateMatrix();
+          dirtTransforms.push(dummy.matrix.clone());
+        } else if (isSand) {
+          // Sand Shoreline
+          dummy.position.set(x, surfaceH, z);
+          dummy.updateMatrix();
+          sandTransforms.push(dummy.matrix.clone());
+
+          if (surfaceH - 1 > BEDROCK_Y) {
+            dummy.position.set(x, surfaceH - 1, z);
             dummy.updateMatrix();
-            stoneTransforms.push(dummy.matrix.clone());
+            sandTransforms.push(dummy.matrix.clone());
+          }
+        } else {
+          // Top Grass Block
+          dummy.position.set(x, surfaceH, z);
+          dummy.updateMatrix();
+          grassTransforms.push(dummy.matrix.clone());
+
+          // Sub-surface Dirt Layer
+          if (surfaceH - 1 > BEDROCK_Y) {
+            dummy.position.set(x, surfaceH - 1, z);
+            dummy.updateMatrix();
+            dirtTransforms.push(dummy.matrix.clone());
+          }
+
+          // Foliage & Flower Placement (Pseudo-random based on coords)
+          if (Math.abs(x) > 2 || Math.abs(z) > 2) {
+            const seed = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+            dummy.position.set(x, surfaceH + 0.5, z);
+            dummy.updateMatrix();
+
+            if (seed < 0.18) {
+              tallGrassTransforms.push(dummy.matrix.clone());
+            } else if (seed >= 0.18 && seed < 0.22) {
+              poppyTransforms.push(dummy.matrix.clone());
+            } else if (seed >= 0.22 && seed < 0.25) {
+              dandelionTransforms.push(dummy.matrix.clone());
+            }
           }
         }
       }
@@ -135,10 +291,37 @@ export class VoxelTerrain {
       this.instancedMeshes.stone = sMesh;
       this.group.add(sMesh);
     }
+    if (sandTransforms.length > 0) {
+      const sndMesh = createInstanced(boxGeo, mats.sandMat, sandTransforms, 'InstancedSand');
+      this.instancedMeshes.sand = sndMesh;
+      this.group.add(sndMesh);
+    }
+    if (bedrockTransforms.length > 0) {
+      const bMesh = createInstanced(boxGeo, mats.bedrockMat, bedrockTransforms, 'InstancedBedrock');
+      this.instancedMeshes.bedrock = bMesh;
+      this.group.add(bMesh);
+    }
     if (waterTransforms.length > 0) {
       const wMesh = createInstanced(boxGeo, mats.waterMat, waterTransforms, 'InstancedWater');
       this.instancedMeshes.water = wMesh;
       this.group.add(wMesh);
+    }
+
+    // Foliage Cross-Quads
+    if (tallGrassTransforms.length > 0) {
+      const tgMesh = createInstanced(crossGeo, mats.tallGrassMat, tallGrassTransforms, 'InstancedTallGrass');
+      this.instancedMeshes.tallGrass = tgMesh;
+      this.group.add(tgMesh);
+    }
+    if (poppyTransforms.length > 0) {
+      const pMesh = createInstanced(crossGeo, mats.poppyMat, poppyTransforms, 'InstancedPoppy');
+      this.instancedMeshes.poppy = pMesh;
+      this.group.add(pMesh);
+    }
+    if (dandelionTransforms.length > 0) {
+      const dMesh = createInstanced(crossGeo, mats.dandelionMat, dandelionTransforms, 'InstancedDandelion');
+      this.instancedMeshes.dandelion = dMesh;
+      this.group.add(dMesh);
     }
 
     // Trees (Solid Trunks that block player movement)
@@ -164,7 +347,6 @@ export class VoxelTerrain {
         dummy.position.set(x, logY, z);
         dummy.updateMatrix();
         treeTransformsLogs.push(dummy.matrix.clone());
-        // Register solid obstacle
         this.solidBlocks.add(`${x},${logY},${z}`);
       }
 
@@ -215,7 +397,6 @@ export class VoxelTerrain {
       diamondMesh.castShadow = true;
       this.group.add(diamondMesh);
 
-      // Register solid diamond ore block
       this.solidBlocks.add(`${x},${oreY},${z}`);
 
       this.pois.push({
@@ -336,7 +517,7 @@ export class VoxelTerrain {
     return h !== undefined ? h + 0.5 : 0.5;
   }
 
-  // Checks if Steve's 3D bounding cylinder overlaps any solid obstacle block (trees, pillars, chests, ore)
+  // Checks if Steve's 3D bounding cylinder overlaps any solid obstacle block
   isCollidingWithSolid(x, y, z, radius = 0.35, height = 1.8) {
     const minX = Math.floor(x - radius);
     const maxX = Math.ceil(x + radius);
@@ -349,7 +530,6 @@ export class VoxelTerrain {
       for (let bz = minZ; bz <= maxZ; bz++) {
         for (let by = minY; by <= maxY; by++) {
           if (this.solidBlocks.has(`${bx},${by},${bz}`)) {
-            // AABB vs Cylinder/Box test
             const dx = Math.max(Math.abs(x - bx) - 0.5, 0);
             const dz = Math.max(Math.abs(z - bz) - 0.5, 0);
             if (dx * dx + dz * dz < radius * radius) {

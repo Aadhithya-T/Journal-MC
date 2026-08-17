@@ -13,6 +13,7 @@ function createTexture(width, height, drawFn) {
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
   texture.minFilter = THREE.NearestFilter;
+  texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
 
@@ -21,6 +22,7 @@ function loadFileTexture(path) {
   const tex = loader.load(path);
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -39,7 +41,60 @@ export const TEXTURE_PACKS = {
       const diamondOreTex = loadFileTexture('/texturepacks/faithful64x/diamond_ore.png');
       const cobbleTex = loadFileTexture('/texturepacks/faithful64x/cobblestone.png');
 
-      return { grassTopTex, grassSideTex, dirtTex, stoneTex, oakLogTex, leavesTex, diamondOreTex, cobbleTex };
+      const sandTex = createTexture(64, 64, (ctx) => {
+        ctx.fillStyle = '#dbd3a0';
+        ctx.fillRect(0, 0, 64, 64);
+        ctx.fillStyle = '#cfc58f';
+        for (let i = 0; i < 90; i++) ctx.fillRect(Math.floor(Math.random() * 64), Math.floor(Math.random() * 64), 2, 2);
+        ctx.fillStyle = '#e8e0b5';
+        for (let i = 0; i < 70; i++) ctx.fillRect(Math.floor(Math.random() * 64), Math.floor(Math.random() * 64), 2, 2);
+      });
+
+      const bedrockTex = createTexture(64, 64, (ctx) => {
+        ctx.fillStyle = '#222222';
+        ctx.fillRect(0, 0, 64, 64);
+        ctx.fillStyle = '#111111';
+        for (let i = 0; i < 80; i++) ctx.fillRect(Math.floor(Math.random() * 64), Math.floor(Math.random() * 64), 4, 4);
+        ctx.fillStyle = '#444444';
+        for (let i = 0; i < 40; i++) ctx.fillRect(Math.floor(Math.random() * 64), Math.floor(Math.random() * 64), 2, 2);
+      });
+
+      const tallGrassTex = createTexture(32, 32, (ctx) => {
+        ctx.clearRect(0, 0, 32, 32);
+        ctx.fillStyle = '#5fa832';
+        ctx.fillRect(10, 8, 3, 24);
+        ctx.fillRect(14, 4, 4, 28);
+        ctx.fillRect(19, 12, 3, 20);
+        ctx.fillRect(7, 16, 3, 16);
+        ctx.fillRect(23, 14, 3, 18);
+        ctx.fillStyle = '#7ebd42';
+        ctx.fillRect(11, 8, 1, 20);
+        ctx.fillRect(15, 4, 2, 24);
+      });
+
+      const poppyTex = createTexture(32, 32, (ctx) => {
+        ctx.clearRect(0, 0, 32, 32);
+        ctx.fillStyle = '#498834';
+        ctx.fillRect(14, 12, 4, 20);
+        ctx.fillStyle = '#dd2222';
+        ctx.fillRect(8, 4, 16, 10);
+        ctx.fillStyle = '#aa0000';
+        ctx.fillRect(10, 2, 12, 14);
+        ctx.fillStyle = '#111111';
+        ctx.fillRect(14, 6, 4, 4);
+      });
+
+      const dandelionTex = createTexture(32, 32, (ctx) => {
+        ctx.clearRect(0, 0, 32, 32);
+        ctx.fillStyle = '#498834';
+        ctx.fillRect(14, 14, 4, 18);
+        ctx.fillStyle = '#ffdd00';
+        ctx.fillRect(10, 6, 12, 10);
+        ctx.fillStyle = '#ffaa00';
+        ctx.fillRect(12, 8, 8, 6);
+      });
+
+      return { grassTopTex, grassSideTex, dirtTex, stoneTex, oakLogTex, leavesTex, diamondOreTex, cobbleTex, sandTex, bedrockTex, tallGrassTex, poppyTex, dandelionTex };
     }
   },
 
@@ -116,7 +171,46 @@ export const TEXTURE_PACKS = {
         for (let i = 0; i < 25; i++) ctx.fillRect(Math.floor(Math.random() * 30), Math.floor(Math.random() * 30), 2, 2);
       });
 
-      return { grassTopTex, grassSideTex, dirtTex, stoneTex, oakLogTex, leavesTex, diamondOreTex, cobbleTex };
+      const sandTex = createTexture(32, 32, (ctx) => {
+        ctx.fillStyle = '#dcd3a2';
+        ctx.fillRect(0, 0, 32, 32);
+        ctx.fillStyle = '#c5b980';
+        for (let i = 0; i < 30; i++) ctx.fillRect(Math.floor(Math.random() * 32), Math.floor(Math.random() * 32), 2, 2);
+      });
+
+      const bedrockTex = createTexture(32, 32, (ctx) => {
+        ctx.fillStyle = '#2b2b2b';
+        ctx.fillRect(0, 0, 32, 32);
+        ctx.fillStyle = '#111111';
+        for (let i = 0; i < 35; i++) ctx.fillRect(Math.floor(Math.random() * 32), Math.floor(Math.random() * 32), 3, 3);
+      });
+
+      const tallGrassTex = createTexture(32, 32, (ctx) => {
+        ctx.clearRect(0, 0, 32, 32);
+        ctx.fillStyle = '#5c8e32';
+        ctx.fillRect(10, 8, 3, 24);
+        ctx.fillRect(14, 4, 4, 28);
+        ctx.fillRect(19, 12, 3, 20);
+        ctx.fillRect(7, 16, 3, 16);
+      });
+
+      const poppyTex = createTexture(32, 32, (ctx) => {
+        ctx.clearRect(0, 0, 32, 32);
+        ctx.fillStyle = '#498834';
+        ctx.fillRect(14, 12, 4, 20);
+        ctx.fillStyle = '#dd2222';
+        ctx.fillRect(8, 4, 16, 10);
+      });
+
+      const dandelionTex = createTexture(32, 32, (ctx) => {
+        ctx.clearRect(0, 0, 32, 32);
+        ctx.fillStyle = '#498834';
+        ctx.fillRect(14, 14, 4, 18);
+        ctx.fillStyle = '#ffdd00';
+        ctx.fillRect(10, 6, 12, 10);
+      });
+
+      return { grassTopTex, grassSideTex, dirtTex, stoneTex, oakLogTex, leavesTex, diamondOreTex, cobbleTex, sandTex, bedrockTex, tallGrassTex, poppyTex, dandelionTex };
     }
   },
 
@@ -190,7 +284,43 @@ export const TEXTURE_PACKS = {
         ctx.fillRect(9, 9, 6, 6);
       });
 
-      return { grassTopTex, grassSideTex, dirtTex, stoneTex, oakLogTex, leavesTex, diamondOreTex, cobbleTex };
+      const sandTex = createTexture(16, 16, (ctx) => {
+        ctx.fillStyle = '#dbd3a0';
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = '#c8bf8c';
+        ctx.fillRect(3, 3, 10, 10);
+      });
+
+      const bedrockTex = createTexture(16, 16, (ctx) => {
+        ctx.fillStyle = '#222222';
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = '#111111';
+        ctx.fillRect(2, 2, 12, 12);
+      });
+
+      const tallGrassTex = createTexture(16, 16, (ctx) => {
+        ctx.clearRect(0, 0, 16, 16);
+        ctx.fillStyle = '#65a832';
+        ctx.fillRect(6, 4, 4, 12);
+      });
+
+      const poppyTex = createTexture(16, 16, (ctx) => {
+        ctx.clearRect(0, 0, 16, 16);
+        ctx.fillStyle = '#5aa632';
+        ctx.fillRect(7, 8, 2, 8);
+        ctx.fillStyle = '#dd2222';
+        ctx.fillRect(5, 3, 6, 6);
+      });
+
+      const dandelionTex = createTexture(16, 16, (ctx) => {
+        ctx.clearRect(0, 0, 16, 16);
+        ctx.fillStyle = '#5aa632';
+        ctx.fillRect(7, 8, 2, 8);
+        ctx.fillStyle = '#ffdd00';
+        ctx.fillRect(5, 3, 6, 6);
+      });
+
+      return { grassTopTex, grassSideTex, dirtTex, stoneTex, oakLogTex, leavesTex, diamondOreTex, cobbleTex, sandTex, bedrockTex, tallGrassTex, poppyTex, dandelionTex };
     }
   }
 };
