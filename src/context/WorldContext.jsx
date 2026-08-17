@@ -45,6 +45,22 @@ export function WorldProvider({ children }) {
         }
       }
 
+      if (loadedWorlds.length === 0) {
+        const defaultWorld = {
+          id: "default_world",
+          name: "New World",
+          biome: "plains",
+          game_mode: "survival",
+          difficulty: "normal",
+          hardcore: false,
+          created_at: new Date().toISOString()
+        };
+        loadedWorlds = [defaultWorld];
+        try {
+          localStorage.setItem(STORAGE_KEY_WORLDS, JSON.stringify(loadedWorlds));
+        } catch (_) {}
+      }
+
       setWorlds(loadedWorlds);
 
       const savedActiveId = localStorage.getItem(STORAGE_KEY_ACTIVE);
@@ -54,9 +70,11 @@ export function WorldProvider({ children }) {
         setCurrentWorld(matched);
       } else if (loadedWorlds.length > 0) {
         setCurrentWorld(loadedWorlds[0]);
-        localStorage.setItem(STORAGE_KEY_ACTIVE, loadedWorlds[0].id);
+        try {
+          localStorage.setItem(STORAGE_KEY_ACTIVE, loadedWorlds[0].id);
+        } catch (_) {}
       } else {
-        setCurrentWorld(null);
+        setCurrentWorld(loadedWorlds[0] || null);
       }
 
       setLoading(false);
