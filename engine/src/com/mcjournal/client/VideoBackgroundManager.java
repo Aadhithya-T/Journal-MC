@@ -1,6 +1,5 @@
 package com.mcjournal.client;
 
-import com.mcjournal.client.gui.GuiRenderer;
 import org.joml.Vector2f;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -42,19 +41,14 @@ public class VideoBackgroundManager {
     private int vao;
     private int vbo;
 
-    private int textureId0;
-    private int textureId1;
-
-    private final List<ByteBuffer> frameBuffers = new ArrayList<>();
+    private int textureArrayId;
     private int frameWidth = 1280;
     private int frameHeight = 720;
     private int totalFrames = 0;
 
     private double playbackTime = 0;
-    private int lastUploadedFrame0 = -1;
-    private int lastUploadedFrame1 = -1;
 
-    // 20 FPS video source smoothly interpolated to 60+ FPS monitor refresh
+    // 20 FPS video source smoothly interpolated across GPU monitor refresh
     private static final double FPS = 20.0;
     private static final double FRAME_DURATION = 1.0 / FPS;
 
@@ -62,7 +56,7 @@ public class VideoBackgroundManager {
         this.sessionIndex = new Random().nextInt(VIDEO_NAMES.length);
         this.selectedVideoName = VIDEO_NAMES[sessionIndex];
         this.selectedDisplayName = DISPLAY_NAMES[sessionIndex];
-        System.out.println("[VideoBackground] 🎬 Selected Session HD Video: " + selectedDisplayName + " (" + selectedVideoName + ".mp4 - HD 1280x720)");
+        System.out.println("[VideoBackground] 🎬 Selected Session HD Video: " + selectedDisplayName + " (" + selectedVideoName + ".mp4 - GPU Texture Array)");
     }
 
     public void init() {
@@ -72,7 +66,8 @@ public class VideoBackgroundManager {
         // 2. Full-Screen Quad (-1..1 in NDC)
         initQuad();
 
-        // 3. Load all HD Frames for the selected video
+        // 3. Load all HD Frames from disk into memory
+        List<ByteBuffer> loadedBuffers = new ArrayList<>();
         File dir = new File("engine/resources/backgrounds/" + selectedVideoName);
         if (!dir.exists()) {
             dir = new File("resources/backgrounds/" + selectedVideoName);
@@ -94,23 +89,33 @@ public class VideoBackgroundManager {
                     if (image != null) {
                         this.frameWidth = w.get(0);
                         this.frameHeight = h.get(0);
-                        frameBuffers.add(image);
+                        loadedBuffers.add(image);
                     }
                 }
             }
-            this.totalFrames = frameBuffers.size();
-            System.out.println("[VideoBackground] Loaded " + totalFrames + " HD Video Frames for " + selectedVideoName + " (" + frameWidth + "x" + frameHeight + ")");
+            this.totalFrames = loadedBuffers.size();
         }
 
-        // 4. Create Dual GPU Textures for Smooth Sub-Frame Blending
-        textureId0 = createVideoTexture();
-        textureId1 = createVideoTexture();
-
+        // 4. Pre-Upload All Frames into a single OpenGL 2D Texture Array on GPU VRAM
         if (totalFrames > 0) {
-            uploadFrameToTexture(textureId0, 0);
-            uploadFrameToTexture(textureId1, Math.min(1, totalFrames - 1));
-            lastUploadedFrame0 = 0;
-            lastUploadedFrame1 = Math.min(1, totalFrames - 1);
+            textureArrayId = glGenTextures();
+            glBindTexture(GL_TEXTURE_2D_ARRAY, textureArrayId);
+
+            glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, frameWidth, frameHeight, totalFrames, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+
+            for (int i = 0; i < totalFrames; i++) {
+                glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, i, frameWidth, frameHeight, 1, GL_RGBA, GL_UNSIGNED_BYTE, loadedBuffers.get(i));
+                stbi_image_free(loadedBuffers.get(i)); // Immediately free CPU RAM!
+            }
+            loadedBuffers.clear();
+
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            System.out.println("[VideoBackground] ⚡ Uploaded " + totalFrames + " HD frames to GPU VRAM Texture Array. CPU RAM freed. Zero PCI-e stalls.");
         }
     }
 
@@ -144,57 +149,20 @@ public class VideoBackgroundManager {
         MemoryUtil.memFree(vertexBuffer);
     }
 
-    private int createVideoTexture() {
-        int texId = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, texId);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        if (frameBuffers.size() > 0) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, frameWidth, frameHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, frameBuffers.get(0));
-        }
-        glBindTexture(GL_TEXTURE_2D, 0);
-        return texId;
-    }
-
-    private void uploadFrameToTexture(int texId, int frameIndex) {
-        if (frameIndex >= 0 && frameIndex < totalFrames) {
-            glBindTexture(GL_TEXTURE_2D, texId);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, frameWidth, frameHeight, GL_RGBA, GL_UNSIGNED_BYTE, frameBuffers.get(frameIndex));
-            glBindTexture(GL_TEXTURE_2D, 0);
-        }
-    }
-
     public void update(double deltaTime) {
         if (totalFrames <= 0) return;
-
         playbackTime += deltaTime;
-        double totalDuration = totalFrames * FRAME_DURATION;
-        double loopedTime = playbackTime % totalDuration;
-
-        double currentFrameFloat = loopedTime / FRAME_DURATION;
-        int frame0 = (int) Math.floor(currentFrameFloat) % totalFrames;
-        int frame1 = (frame0 + 1) % totalFrames;
-
-        if (frame0 != lastUploadedFrame0) {
-            uploadFrameToTexture(textureId0, frame0);
-            lastUploadedFrame0 = frame0;
-        }
-
-        if (frame1 != lastUploadedFrame1) {
-            uploadFrameToTexture(textureId1, frame1);
-            lastUploadedFrame1 = frame1;
-        }
     }
 
     public void render(int screenWidth, int screenHeight) {
-        if (totalFrames <= 0 || textureId0 == 0) return;
+        if (totalFrames <= 0 || textureArrayId == 0) return;
 
         double totalDuration = totalFrames * FRAME_DURATION;
         double loopedTime = playbackTime % totalDuration;
         double currentFrameFloat = loopedTime / FRAME_DURATION;
+
+        int frame0 = (int) Math.floor(currentFrameFloat) % totalFrames;
+        int frame1 = (frame0 + 1) % totalFrames;
         float blendFactor = (float) (currentFrameFloat - Math.floor(currentFrameFloat));
 
         // Aspect Ratio "Cover" calculation
@@ -216,13 +184,11 @@ public class VideoBackgroundManager {
         videoShader.bind();
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureId0);
-        videoShader.setUniform("uTex0", 0);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, textureArrayId);
+        videoShader.setUniform("uVideoArray", 0);
 
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, textureId1);
-        videoShader.setUniform("uTex1", 1);
-
+        videoShader.setUniform("uFrame0", (float) frame0);
+        videoShader.setUniform("uFrame1", (float) frame1);
         videoShader.setUniform("uBlend", blendFactor);
         videoShader.setUniform("uUvScale", new Vector2f(scaleX, scaleY));
         videoShader.setUniform("uUvOffset", new Vector2f(0.0f, 0.0f));
@@ -231,12 +197,9 @@ public class VideoBackgroundManager {
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glBindVertexArray(0);
 
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
         videoShader.unbind();
+
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
     }
@@ -249,13 +212,6 @@ public class VideoBackgroundManager {
         if (videoShader != null) videoShader.cleanup();
         if (vbo != 0) glDeleteBuffers(vbo);
         if (vao != 0) glDeleteVertexArrays(vao);
-
-        for (ByteBuffer buf : frameBuffers) {
-            stbi_image_free(buf);
-        }
-        frameBuffers.clear();
-
-        if (textureId0 != 0) glDeleteTextures(textureId0);
-        if (textureId1 != 0) glDeleteTextures(textureId1);
+        if (textureArrayId != 0) glDeleteTextures(textureArrayId);
     }
 }
