@@ -49,11 +49,18 @@ function createWindow() {
     }
   });
 
-  const devUrl = 'http://localhost:5173';
-  mainWindow.loadURL(devUrl).catch(() => {
-    const distPath = path.join(__dirname, '..', 'dist', 'index.html');
+  const distPath = path.join(__dirname, '..', 'dist', 'index.html');
+  const fs = require('fs');
+
+  if (process.env.VITE_DEV_SERVER_URL) {
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else if (fs.existsSync(distPath)) {
     mainWindow.loadFile(distPath);
-  });
+  } else {
+    mainWindow.loadURL('http://localhost:5173').catch(() => {
+      mainWindow.loadFile(distPath);
+    });
+  }
 
   mainWindow.once('ready-to-show', () => {
     if (mainWindow) {

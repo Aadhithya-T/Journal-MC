@@ -239,15 +239,18 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     const activeParticles = [];
     particleGroupRef.current = activeParticles;
 
+    const width = currentMount.clientWidth || window.innerWidth || 1280;
+    const height = currentMount.clientHeight || window.innerHeight || 720;
+
     const camera = new THREE.PerspectiveCamera(
       70,
-      currentMount.clientWidth / currentMount.clientHeight,
+      width / height,
       0.05,
       350
     );
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+    renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
