@@ -11,8 +11,9 @@
     "app:prod": "npm run java:build && vite build && electron .",
     "build": "npm run java:build && vite build",
     "lint": "oxlint",
-    "java:build": "javac -d engine/bin engine/src/com/mcjournal/*.java",
+    "java:build": "javac -cp \"engine/lib/*\" -d engine/bin engine/src/com/mcjournal/*.java engine/src/com/mcjournal/client/*.java",
     "java:start": "java -cp engine/bin com.mcjournal.ChunkServer",
+    "java:run": "java -cp \"engine/bin;engine/lib/*\" com.mcjournal.client.MCJournalApp",
     "electron": "electron ."
   },
   "dependencies": {

@@ -241,10 +241,10 @@ public class ChunkMeshBuilder {
                             int[][] c = face.corners;
                             float yOffset = isWater ? -0.1f : 0.0f;
 
-                            float[] v0 = {x + c[0][0], y + c[0][1] + yOffset, z + c[0][2]};
-                            float[] v1 = {x + c[1][0], y + c[1][1] + yOffset, z + c[1][2]};
-                            float[] v2 = {x + c[2][0], y + c[2][1] + yOffset, z + c[2][2]};
-                            float[] v3 = {x + c[3][0], y + c[3][1] + yOffset, z + c[3][2]};
+                            float[] v0 = {wx + c[0][0], y + c[0][1] + yOffset, wz + c[0][2]};
+                            float[] v1 = {wx + c[1][0], y + c[1][1] + yOffset, wz + c[1][2]};
+                            float[] v2 = {wx + c[2][0], y + c[2][1] + yOffset, wz + c[2][2]};
+                            float[] v3 = {wx + c[3][0], y + c[3][1] + yOffset, wz + c[3][2]};
 
                             // Ambient Occlusion
                             float ao0 = isWater ? 1.0f : computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[0][0], face.cornerOffsets[0][1]);
@@ -314,8 +314,8 @@ public class ChunkMeshBuilder {
 
         float w = 0.5f;
         float h = 0.92f;
-        float cx = x + 0.5f + jitterX;
-        float cz = z + 0.5f + jitterZ;
+        float cx = wx + 0.5f + jitterX;
+        float cz = wz + 0.5f + jitterZ;
 
         // Diagonal 1
         addFoliageQuad(cx - w, y, cz - w, cx + w, y, cz + w, cx + w, y + h, cz + w, cx - w, y + h, cz - w, uMin, uMax, vMin, vMax, pos, norm, uv, col);
