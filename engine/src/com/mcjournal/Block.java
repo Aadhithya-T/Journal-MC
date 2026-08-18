@@ -62,6 +62,20 @@ public final class Block {
         };
     }
 
+    public static float getHardness(byte type) {
+        return switch (type) {
+            case BEDROCK, WATER -> -1.0f; // Unbreakable
+            case TALL_GRASS, POPPY, DANDELION -> 0.0f; // Instant Break
+            case OAK_LEAVES, BIRCH_LEAVES -> 0.2f;
+            case DIRT, SAND -> 0.5f;
+            case GRASS -> 0.6f;
+            case STONE -> 1.5f;
+            case COBBLESTONE, OAK_LOG, BIRCH_LOG -> 2.0f;
+            case DIAMOND_ORE -> 3.0f;
+            default -> 0.5f;
+        };
+    }
+
     public static boolean isSolid(byte type) {
         return type != AIR && type != WATER && type != TALL_GRASS && type != POPPY && type != DANDELION;
     }

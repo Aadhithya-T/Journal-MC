@@ -23,6 +23,8 @@ public class MCJournalApp {
     private FontRenderer fontRenderer;
     private HardcoreHUD hud;
     private VideoBackgroundManager videoBackgroundManager;
+    private BlockBreakingManager blockBreakingManager;
+    private BlockSelectionRenderer blockSelectionRenderer;
 
     private ChunkManager chunkManager;
     private ShaderProgram chunkShader;
@@ -44,6 +46,8 @@ public class MCJournalApp {
         this.camera = new Camera();
         this.player = new Player();
         this.videoBackgroundManager = new VideoBackgroundManager();
+        this.blockBreakingManager = new BlockBreakingManager();
+        this.blockSelectionRenderer = new BlockSelectionRenderer();
     }
 
     public void run() {
@@ -64,6 +68,7 @@ public class MCJournalApp {
         hud = new HardcoreHUD();
 
         videoBackgroundManager.init();
+        blockSelectionRenderer.init();
 
         atlas = new TextureAtlas();
         chunkRenderer = new ChunkRenderer();
@@ -88,6 +93,7 @@ public class MCJournalApp {
         if (screen != null) {
             window.lockCursor(false);
             screen.init(window.getWidth(), window.getHeight());
+            if (blockBreakingManager != null) blockBreakingManager.resetBreak();
         } else {
             window.lockCursor(true);
         }
@@ -224,7 +230,7 @@ public class MCJournalApp {
             camera.setYaw(player.yaw);
             camera.setPitch(player.pitch);
 
-            // Hotbar keys
+            // Hotbar keys 1-9
             for (int k = GLFW_KEY_1; k <= GLFW_KEY_9; k++) {
                 if (input.isKeyDown(k)) {
                     player.selectedSlot = k - GLFW_KEY_1;
@@ -254,6 +260,11 @@ public class MCJournalApp {
             boolean sneak = input.isKeyDown(GLFW_KEY_LEFT_SHIFT);
 
             player.updateTick(chunkManager, forward, backward, left, right, jump, sprint, sneak);
+
+            // Mine blocks by hand (LMB) & Place blocks (RMB)
+            boolean lmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_1);
+            boolean rmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_2);
+            blockBreakingManager.update(chunkManager, chunkRenderer, player, camera, lmb, rmb);
         }
     }
 
@@ -281,18 +292,26 @@ public class MCJournalApp {
             chunkShader.unbind();
             atlas.unbind();
 
-            // In-Game HUD
+            // --- 2. RENDER MINECRAFT BLOCK SELECTION & DESTRUCTION OUTLINE ---
+            if (currentScreen == null) {
+                Raycast.Hit hit = blockBreakingManager.getCurrentHit();
+                if (hit != null) {
+                    blockSelectionRenderer.render(camera, hit.bx, hit.by, hit.bz, blockBreakingManager.getBreakProgress());
+                }
+            }
+
+            // --- 3. IN-GAME HARDCORE HUD ---
             if (currentScreen == null) {
                 guiRenderer.begin(window.getWidth(), window.getHeight());
                 hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome);
                 guiRenderer.end();
             }
         } else {
-            // --- 2. RENDER LIVE MP4 VIDEO BACKGROUND (Title / World Select Menus) ---
+            // --- LIVE MP4 VIDEO BACKGROUND (Title / World Select Menus) ---
             videoBackgroundManager.render(window.getWidth(), window.getHeight());
         }
 
-        // --- 3. RENDER ACTIVE GUI MENU OVERLAY ---
+        // --- 4. RENDER ACTIVE GUI MENU OVERLAY ---
         if (currentScreen != null) {
             guiRenderer.begin(window.getWidth(), window.getHeight());
             currentScreen.render(guiRenderer, fontRenderer, input.getMouseX(), input.getMouseY(), (float) deltaTime);
@@ -307,6 +326,7 @@ public class MCJournalApp {
         if (guiRenderer != null) guiRenderer.cleanup();
         if (fontRenderer != null) fontRenderer.cleanup();
         if (videoBackgroundManager != null) videoBackgroundManager.cleanup();
+        if (blockSelectionRenderer != null) blockSelectionRenderer.cleanup();
         window.destroy();
     }
 
