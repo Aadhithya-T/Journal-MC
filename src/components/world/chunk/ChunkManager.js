@@ -299,20 +299,22 @@ export class ChunkManager {
     return null;
   }
 
-  // High-performance ground height lookup (top block surface Y + 1.0)
-  getGroundHeight(wx, wz) {
+  // Ground height lookup under player position or from top of world
+  getGroundHeight(wx, wz, currentY = null) {
     const rx = Math.floor(wx);
     const rz = Math.floor(wz);
 
-    // Search downwards from top of chunk for the first solid surface block
-    for (let y = 28; y >= 0; y--) {
+    const startY = currentY !== null ? Math.min(28, Math.floor(currentY + 0.6)) : 28;
+
+    // Search downwards from startY for the first solid surface block under player
+    for (let y = startY; y >= 0; y--) {
       const block = this.getBlockAt(rx, y, rz);
       if (block !== BLOCK.AIR && block !== BLOCK.WATER && block < BLOCK.TALL_GRASS) {
         return y + 1.0;
       }
     }
 
-    return this.generator.computeHeight(rx, rz) + 1.0;
+    return 2.0;
   }
 
   // 3D Bounding AABB Collision check against solid world blocks and obstacles
@@ -322,8 +324,8 @@ export class ChunkManager {
     const minBZ = Math.floor(pz - radius);
     const maxBZ = Math.floor(pz + radius);
     
-    // Check vertical overlap with player torso/head (above 0.55m step height to avoid floor collisions)
-    const minBY = Math.floor(py + 0.55);
+    // Check vertical overlap with player torso/head (above 0.15m to avoid floor collisions)
+    const minBY = Math.floor(py + 0.15);
     const maxBY = Math.floor(py + height - 0.05);
 
     for (let bx = minBX; bx <= maxBX; bx++) {

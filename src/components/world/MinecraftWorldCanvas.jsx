@@ -711,17 +711,18 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         // 1. Test X Movement with Auto Step-Up & Wall Sliding
         if (Math.abs(moveStepX) > 0.0005) {
           const nextX = THREE.MathUtils.clamp(curX + moveStepX, -78, 78);
-          const targetGroundX = chunkManager.getGroundHeight(nextX, curZ);
+          const targetGroundX = chunkManager.getGroundHeight(nextX, curZ, curY);
           const hitWallX = chunkManager.isCollidingWithSolid(nextX, curY, curZ, 0.28, 1.8);
           const canStepUpX = isGroundedRef.current && (targetGroundX <= curY + 0.55) && !chunkManager.isCollidingWithSolid(nextX, targetGroundX, curZ, 0.28, 1.8);
           const isDangerousDropX = isSneakingRef.current && isGroundedRef.current && (targetGroundX < curY - 0.6);
 
-          if (!isDangerousDropX && (!hitWallX || canStepUpX)) {
-            if (canStepUpX || curY >= targetGroundX - 0.15) {
+          if (!isDangerousDropX) {
+            if (canStepUpX) {
               curX = nextX;
-              if (canStepUpX && targetGroundX > curY) {
-                curY = targetGroundX;
-              } else if (isGroundedRef.current && targetGroundX <= curY && targetGroundX >= curY - 0.6) {
+              curY = targetGroundX;
+            } else if (!hitWallX && curY >= targetGroundX - 0.15) {
+              curX = nextX;
+              if (isGroundedRef.current && targetGroundX <= curY && targetGroundX >= curY - 0.6) {
                 curY = targetGroundX;
               }
             }
@@ -731,17 +732,18 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         // 2. Test Z Movement with Auto Step-Up & Wall Sliding
         if (Math.abs(moveStepZ) > 0.0005) {
           const nextZ = THREE.MathUtils.clamp(curZ + moveStepZ, -78, 78);
-          const targetGroundZ = chunkManager.getGroundHeight(curX, nextZ);
+          const targetGroundZ = chunkManager.getGroundHeight(curX, nextZ, curY);
           const hitWallZ = chunkManager.isCollidingWithSolid(curX, curY, nextZ, 0.28, 1.8);
           const canStepUpZ = isGroundedRef.current && (targetGroundZ <= curY + 0.55) && !chunkManager.isCollidingWithSolid(curX, targetGroundZ, nextZ, 0.28, 1.8);
           const isDangerousDropZ = isSneakingRef.current && isGroundedRef.current && (targetGroundZ < curY - 0.6);
 
-          if (!isDangerousDropZ && (!hitWallZ || canStepUpZ)) {
-            if (canStepUpZ || curY >= targetGroundZ - 0.15) {
+          if (!isDangerousDropZ) {
+            if (canStepUpZ) {
               curZ = nextZ;
-              if (canStepUpZ && targetGroundZ > curY) {
-                curY = targetGroundZ;
-              } else if (isGroundedRef.current && targetGroundZ <= curY && targetGroundZ >= curY - 0.6) {
+              curY = targetGroundZ;
+            } else if (!hitWallZ && curY >= targetGroundZ - 0.15) {
+              curZ = nextZ;
+              if (isGroundedRef.current && targetGroundZ <= curY && targetGroundZ >= curY - 0.6) {
                 curY = targetGroundZ;
               }
             }
@@ -753,13 +755,25 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         steve.group.position.z = curZ;
       }
 
-      // --- JUMP & VERTICAL GRAVITY PHYSICS ---
+      // --- JUMP, CEILING BONK & VERTICAL GRAVITY PHYSICS ---
       const curPos = steve.group.position;
-      const groundY = chunkManager.getGroundHeight(curPos.x, curPos.z);
+      const groundY = chunkManager.getGroundHeight(curPos.x, curPos.z, curPos.y);
 
       if (!isGroundedRef.current) {
         velocityYRef.current -= GRAVITY * deltaTime;
-        curPos.y += velocityYRef.current * deltaTime;
+        const nextY = curPos.y + velocityYRef.current * deltaTime;
+
+        // Bonk head on ceiling if solid block is directly above
+        if (velocityYRef.current > 0) {
+          const hitCeiling = chunkManager.isCollidingWithSolid(curPos.x, nextY, curPos.z, 0.28, 1.8);
+          if (hitCeiling) {
+            velocityYRef.current = 0;
+          } else {
+            curPos.y = nextY;
+          }
+        } else {
+          curPos.y = nextY;
+        }
 
         if (curPos.y <= groundY) {
           curPos.y = groundY;

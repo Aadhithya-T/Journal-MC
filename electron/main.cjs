@@ -1,15 +1,17 @@
-const { app, BrowserWindow, globalShortcut } = require('electron');
+const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
 let mainWindow = null;
 let javaProcess = null;
 
-// Hardware GPU Acceleration & Voxel Performance Switches
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
+// High DPI & Stable GPU Rendering Switches
 app.commandLine.appendSwitch('high-dpi-support', '1');
+
+// Catch any unhandled process exceptions to avoid random desktop exits
+process.on('uncaughtException', (err) => {
+  console.error('[Desktop] Uncaught exception:', err);
+});
 
 function startJavaEngine() {
   try {
@@ -37,7 +39,7 @@ function createWindow() {
     title: 'Minecraft Journal - Standalone Desktop App',
     backgroundColor: '#111111',
     autoHideMenuBar: true,
-    show: true,
+    show: false,
     center: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -49,13 +51,21 @@ function createWindow() {
 
   const devUrl = 'http://localhost:5173';
   mainWindow.loadURL(devUrl).catch(() => {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+    const distPath = path.join(__dirname, '..', 'dist', 'index.html');
+    mainWindow.loadFile(distPath);
   });
 
   mainWindow.once('ready-to-show', () => {
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
+    }
+  });
+
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.warn('[Desktop] Renderer process gone:', details.reason);
+    if (details.reason !== 'clean-exit' && mainWindow) {
+      mainWindow.reload();
     }
   });
 
