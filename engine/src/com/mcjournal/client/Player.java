@@ -70,8 +70,8 @@ public class Player {
         float slipperiness = onGround ? 0.6f : 1.0f;
         float friction = slipperiness * 0.91f;
 
-        float baseSpeed = isSprinting ? 0.135f : (isSneaking ? 0.035f : 0.10f);
-        if (!onGround) baseSpeed *= 0.25f; // Air control
+        float baseSpeed = isSprinting ? 0.14f : (isSneaking ? 0.035f : 0.10f);
+        if (!onGround) baseSpeed *= 0.35f; // Air control
 
         velocity.x += moveX * baseSpeed;
         velocity.z += moveZ * baseSpeed;
@@ -80,8 +80,11 @@ public class Player {
         if (jump && onGround) {
             velocity.y = JUMP_IMPULSE;
             if (isSprinting) {
-                velocity.x += forwardX * 0.12f;
-                velocity.z += forwardZ * 0.12f;
+                velocity.x += forwardX * 0.20f;
+                velocity.z += forwardZ * 0.20f;
+            } else if (forward) {
+                velocity.x += forwardX * 0.10f;
+                velocity.z += forwardZ * 0.10f;
             }
             onGround = false;
         }
@@ -89,7 +92,7 @@ public class Player {
         // 3. Gravity & Vertical Drag
         velocity.y = (velocity.y - GRAVITY) * DRAG_Y;
 
-        // 4. Move & Collide with Voxel Terrain (Y first, then X and Z with 0.6-block step-up)
+        // 4. Move & Collide with Voxel Terrain (Y first, then X and Z with continuous step-up)
         moveWithCollision(world, velocity.x, velocity.y, velocity.z);
 
         // Apply Horizontal Friction
@@ -98,8 +101,8 @@ public class Player {
 
         // 5. Fall Damage Calculation (Vanilla Hardcore formula)
         if (onGround) {
-            if (fallDistance > 3.0f) {
-                int damage = (int) Math.floor(fallDistance - 3.0f);
+            if (fallDistance > 3.5f) {
+                int damage = (int) Math.floor(fallDistance - 3.5f);
                 if (damage > 0) {
                     takeDamage(damage);
                     System.out.println("[Hardcore] Player took " + damage + " fall damage! (HP: " + health + "/20)");
@@ -154,32 +157,38 @@ public class Player {
             }
         }
 
-        // Step 2: Move X (Horizontal with Step-Up)
+        // Step 2: Move X (Horizontal with 0.6-block step-up and jump-clearing)
         if (dx != 0) {
             float targetX = pos.x + dx;
             if (!checkBlockCollision(world, targetX, pos.y, pos.z)) {
                 pos.x = targetX;
             } else {
                 // Auto Step-Up 0.6-block ledge
-                if (onGround && !checkBlockCollision(world, targetX, pos.y + STEP_HEIGHT, pos.z)) {
+                if (!checkBlockCollision(world, targetX, pos.y + STEP_HEIGHT, pos.z)) {
                     pos.x = targetX;
-                    pos.y += STEP_HEIGHT;
+                    if (onGround) pos.y += STEP_HEIGHT;
+                } else if (!onGround && velocity.y > 0 && !checkBlockCollision(world, targetX, pos.y + 1.05f, pos.z)) {
+                    // Mid-jump: allow forward traversal over 1-block obstacles
+                    pos.x = targetX;
                 } else {
                     velocity.x = 0;
                 }
             }
         }
 
-        // Step 3: Move Z (Horizontal with Step-Up)
+        // Step 3: Move Z (Horizontal with 0.6-block step-up and jump-clearing)
         if (dz != 0) {
             float targetZ = pos.z + dz;
             if (!checkBlockCollision(world, pos.x, pos.y, targetZ)) {
                 pos.z = targetZ;
             } else {
                 // Auto Step-Up 0.6-block ledge
-                if (onGround && !checkBlockCollision(world, pos.x, pos.y + STEP_HEIGHT, targetZ)) {
+                if (!checkBlockCollision(world, pos.x, pos.y + STEP_HEIGHT, targetZ)) {
                     pos.z = targetZ;
-                    pos.y += STEP_HEIGHT;
+                    if (onGround) pos.y += STEP_HEIGHT;
+                } else if (!onGround && velocity.y > 0 && !checkBlockCollision(world, pos.x, pos.y + 1.05f, targetZ)) {
+                    // Mid-jump: allow forward traversal over 1-block obstacles
+                    pos.z = targetZ;
                 } else {
                     velocity.z = 0;
                 }
@@ -188,13 +197,13 @@ public class Player {
     }
 
     private boolean checkBlockCollision(ChunkManager world, float px, float py, float pz) {
-        float halfW = (WIDTH / 2.0f) - 0.02f; // Slight inset to prevent snagging on wall edges
-        int minX = (int) Math.floor(px - halfW);
-        int maxX = (int) Math.floor(px + halfW);
-        int minY = (int) Math.floor(py);
+        float halfW = (WIDTH / 2.0f) - 0.04f; // 0.26 half-width for smooth traversal
+        int minX = (int) Math.floor(px - halfW + 0.001f);
+        int maxX = (int) Math.floor(px + halfW - 0.001f);
+        int minY = (int) Math.floor(py + 0.01f);
         int maxY = (int) Math.floor(py + HEIGHT - 0.05f);
-        int minZ = (int) Math.floor(pz - halfW);
-        int maxZ = (int) Math.floor(pz + halfW);
+        int minZ = (int) Math.floor(pz - halfW + 0.001f);
+        int maxZ = (int) Math.floor(pz + halfW - 0.001f);
 
         for (int y = minY; y <= maxY; y++) {
             for (int z = minZ; z <= maxZ; z++) {
