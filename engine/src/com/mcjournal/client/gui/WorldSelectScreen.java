@@ -1,63 +1,49 @@
 package com.mcjournal.client.gui;
 
 import com.mcjournal.client.MCJournalApp;
-
-import java.util.ArrayList;
-import java.util.List;
+import com.mcjournal.client.WorldSaveManager;
 
 public class WorldSelectScreen extends Screen {
-    public static class WorldEntry {
-        public String id;
-        public String name;
-        public String biome;
-        public String gameMode;
-        public long seed;
-
-        public WorldEntry(String id, String name, String biome, String gameMode, long seed) {
-            this.id = id;
-            this.name = name;
-            this.biome = biome;
-            this.gameMode = gameMode;
-            this.seed = seed;
-        }
-    }
-
-    private final List<WorldEntry> worlds = new ArrayList<>();
-    private int selectedIndex = 0;
+    private WorldSaveManager.SavedWorld currentWorld;
 
     public WorldSelectScreen(MCJournalApp app) {
         super(app);
-        // Default worlds (Hardcore only)
-        worlds.add(new WorldEntry("world_1", "Adventurer's Frontier", "Plains", "Hardcore", 4242));
-        worlds.add(new WorldEntry("world_2", "Dense Birch Highlands", "Birch Forest", "Hardcore", 1337));
-        worlds.add(new WorldEntry("world_3", "Crystal Lake Sanctuary", "River Basin", "Hardcore", 9999));
+        this.currentWorld = WorldSaveManager.loadWorld();
     }
 
     @Override
     public void init(int width, int height) {
         super.init(width, height);
+        this.currentWorld = WorldSaveManager.loadWorld();
 
-        int btnWidth = 160;
-        int btnHeight = 40;
-        int bottomY = height - 60;
+        int btnWidth = 170;
+        int btnHeight = 44;
+        int bottomY = height - 70;
 
-        // 1. Play Selected World
-        buttons.add(new Button(1, "Play Selected World", width / 2 - 250, bottomY, btnWidth + 40, btnHeight, () -> {
-            if (selectedIndex >= 0 && selectedIndex < worlds.size()) {
-                WorldEntry entry = worlds.get(selectedIndex);
-                app.enterWorld(entry.seed, entry.name, entry.biome);
-            }
-        }));
+        if (currentWorld != null) {
+            // World Exists: Play, Delete, Cancel
+            buttons.add(new Button(1, "Play World", width / 2 - 270, bottomY, btnWidth + 20, btnHeight, () -> {
+                app.enterWorld(currentWorld.seed, currentWorld.name, currentWorld.biome);
+            }));
 
-        // 2. Create New World
-        buttons.add(new Button(2, "Create New World", width / 2 - 40, bottomY, btnWidth, btnHeight, () -> {
-            app.setScreen(new WorldCreateScreen(app));
-        }));
+            buttons.add(new Button(2, "Delete World", width / 2 - 70, bottomY, btnWidth, btnHeight, () -> {
+                WorldSaveManager.deleteWorld();
+                init(width, height); // Refresh screen to empty state
+            }));
 
-        // 3. Back to Main Menu
-        buttons.add(new Button(3, "Cancel", width / 2 + 130, bottomY, btnWidth - 30, btnHeight, () -> {
-            app.setScreen(new TitleScreen(app));
-        }));
+            buttons.add(new Button(3, "Back", width / 2 + 110, bottomY, btnWidth - 30, btnHeight, () -> {
+                app.setScreen(new TitleScreen(app));
+            }));
+        } else {
+            // No World Exists: Create New World, Back
+            buttons.add(new Button(1, "Create Hardcore World", width / 2 - 190, bottomY, btnWidth + 60, btnHeight, () -> {
+                app.setScreen(new WorldCreateScreen(app));
+            }));
+
+            buttons.add(new Button(2, "Back", width / 2 + 50, bottomY, btnWidth - 40, btnHeight, () -> {
+                app.setScreen(new TitleScreen(app));
+            }));
+        }
     }
 
     @Override
@@ -66,62 +52,50 @@ public class WorldSelectScreen extends Screen {
         gui.drawRect(0, 0, width, height, 0.10f, 0.10f, 0.12f, 1.0f);
 
         // Header Title
-        String title = "Select World";
+        String title = "Singleplayer";
         float titleW = font.getStringWidth(title, 1.5f);
-        font.drawString(gui, title, (width - titleW) / 2.0f, 24, 1.5f, 0xffffff, true);
+        font.drawString(gui, title, (width - titleW) / 2.0f, 30, 1.5f, 0xffffff, true);
 
-        // World List Container
+        // Container Box
         int boxW = 680;
-        int boxH = 420;
+        int boxH = 380;
         int boxX = (width - boxW) / 2;
-        int boxY = 70;
+        int boxY = 80;
 
         gui.drawBevelBox(boxX, boxY, boxW, boxH, 0x181818, 0x333333, 0x080808);
 
-        // World Entries
-        int itemH = 68;
-        for (int i = 0; i < worlds.size(); i++) {
-            WorldEntry w = worlds.get(i);
-            int itemY = boxY + 12 + (i * (itemH + 8));
-
-            boolean isSelected = (i == selectedIndex);
-            int bg = isSelected ? 0x3a3a3a : 0x222222;
-            int borderL = isSelected ? 0xffffff : 0x444444;
-            int borderD = isSelected ? 0xaaaaaa : 0x111111;
-
-            gui.drawBevelBox(boxX + 12, itemY, boxW - 24, itemH, bg, borderL, borderD);
+        if (currentWorld != null) {
+            // Render Active Single World Entry
+            int itemY = boxY + 30;
+            int itemH = 100;
+            gui.drawBevelBox(boxX + 24, itemY, boxW - 48, itemH, 0x2e1818, 0xaa3333, 0x441111);
 
             // Icon + World Name
-            font.drawString(gui, "🌍 " + w.name, boxX + 24, itemY + 14, 1.15f, isSelected ? 0xffffa0 : 0xffffff, true);
+            font.drawString(gui, "⚔ " + currentWorld.name, boxX + 44, itemY + 18, 1.25f, 0xff5555, true);
 
             // Details
-            String details = "Biome: " + w.biome + " | Mode: " + w.gameMode + " | Seed: " + w.seed;
-            font.drawString(gui, details, boxX + 24, itemY + 40, 0.85f, 0xaaaaaa, false);
+            String details = "Biome: " + currentWorld.biome + " | Mode: Hardcore (Locked) | Seed: " + currentWorld.seed;
+            font.drawString(gui, details, boxX + 44, itemY + 48, 0.85f, 0xddaaaa, false);
+
+            String date = "Created: " + currentWorld.createdAt;
+            font.drawString(gui, date, boxX + 44, itemY + 70, 0.75f, 0x888888, false);
+
+            // Notice
+            String notice = "(Only 1 Hardcore World permitted. Delete to start a new adventure)";
+            float noticeW = font.getStringWidth(notice, 0.8f);
+            font.drawString(gui, notice, (width - noticeW) / 2.0f, boxY + boxH - 35, 0.8f, 0x888888, false);
+        } else {
+            // Empty State Display
+            String empty1 = "No Hardcore World Found";
+            float e1W = font.getStringWidth(empty1, 1.25f);
+            font.drawString(gui, empty1, (width - e1W) / 2.0f, boxY + 140, 1.25f, 0xaaaaaa, true);
+
+            String empty2 = "Create your singleplayer world to begin your journal.";
+            float e2W = font.getStringWidth(empty2, 0.9f);
+            font.drawString(gui, empty2, (width - e2W) / 2.0f, boxY + 180, 0.9f, 0x666666, false);
         }
 
         // Render Buttons
         super.render(gui, font, mouseX, mouseY, deltaTime);
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (super.mouseClicked(mouseX, mouseY, button)) {
-            return true;
-        }
-
-        int boxW = 680;
-        int boxX = (width - boxW) / 2;
-        int boxY = 70;
-        int itemH = 68;
-
-        for (int i = 0; i < worlds.size(); i++) {
-            int itemY = boxY + 12 + (i * (itemH + 8));
-            if (mouseX >= boxX + 12 && mouseX <= boxX + boxW - 12 && mouseY >= itemY && mouseY <= itemY + itemH) {
-                this.selectedIndex = i;
-                return true;
-            }
-        }
-
-        return false;
     }
 }

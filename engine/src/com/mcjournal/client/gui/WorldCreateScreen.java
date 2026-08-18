@@ -32,6 +32,7 @@ public class WorldCreateScreen extends Screen {
 
         // 2. Create World Button
         buttons.add(new Button(2, "Create Hardcore World", centerX, startY + 195, btnW, btnH, () -> {
+            com.mcjournal.client.WorldSaveManager.saveWorld(worldName, biome, seed);
             app.enterWorld(seed, worldName, biome);
         }));
 
