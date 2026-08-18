@@ -22,6 +22,7 @@ public class TextureAtlas {
 
     private int textureId;
     private final Map<Integer, String> slotFiles = new HashMap<>();
+    private String currentDir = "public/texturepacks/faithful64x";
 
     public TextureAtlas() {
         initSlotMap();
@@ -47,9 +48,19 @@ public class TextureAtlas {
     }
 
     public void load(String texturesDir) {
+        this.currentDir = texturesDir;
+        loadAtlas(0);
+    }
+
+    public void switchPack(int packIndex) {
+        loadAtlas(packIndex);
+        System.out.println("[TextureAtlas] Switched to Texture Pack Variant #" + packIndex);
+    }
+
+    private void loadAtlas(int variant) {
         ByteBuffer atlasBuffer = MemoryUtil.memAlloc(ATLAS_SIZE * ATLAS_SIZE * 4);
 
-        // Fill with default opaque gray background
+        // Fill with default opaque background
         for (int i = 0; i < ATLAS_SIZE * ATLAS_SIZE * 4; i += 4) {
             atlasBuffer.put(i, (byte) 120);     // R
             atlasBuffer.put(i + 1, (byte) 120); // G
@@ -68,10 +79,9 @@ public class TextureAtlas {
             int row = slot / ATLAS_GRID;
 
             int slotX = col * TILE_SIZE;
-            // In OpenGL texture space, row 0 (top in UV v in [0.75, 1.0]) is at Y in [192, 255]
             int slotY = ((ATLAS_GRID - 1) - row) * TILE_SIZE;
 
-            File file = new File(texturesDir, fileName);
+            File file = new File(currentDir, fileName);
             if (!file.exists()) {
                 file = new File("public/texturepacks/faithful64x", fileName);
             }
@@ -92,10 +102,31 @@ public class TextureAtlas {
                                 int srcIdx = (y * imgW + x) * 4;
                                 int dstIdx = ((slotY + y) * ATLAS_SIZE + (slotX + x)) * 4;
 
-                                atlasBuffer.put(dstIdx, image.get(srcIdx));         // R
-                                atlasBuffer.put(dstIdx + 1, image.get(srcIdx + 1)); // G
-                                atlasBuffer.put(dstIdx + 2, image.get(srcIdx + 2)); // B
-                                atlasBuffer.put(dstIdx + 3, image.get(srcIdx + 3)); // A
+                                byte r = image.get(srcIdx);
+                                byte g = image.get(srcIdx + 1);
+                                byte b = image.get(srcIdx + 2);
+                                byte a = image.get(srcIdx + 3);
+
+                                if (variant == 1) {
+                                    // Stylized Clean: vibrant saturated tones
+                                    r = (byte) Math.min(255, (r & 0xFF) * 1.15f);
+                                    g = (byte) Math.min(255, (g & 0xFF) * 1.15f);
+                                    b = (byte) Math.min(255, (b & 0xFF) * 1.15f);
+                                } else if (variant == 2) {
+                                    // Classic Retro 16x: pixelated 4x4 downsample effect
+                                    int px = (x / 4) * 4;
+                                    int py = (y / 4) * 4;
+                                    int pSrcIdx = (py * imgW + px) * 4;
+                                    r = image.get(pSrcIdx);
+                                    g = image.get(pSrcIdx + 1);
+                                    b = image.get(pSrcIdx + 2);
+                                    a = image.get(pSrcIdx + 3);
+                                }
+
+                                atlasBuffer.put(dstIdx, r);
+                                atlasBuffer.put(dstIdx + 1, g);
+                                atlasBuffer.put(dstIdx + 2, b);
+                                atlasBuffer.put(dstIdx + 3, a);
                             }
                         }
                         stbi_image_free(image);
@@ -106,9 +137,11 @@ public class TextureAtlas {
 
         atlasBuffer.flip();
 
-        textureId = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, textureId);
+        if (textureId == 0) {
+            textureId = glGenTextures();
+        }
 
+        glBindTexture(GL_TEXTURE_2D, textureId);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
@@ -119,8 +152,6 @@ public class TextureAtlas {
 
         MemoryUtil.memFree(atlasBuffer);
         glBindTexture(GL_TEXTURE_2D, 0);
-
-        System.out.println("[TextureAtlas] OpenGL 256x256 Faithful 64x Texture Atlas Loaded (Texture ID: " + textureId + ")");
     }
 
     public void bind(int textureUnit) {

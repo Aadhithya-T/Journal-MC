@@ -26,6 +26,8 @@ public class MCJournalApp {
     private ChunkManager chunkManager;
     private ShaderProgram chunkShader;
     private String currentBiome = "Plains";
+    private String currentWorldName = "Hardcore World";
+    private long currentSeed = 4242;
 
     private Screen currentScreen;
     private boolean isInWorld = false;
@@ -95,8 +97,29 @@ public class MCJournalApp {
         return window;
     }
 
+    public TextureAtlas getAtlas() {
+        return atlas;
+    }
+
+    public void resumeGame() {
+        setScreen(null); // Closes escape menu and returns directly to 3D world
+    }
+
+    public void saveAndQuitToTitle() {
+        if (isInWorld) {
+            // Save world stats to JSON
+            WorldSaveManager.saveWorld(currentWorldName, currentBiome, currentSeed);
+            System.out.println("[MCJournalApp] World saved. Quitting to title menu...");
+            this.isInWorld = false;
+        }
+        setScreen(new TitleScreen(this));
+    }
+
     public void enterWorld(long seed, String worldName, String biome) {
         this.currentBiome = biome;
+        this.currentWorldName = worldName;
+        this.currentSeed = seed;
+
         System.out.println("[MCJournalApp] Generating 100-chunk Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
         this.chunkManager = new ChunkManager(5, seed);
 
@@ -155,10 +178,14 @@ public class MCJournalApp {
                 handleInGameMouseLook();
             }
 
-            // Run Fixed 20-TPS Game Ticks
-            while (tickAccumulator >= TICK_DURATION) {
-                tick();
-                tickAccumulator -= TICK_DURATION;
+            // Run Fixed 20-TPS Game Ticks (only when not paused)
+            if (currentScreen == null) {
+                while (tickAccumulator >= TICK_DURATION) {
+                    tick();
+                    tickAccumulator -= TICK_DURATION;
+                }
+            } else {
+                tickAccumulator = 0; // Pause game ticks in menu
             }
 
             // Render Frame
@@ -170,8 +197,9 @@ public class MCJournalApp {
     }
 
     private void handleInGameMouseLook() {
+        // Pressing ESC in game opens the Escape Menu!
         if (input.isKeyDown(GLFW_KEY_ESCAPE)) {
-            setScreen(new TitleScreen(this));
+            setScreen(new EscapeMenuScreen(this));
             return;
         }
 
@@ -225,7 +253,7 @@ public class MCJournalApp {
     private void render(double deltaTime, float partialTick) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (isInWorld && currentScreen == null) {
+        if (isInWorld) {
             // --- RENDER 3D VOXEL WORLD ---
             Vector3f eyePos = player.getEyePosition(partialTick);
             camera.setPosition(eyePos.x, eyePos.y, eyePos.z);
@@ -246,13 +274,15 @@ public class MCJournalApp {
             chunkShader.unbind();
             atlas.unbind();
 
-            // --- RENDER HARDCORE SURVIVAL HUD ---
-            guiRenderer.begin(window.getWidth(), window.getHeight());
-            hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome);
-            guiRenderer.end();
+            // Render HUD if not in menu
+            if (currentScreen == null) {
+                guiRenderer.begin(window.getWidth(), window.getHeight());
+                hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome);
+                guiRenderer.end();
+            }
         }
 
-        // --- RENDER ACTIVE GUI MENU ---
+        // --- RENDER ACTIVE GUI MENU (Title, Escape Menu, etc.) ---
         if (currentScreen != null) {
             guiRenderer.begin(window.getWidth(), window.getHeight());
             currentScreen.render(guiRenderer, fontRenderer, input.getMouseX(), input.getMouseY(), (float) deltaTime);
