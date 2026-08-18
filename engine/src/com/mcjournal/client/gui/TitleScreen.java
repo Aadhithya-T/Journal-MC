@@ -49,7 +49,7 @@ public class TitleScreen extends Screen {
             if (noticeTimer <= 0) multiplayerNotice = null;
         }
 
-        // Soft vignette overlay over the rotating 3D world
+        // Soft vignette overlay over the live looping video background
         gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.25f);
 
         // Header Minecraft Title Banner Box
@@ -78,10 +78,10 @@ public class TitleScreen extends Screen {
             font.drawString(gui, multiplayerNotice, toastX, toastY, 0.95f, 0xffcc00, true);
         }
 
-        // Footer Subtitle
-        String sub = "Hardcore Edition | Java 26 + OpenGL 3.3";
-        float subW = font.getStringWidth(sub, 0.85f);
-        font.drawString(gui, sub, (width - subW) / 2.0f, height - 28, 0.85f, 0xffffff, true);
+        // Footer Subtitle with Active Session Video Background
+        String sub = "Hardcore Edition | Theme: " + app.getVideoBackgroundManager().getCurrentThemeName() + " | Java 26 + OpenGL 3.3";
+        float subW = font.getStringWidth(sub, 0.82f);
+        font.drawString(gui, sub, (width - subW) / 2.0f, height - 28, 0.82f, 0xffffff, true);
 
         // Render Buttons
         super.render(gui, font, mouseX, mouseY, deltaTime);

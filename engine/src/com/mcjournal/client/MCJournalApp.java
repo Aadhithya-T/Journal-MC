@@ -22,6 +22,7 @@ public class MCJournalApp {
     private GuiRenderer guiRenderer;
     private FontRenderer fontRenderer;
     private HardcoreHUD hud;
+    private VideoBackgroundManager videoBackgroundManager;
 
     private ChunkManager chunkManager;
     private ShaderProgram chunkShader;
@@ -31,7 +32,6 @@ public class MCJournalApp {
 
     private Screen currentScreen;
     private boolean isInWorld = false;
-    private float menuPanoramaYaw = 0;
 
     // Fixed 20-TPS Tick timing
     private static final double TICK_DURATION = 0.050; // 50ms = 20 TPS
@@ -43,6 +43,7 @@ public class MCJournalApp {
         this.input = new InputHandler();
         this.camera = new Camera();
         this.player = new Player();
+        this.videoBackgroundManager = new VideoBackgroundManager();
     }
 
     public void run() {
@@ -62,6 +63,8 @@ public class MCJournalApp {
         fontRenderer.init();
         hud = new HardcoreHUD();
 
+        videoBackgroundManager.init();
+
         atlas = new TextureAtlas();
         chunkRenderer = new ChunkRenderer();
 
@@ -73,27 +76,11 @@ public class MCJournalApp {
         // 4. Generate Procedural 64x Pixel-Art Texture Atlas
         atlas.init();
 
-        // 5. Generate Initial Scenic 3D World for Main Menu Panorama
-        System.out.println("[MCJournalApp] Generating 3D Panorama Voxel World...");
-        this.chunkManager = new ChunkManager(5, 4242);
-        uploadAllWorldMeshes();
-
-        // 6. Start on Title Screen
+        // 5. Start on Title Screen
         setScreen(new TitleScreen(this));
 
         lastFrameTime = glfwGetTime();
         System.out.println("[MCJournalApp] Native OpenGL 3.3 Hardcore Engine Ready!");
-    }
-
-    private void uploadAllWorldMeshes() {
-        chunkRenderer.cleanup();
-        Map<String, ChunkMeshBuilder.MeshData> meshes = chunkManager.getAllMeshes();
-        for (Map.Entry<String, ChunkMeshBuilder.MeshData> entry : meshes.entrySet()) {
-            String[] parts = entry.getKey().split(",");
-            int cx = Integer.parseInt(parts[0]);
-            int cz = Integer.parseInt(parts[1]);
-            chunkRenderer.uploadChunkMesh(cx, cz, entry.getValue());
-        }
     }
 
     public void setScreen(Screen screen) {
@@ -118,6 +105,10 @@ public class MCJournalApp {
         return atlas;
     }
 
+    public VideoBackgroundManager getVideoBackgroundManager() {
+        return videoBackgroundManager;
+    }
+
     public void resumeGame() {
         setScreen(null); // Closes escape menu and returns directly to 3D world
     }
@@ -136,10 +127,16 @@ public class MCJournalApp {
         this.currentWorldName = worldName;
         this.currentSeed = seed;
 
-        if (this.currentSeed != seed) {
-            System.out.println("[MCJournalApp] Generating 100-chunk Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
-            this.chunkManager = new ChunkManager(5, seed);
-            uploadAllWorldMeshes();
+        System.out.println("[MCJournalApp] Generating 100-chunk Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
+        this.chunkManager = new ChunkManager(5, seed);
+
+        chunkRenderer.cleanup();
+        Map<String, ChunkMeshBuilder.MeshData> meshes = chunkManager.getAllMeshes();
+        for (Map.Entry<String, ChunkMeshBuilder.MeshData> entry : meshes.entrySet()) {
+            String[] parts = entry.getKey().split(",");
+            int cx = Integer.parseInt(parts[0]);
+            int cz = Integer.parseInt(parts[1]);
+            chunkRenderer.uploadChunkMesh(cx, cz, entry.getValue());
         }
 
         // Safe spawn point calculation
@@ -181,10 +178,9 @@ public class MCJournalApp {
                 window.setResized(false);
             }
 
-            // Handle Input & Panorama Rotation
+            // Handle Input
             if (currentScreen != null) {
                 currentScreen.update(input.getMouseX(), input.getMouseY());
-                menuPanoramaYaw += (float) (deltaTime * 4.5); // Slow panoramic camera rotation
             } else {
                 handleInGameMouseLook();
             }
@@ -225,7 +221,7 @@ public class MCJournalApp {
             camera.setYaw(player.yaw);
             camera.setPitch(player.pitch);
 
-            // Hotbar keys
+            // Hotbar selection
             for (int k = GLFW_KEY_1; k <= GLFW_KEY_9; k++) {
                 if (input.isKeyDown(k)) {
                     player.selectedSlot = k - GLFW_KEY_1;
@@ -261,19 +257,10 @@ public class MCJournalApp {
     private void render(double deltaTime, float partialTick) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // --- 1. RENDER 3D VOXEL WORLD (Both in-game and as Live Menu Panorama) ---
-        if (chunkManager != null) {
-            if (isInWorld && currentScreen == null) {
-                // In-Game First Person Camera
-                Vector3f eyePos = player.getEyePosition(partialTick);
-                camera.setPosition(eyePos.x, eyePos.y, eyePos.z);
-            } else {
-                // Menu Panorama Camera (Gentle rotation over scenic landscape)
-                camera.setPosition(8.0f, 10.5f, 8.0f);
-                camera.setYaw(menuPanoramaYaw);
-                camera.setPitch(-6.0f);
-            }
-
+        // --- 1. RENDER 3D VOXEL WORLD (During active gameplay) ---
+        if (isInWorld && chunkManager != null) {
+            Vector3f eyePos = player.getEyePosition(partialTick);
+            camera.setPosition(eyePos.x, eyePos.y, eyePos.z);
             camera.updateView();
 
             chunkShader.bind();
@@ -290,13 +277,16 @@ public class MCJournalApp {
 
             chunkShader.unbind();
             atlas.unbind();
-        }
 
-        // --- 2. RENDER IN-GAME SURVIVAL HUD ---
-        if (isInWorld && currentScreen == null) {
-            guiRenderer.begin(window.getWidth(), window.getHeight());
-            hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome);
-            guiRenderer.end();
+            // In-Game HUD
+            if (currentScreen == null) {
+                guiRenderer.begin(window.getWidth(), window.getHeight());
+                hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome);
+                guiRenderer.end();
+            }
+        } else {
+            // --- 2. RENDER SESSION VIDEO BACKGROUND (Loading / Main Menus) ---
+            videoBackgroundManager.render(window.getWidth(), window.getHeight(), (float) glfwGetTime());
         }
 
         // --- 3. RENDER ACTIVE GUI MENU OVERLAY ---
@@ -313,6 +303,7 @@ public class MCJournalApp {
         if (chunkRenderer != null) chunkRenderer.cleanup();
         if (guiRenderer != null) guiRenderer.cleanup();
         if (fontRenderer != null) fontRenderer.cleanup();
+        if (videoBackgroundManager != null) videoBackgroundManager.cleanup();
         window.destroy();
     }
 
