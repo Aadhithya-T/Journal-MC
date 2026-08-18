@@ -5,14 +5,11 @@
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "start": "npm run app:prod",
-    "dev": "npm run app:prod",
-    "app": "npm run java:build && concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "app:prod": "npm run java:build && vite build && electron .",
-    "build": "npm run java:build && vite build",
+    "start": "npm run java:run",
+    "dev": "npm run java:run",
+    "build": "npm run java:build",
     "lint": "oxlint",
     "java:build": "javac -cp \"engine/lib/*\" -d engine/bin engine/src/com/mcjournal/*.java engine/src/com/mcjournal/client/*.java",
-    "java:start": "java -cp engine/bin com.mcjournal.ChunkServer",
     "java:run": "java -cp \"engine/bin;engine/lib/*\" com.mcjournal.client.MCJournalApp",
     "electron": "electron ."
   },
