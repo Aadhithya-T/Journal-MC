@@ -1,6 +1,19 @@
 {
   "name": "New Adventure",
   "biome": "Multi-Biome",
-  "seed": 643140,
-  "createdAt": "2026-08-18 23:40"
+  "seed": 909022,
+  "createdAt": "2026-08-19 01:10",
+  "playerX": -3.0777931,
+  "playerY": 68.0,
+  "playerZ": 2.9352882,
+  "playerYaw": -18.119083,
+  "playerPitch": -1.4600027,
+  "health": 20,
+  "hunger": 20,
+  "selectedSlot": 0,
+  "modifiedBlocks": {
+    "7,60,8": 10,
+    "7,61,8": 10,
+    "7,59,7": 10
+  }
 }

@@ -170,6 +170,31 @@ public class ChunkMeshBuilder {
         return Block.isSolid(b) && b != Block.OAK_LEAVES && b != Block.BIRCH_LEAVES;
     }
 
+    private static float computeWaterColumnDepth(ChunkManager manager, int wx, int y, int wz) {
+        int depth = 1;
+        for (int dy = 1; dy <= 16; dy++) {
+            int checkY = y - dy;
+            if (checkY < 0) break;
+            byte b = manager.getBlockAt(wx, checkY, wz);
+            if (b == Block.WATER) {
+                depth++;
+            } else {
+                break;
+            }
+        }
+        return (float) depth;
+    }
+
+    private static float computeWaterShoreline(ChunkManager manager, int wx, int y, int wz) {
+        if (Block.isSolid(manager.getBlockAt(wx + 1, y, wz)) ||
+            Block.isSolid(manager.getBlockAt(wx - 1, y, wz)) ||
+            Block.isSolid(manager.getBlockAt(wx, y, wz + 1)) ||
+            Block.isSolid(manager.getBlockAt(wx, y, wz - 1))) {
+            return 1.0f;
+        }
+        return 0.0f;
+    }
+
     public static MeshData buildMesh(Chunk chunk, ChunkManager manager) {
         FloatArrayList solidPos = new FloatArrayList(16384);
         FloatArrayList solidNorm = new FloatArrayList(16384);
@@ -246,47 +271,63 @@ public class ChunkMeshBuilder {
                             float[] v2 = {wx + c[2][0], y + c[2][1] + yOffset, wz + c[2][2]};
                             float[] v3 = {wx + c[3][0], y + c[3][1] + yOffset, wz + c[3][2]};
 
-                            // Ambient Occlusion
-                            float ao0 = isWater ? 1.0f : computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[0][0], face.cornerOffsets[0][1]);
-                            float ao1 = isWater ? 1.0f : computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[1][0], face.cornerOffsets[1][1]);
-                            float ao2 = isWater ? 1.0f : computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[2][0], face.cornerOffsets[2][1]);
-                            float ao3 = isWater ? 1.0f : computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[3][0], face.cornerOffsets[3][1]);
+                            // Ambient Occlusion / Water Optical Parameters
+                            float s0, s1, s2, s3;
+                            float g0 = 0, g1 = 0, g2 = 0, g3 = 0;
+                            float b0 = 0, b1 = 0, b2 = 0, b3 = 0;
 
-                            float s0 = face.baseShade * ao0;
-                            float s1 = face.baseShade * ao1;
-                            float s2 = face.baseShade * ao2;
-                            float s3 = face.baseShade * ao3;
+                            if (isWater) {
+                                s0 = computeWaterColumnDepth(manager, wx + c[0][0], y, wz + c[0][2]) / 8.0f;
+                                s1 = computeWaterColumnDepth(manager, wx + c[1][0], y, wz + c[1][2]) / 8.0f;
+                                s2 = computeWaterColumnDepth(manager, wx + c[2][0], y, wz + c[2][2]) / 8.0f;
+                                s3 = computeWaterColumnDepth(manager, wx + c[3][0], y, wz + c[3][2]) / 8.0f;
+
+                                g0 = computeWaterShoreline(manager, wx + c[0][0], y, wz + c[0][2]);
+                                g1 = computeWaterShoreline(manager, wx + c[1][0], y, wz + c[1][2]);
+                                g2 = computeWaterShoreline(manager, wx + c[2][0], y, wz + c[2][2]);
+                                g3 = computeWaterShoreline(manager, wx + c[3][0], y, wz + c[3][2]);
+                            } else {
+                                float ao0 = computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[0][0], face.cornerOffsets[0][1]);
+                                float ao1 = computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[1][0], face.cornerOffsets[1][1]);
+                                float ao2 = computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[2][0], face.cornerOffsets[2][1]);
+                                float ao3 = computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[3][0], face.cornerOffsets[3][1]);
+
+                                s0 = g0 = b0 = ao0;
+                                s1 = g1 = b1 = ao1;
+                                s2 = g2 = b2 = ao2;
+                                s3 = g3 = b3 = ao3;
+                            }
 
                             FloatArrayList targetPos = isWater ? waterPos : solidPos;
                             FloatArrayList targetNorm = isWater ? waterNorm : solidNorm;
                             FloatArrayList targetUv = isWater ? waterUv : solidUv;
                             FloatArrayList targetCol = isWater ? waterCol : solidCol;
 
-                            // Anisotropic Triangulation Flip
-                            if (ao0 + ao2 > ao1 + ao3) {
+                            // Triangulation
+                            if (s0 + s2 > s1 + s3) {
                                 // Triangle 1 (v0, v1, v2)
                                 targetPos.add9(v0[0], v0[1], v0[2], v1[0], v1[1], v1[2], v2[0], v2[1], v2[2]);
                                 targetNorm.add9(face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2]);
                                 targetUv.add6(uv0[0], uv0[1], uv1[0], uv1[1], uv2[0], uv2[1]);
-                                targetCol.add9(s0, s0, s0, s1, s1, s1, s2, s2, s2);
+                                targetCol.add9(s0, g0, b0, s1, g1, b1, s2, g2, b2);
 
                                 // Triangle 2 (v0, v2, v3)
                                 targetPos.add9(v0[0], v0[1], v0[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]);
                                 targetNorm.add9(face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2]);
                                 targetUv.add6(uv0[0], uv0[1], uv2[0], uv2[1], uv3[0], uv3[1]);
-                                targetCol.add9(s0, s0, s0, s2, s2, s2, s3, s3, s3);
+                                targetCol.add9(s0, g0, b0, s2, g2, b2, s3, g3, b3);
                             } else {
                                 // Triangle 1 (v1, v2, v3)
                                 targetPos.add9(v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]);
                                 targetNorm.add9(face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2]);
                                 targetUv.add6(uv1[0], uv1[1], uv2[0], uv2[1], uv3[0], uv3[1]);
-                                targetCol.add9(s1, s1, s1, s2, s2, s2, s3, s3, s3);
+                                targetCol.add9(s1, g1, b1, s2, g2, b2, s3, g3, b3);
 
                                 // Triangle 2 (v1, v3, v0)
                                 targetPos.add9(v1[0], v1[1], v1[2], v3[0], v3[1], v3[2], v0[0], v0[1], v0[2]);
                                 targetNorm.add9(face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2]);
                                 targetUv.add6(uv1[0], uv1[1], uv3[0], uv3[1], uv0[0], uv0[1]);
-                                targetCol.add9(s1, s1, s1, s3, s3, s3, s0, s0, s0);
+                                targetCol.add9(s1, g1, b1, s3, g3, b3, s0, g0, b0);
                             }
                         }
                     }
@@ -337,8 +378,8 @@ public class ChunkMeshBuilder {
         uv.add6(uMin, vMin, uMax, vMin, uMax, vMax);
         uv.add6(uMin, vMin, uMax, vMax, uMin, vMax);
 
-        col.add9(0.92f, 0.92f, 0.92f, 0.92f, 0.92f, 0.92f, 0.92f, 0.92f, 0.92f);
-        col.add9(0.92f, 0.92f, 0.92f, 0.92f, 0.92f, 0.92f, 0.92f, 0.92f, 0.92f);
+        col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+        col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     public static class FloatArrayList {

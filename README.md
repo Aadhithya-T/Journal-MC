@@ -5,7 +5,7 @@
 [![LWJGL 3.3.3](https://img.shields.io/badge/LWJGL-3.3.3-FF6600?style=for-the-badge)](https://www.lwjgl.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
 
-An authentic, standalone singleplayer Minecraft voxel sandbox and journaling desktop game. Built as a 100% pure native Java 26 and hardware-accelerated OpenGL 3.3 Core Profile engine utilizing LWJGL 3.3.3 bindings, featuring authentic Minecraft Java Edition 1.17 world generation, 3D volumetric cave carving, survival hand mining, dynamic fluid mechanics, and persistent world state management.
+An authentic, standalone singleplayer Minecraft voxel sandbox and journaling desktop game. Built as a 100% pure native Java 26 and hardware-accelerated OpenGL 3.3 Core Profile engine utilizing LWJGL 3.3.3 bindings, featuring authentic Minecraft Java Edition 1.17 world generation, 3D volumetric cave carving, survival hand mining, dynamic fluid mechanics, continuous 24-hour astronomical lighting, physical water optics, and persistent world state management.
 
 ---
 
@@ -16,10 +16,35 @@ An authentic, standalone singleplayer Minecraft voxel sandbox and journaling des
 - Direct hardware interaction via GLFW window management, OpenGL 3.3 Core Profile shaders, and STB native bindings.
 - Multi-threaded chunk generation and mesh construction utilizing Java 26 virtual threads to achieve sub-second world generation across 500+ chunks.
 
-### Procedural 64x Pixel-Art Texture Engine
+### Procedural 64x Pixel-Art Texture Engine & sRGB Pipeline
 - In-memory procedural texture generation: All block textures (Grass, Dirt, Stone, Cobblestone, Sand, Bedrock, Oak/Birch Logs, Leaves, Diamond Ore, Water, Foliage) are computed mathematically in RAM in under 1 millisecond on launch without requiring external PNG files.
+- Color space management: Texture atlas is uploaded with GL_SRGB8_ALPHA8 for automatic hardware sRGB-to-linear decoding during sampling.
 - Per-vertex ambient occlusion with 4-level light curves and anisotropic diagonal flip correction.
 - Top-face de-tiling with pseudo-random 90-degree UV rotations on stone, dirt, sand, and cobblestone surfaces.
+
+---
+
+## Lighting, Atmosphere, and Rendering Pipeline
+
+### Continuous 24-Hour Astronomical Solar Cycle
+- Real-time solar orbital engine calculating dynamic celestial coordinates across standard 24,000-tick Minecraft days (20 minutes real-time cycle).
+- Day Phase: Crisp, warm directional sunlight with vibrant azure sky dome and square Minecraft Sun.
+- Sunset & Sunrise (Golden Hour): Warm golden-amber low-angle direct light, fiery crimson/amber horizon haze, and twilight purple zenith.
+- Night Phase: Directional cool moonlight from the opposing lunar orbit vector, glowing square Minecraft Moon disc, and procedural twinkling starfield.
+- Continuous Smooth Transitions: Hermite interpolation (smoothstep) across solar elevation angles eliminates abrupt lighting snaps.
+
+### Principled Shading and Color Management
+- Linear Scene Radiance: All direct sunlight, hemisphere ambient sky fill, and ground bounce are evaluated in physical linear HDR space.
+- Filmic Soft-Shoulder Tone Mapping: Extended Reinhard operator with white point W = 1.8 prevents sunlight highlight blowout while preserving deep shadow detail.
+- Atmospheric Perspective Fog: Linear distance fog blended prior to tone mapping for seamless horizon integration between terrain and the sky dome.
+- Strict Binary Alpha Foliage: 100% binary cutout testing (discard at alpha < 0.5) eliminates transparent depth-sorting sorting bugs.
+
+### Physical Water Optical Model
+- Per-Column Physical Depth: Vertical depth scanning encodes true water column depth (1 to 16 blocks) and shoreline adjacency into vertex attributes.
+- Beer-Lambert Optical Transmission: Dynamic transmission curve (T = exp(-mu * depth)) delivers crystal-clear turquoise shorelines with visible submerged sand/gravel and rich, saturated deep navy absorption in oceans.
+- Schlick Dielectric Fresnel Optics: Surface reflection (F0 = 0.02) transitions smoothly from 98% underwater transmission at normal incidence to sky ambient reflection at grazing angles.
+- Continuous World-Space Wave Normals: Dual-frequency wave perturbations computed in world coordinates eliminate chunk UV boundary seams and grid artifacts.
+- Distant Water Preservation: Preserves blue chroma in distant water fog, preventing distant lakes from bleaching to white/gray horizon haze.
 
 ---
 
@@ -113,6 +138,18 @@ An authentic, standalone singleplayer Minecraft voxel sandbox and journaling des
 | **1 - 9** | Select Hotbar Slot |
 | **Mouse Scroll Wheel** | Cycle Hotbar Slots |
 | **Escape** | Pause Game / Open Escape Menu |
+| **F1** | Normal Full Rendering Pipeline |
+| **F2** | Debug Mode: Albedo Only |
+| **F3** | Debug Mode: Surface Normals |
+| **F4** | Debug Mode: Direct Sunlight/Moonlight |
+| **F5** | Debug Mode: Ambient Hemisphere Light |
+| **F6** | Debug Mode: Baked Vertex AO |
+| **F7** | Debug Mode: Total Pre-Albedo Radiance |
+| **F8** | Debug Mode: Linear Pre-Tonemap HDR |
+| **F9** | Debug Mode: Atmospheric Fog Factor |
+| **F10** | Debug Mode: Water Base Color Gradient |
+| **F11** | Debug Mode: Normalized Water Depth Map |
+| **F12** | Debug Mode: Beer-Lambert Transmission (T) |
 
 ---
 

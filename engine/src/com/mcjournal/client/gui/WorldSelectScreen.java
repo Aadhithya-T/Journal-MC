@@ -23,7 +23,7 @@ public class WorldSelectScreen extends Screen {
         if (currentWorld != null) {
             // Row 1: Play Selected World (Left) | Create Disabled (Right)
             buttons.add(new Button(1, "Play Selected World", width / 2 - 210, bottomY, btnW, btnH, () -> {
-                app.enterWorld(currentWorld.seed, currentWorld.name, currentWorld.biome);
+                app.enterWorld(currentWorld.seed, currentWorld.name, currentWorld.biome, currentWorld);
             }));
 
             Button createBtn = new Button(2, "Create New World", width / 2 + 10, bottomY, btnW, btnH, () -> {});

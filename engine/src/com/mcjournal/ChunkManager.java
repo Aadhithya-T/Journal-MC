@@ -8,6 +8,7 @@ public class ChunkManager {
     private final TerrainGenerator generator;
     private final ConcurrentMap<String, Chunk> chunks = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, ChunkMeshBuilder.MeshData> meshes = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Byte> modifiedBlocks = new ConcurrentHashMap<>();
     private final Set<String> solidObstacles = ConcurrentHashMap.newKeySet();
 
     public ChunkManager(int radiusChunks, long seed) {
@@ -48,6 +49,49 @@ public class ChunkManager {
             }));
         }
         CompletableFuture.allOf(meshFutures.toArray(new CompletableFuture[0])).join();
+    }
+
+    public Map<String, Byte> getModifiedBlocks() {
+        return modifiedBlocks;
+    }
+
+    public void applyModifiedBlocks(Map<String, Byte> deltas) {
+        if (deltas == null || deltas.isEmpty()) return;
+        Set<String> dirtyChunkKeys = new HashSet<>();
+
+        for (Map.Entry<String, Byte> entry : deltas.entrySet()) {
+            try {
+                String[] pos = entry.getKey().split(",");
+                int wx = Integer.parseInt(pos[0]);
+                int wy = Integer.parseInt(pos[1]);
+                int wz = Integer.parseInt(pos[2]);
+                byte type = entry.getValue();
+
+                int cx = Math.floorDiv(wx, 16);
+                int cz = Math.floorDiv(wz, 16);
+                Chunk chunk = getChunk(cx, cz);
+                if (chunk != null) {
+                    int lx = Math.floorMod(wx, 16);
+                    int lz = Math.floorMod(wz, 16);
+                    chunk.setBlock(lx, wy, lz, type);
+                    modifiedBlocks.put(entry.getKey(), type);
+
+                    dirtyChunkKeys.add(cx + "," + cz);
+                    if (lx == 0) dirtyChunkKeys.add((cx - 1) + "," + cz);
+                    if (lx == 15) dirtyChunkKeys.add((cx + 1) + "," + cz);
+                    if (lz == 0) dirtyChunkKeys.add(cx + "," + (cz - 1));
+                    if (lz == 15) dirtyChunkKeys.add(cx + "," + (cz + 1));
+                }
+            } catch (Exception e) {
+                // Ignore malformed key
+            }
+        }
+
+        // Rebuild meshes for all modified chunks
+        for (String key : dirtyChunkKeys) {
+            String[] parts = key.split(",");
+            rebuildSingleMesh(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+        }
     }
 
     public Chunk getChunk(int cx, int cz) {
@@ -92,6 +136,7 @@ public class ChunkManager {
         int lz = Math.floorMod(wz, 16);
 
         chunk.setBlock(lx, wy, lz, type);
+        modifiedBlocks.put(wx + "," + wy + "," + wz, type);
 
         // Rebuild mesh for this chunk
         rebuildSingleMesh(cx, cz);
