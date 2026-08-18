@@ -171,15 +171,15 @@ public class ChunkMeshBuilder {
     }
 
     public static MeshData buildMesh(Chunk chunk, ChunkManager manager) {
-        FloatArrayList solidPos = new FloatArrayList(8192);
-        FloatArrayList solidNorm = new FloatArrayList(8192);
-        FloatArrayList solidUv = new FloatArrayList(8192);
-        FloatArrayList solidCol = new FloatArrayList(8192);
+        FloatArrayList solidPos = new FloatArrayList(16384);
+        FloatArrayList solidNorm = new FloatArrayList(16384);
+        FloatArrayList solidUv = new FloatArrayList(16384);
+        FloatArrayList solidCol = new FloatArrayList(16384);
 
-        FloatArrayList waterPos = new FloatArrayList(2048);
-        FloatArrayList waterNorm = new FloatArrayList(2048);
-        FloatArrayList waterUv = new FloatArrayList(2048);
-        FloatArrayList waterCol = new FloatArrayList(2048);
+        FloatArrayList waterPos = new FloatArrayList(4096);
+        FloatArrayList waterNorm = new FloatArrayList(4096);
+        FloatArrayList waterUv = new FloatArrayList(4096);
+        FloatArrayList waterCol = new FloatArrayList(4096);
 
         int worldOriginX = chunk.getCx() * Chunk.SIZE;
         int worldOriginZ = chunk.getCz() * Chunk.SIZE;
@@ -212,7 +212,7 @@ public class ChunkMeshBuilder {
                         boolean shouldDrawFace;
 
                         if (isWater) {
-                            shouldDrawFace = (neighbor == Block.AIR && f == 2);
+                            shouldDrawFace = (neighbor != Block.WATER && isTransparent(neighbor));
                         } else if (block == Block.OAK_LEAVES || block == Block.BIRCH_LEAVES) {
                             shouldDrawFace = (neighbor != block && isTransparent(neighbor));
                         } else {

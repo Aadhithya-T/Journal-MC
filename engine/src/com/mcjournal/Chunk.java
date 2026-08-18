@@ -5,8 +5,8 @@ import java.util.Base64;
 
 public class Chunk {
     public static final int SIZE = 16;
-    public static final int HEIGHT = 32;
-    public static final int TOTAL_VOXELS = SIZE * SIZE * HEIGHT; // 8,192
+    public static final int HEIGHT = 256; // Minecraft 1.17 Standard Full World Height (0 to 256)
+    public static final int TOTAL_VOXELS = SIZE * SIZE * HEIGHT; // 65,536 voxels per chunk
 
     private final int cx;
     private final int cz;

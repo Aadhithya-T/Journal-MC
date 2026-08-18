@@ -2,6 +2,7 @@ package com.mcjournal.client;
 
 import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
+import com.mcjournal.FluidPhysicsManager;
 import org.joml.Vector3f;
 
 public class BlockBreakingManager {
@@ -15,6 +16,7 @@ public class BlockBreakingManager {
 
     private boolean wasLmbDown = false;
     private boolean wasRmbDown = false;
+    private int hitParticleTick = 0;
 
     // Hotbar default block types for slot 0..8
     public static final byte[] HOTBAR_BLOCKS = {
@@ -29,7 +31,7 @@ public class BlockBreakingManager {
         Block.BIRCH_LOG
     };
 
-    public void update(ChunkManager world, ChunkRenderer renderer, Player player, Camera camera, boolean lmbDown, boolean rmbDown) {
+    public void update(ChunkManager world, ChunkRenderer renderer, ParticleManager particles, FluidPhysicsManager fluidPhysics, Player player, Camera camera, boolean lmbDown, boolean rmbDown) {
         // 1. Cast ray from player eye position along look direction
         Vector3f eyePos = player.getEyePosition(1.0f);
         Vector3f lookDir = camera.getLookDirection();
@@ -53,20 +55,27 @@ public class BlockBreakingManager {
 
                 if (hardness == 0.0f) {
                     // Instant break (Flowers, Tall Grass)
-                    breakTargetBlock(world, renderer, currentHit.bx, currentHit.by, currentHit.bz);
+                    breakTargetBlock(world, renderer, particles, fluidPhysics, currentHit.bx, currentHit.by, currentHit.bz);
                     resetBreak();
                 } else if (hardness > 0.0f) {
+                    // Spawn mining chip particles periodically while hitting
+                    hitParticleTick++;
+                    if (hitParticleTick % 4 == 0 && particles != null) {
+                        particles.spawnMiningHitParticles(currentHit.bx, currentHit.by, currentHit.bz, currentHit.blockType, currentHit.normalX, currentHit.normalY, currentHit.normalZ);
+                    }
+
                     // Vanilla Hand Mining formula: damage = 1.0 / (hardness * 30 * 1.0)
                     float damagePerTick = 1.0f / (hardness * 30.0f);
                     breakProgress += damagePerTick;
 
                     if (breakProgress >= 1.0f) {
-                        breakTargetBlock(world, renderer, currentHit.bx, currentHit.by, currentHit.bz);
+                        breakTargetBlock(world, renderer, particles, fluidPhysics, currentHit.bx, currentHit.by, currentHit.bz);
                         resetBreak();
                     }
                 }
             } else {
                 breakProgress = 0.0f;
+                hitParticleTick = 0;
             }
 
             // 3. Handle Block Placement with Right Mouse Button (RMB Click)
@@ -79,9 +88,12 @@ public class BlockBreakingManager {
 
                 // Check that placed block doesn't intersect player bounding box
                 if (!isIntersectingPlayer(player, placeX, placeY, placeZ)) {
-                    if (world.getBlockAt(placeX, placeY, placeZ) == Block.AIR) {
+                    if (world.getBlockAt(placeX, placeY, placeZ) == Block.AIR || world.getBlockAt(placeX, placeY, placeZ) == Block.WATER) {
                         world.setBlockAt(placeX, placeY, placeZ, blockToPlace);
                         reuploadChunkMeshes(world, renderer, placeX, placeZ);
+                        if (fluidPhysics != null) {
+                            fluidPhysics.onBlockChanged(world, renderer, particles, placeX, placeY, placeZ);
+                        }
                         System.out.println("[Building] 🧱 Placed " + Block.getName(blockToPlace) + " at (" + placeX + ", " + placeY + ", " + placeZ + ")");
                     }
                 }
@@ -92,11 +104,22 @@ public class BlockBreakingManager {
         wasRmbDown = rmbDown;
     }
 
-    private void breakTargetBlock(ChunkManager world, ChunkRenderer renderer, int bx, int by, int bz) {
+    private void breakTargetBlock(ChunkManager world, ChunkRenderer renderer, ParticleManager particles, FluidPhysicsManager fluidPhysics, int bx, int by, int bz) {
         byte brokenType = world.getBlockAt(bx, by, bz);
         if (brokenType != Block.AIR && brokenType != Block.BEDROCK) {
             world.setBlockAt(bx, by, bz, Block.AIR);
             reuploadChunkMeshes(world, renderer, bx, bz);
+
+            // Spawn block disintegration debris particle cloud
+            if (particles != null) {
+                particles.spawnBlockBreakParticles(bx, by, bz, brokenType);
+            }
+
+            // Trigger water filling & flow physics
+            if (fluidPhysics != null) {
+                fluidPhysics.onBlockChanged(world, renderer, particles, bx, by, bz);
+            }
+
             System.out.println("[Mining] ⛏ Broke " + Block.getName(brokenType) + " by hand at (" + bx + ", " + by + ", " + bz + ")!");
         }
     }
@@ -105,7 +128,7 @@ public class BlockBreakingManager {
         int cx = Math.floorDiv(wx, 16);
         int cz = Math.floorDiv(wz, 16);
         int lx = Math.floorMod(wx, 16);
-        int lz = Math.floorMod(wz, 16);
+        int lz = Math.floorMod(wx, 16);
 
         renderer.uploadChunkMesh(cx, cz, world.getChunkMesh(cx, cz));
 
@@ -134,6 +157,7 @@ public class BlockBreakingManager {
         targetBy = -1;
         targetBz = -1;
         breakProgress = 0.0f;
+        hitParticleTick = 0;
     }
 
     public Raycast.Hit getCurrentHit() {

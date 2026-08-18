@@ -89,8 +89,22 @@ public class Player {
             onGround = false;
         }
 
-        // 3. Gravity & Vertical Drag
-        velocity.y = (velocity.y - GRAVITY) * DRAG_Y;
+        // 2.5 Water Physics & Buoyancy
+        boolean inWater = world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + 0.35f), (int) Math.floor(pos.z)) == Block.WATER;
+        if (inWater) {
+            fallDistance = 0; // Water completely breaks fall damage
+            highestY = pos.y;
+            friction = 0.80f;
+
+            if (jump) {
+                velocity.y = 0.14f; // Swim upwards
+            } else {
+                velocity.y = Math.max(-0.05f, (velocity.y - 0.005f) * 0.85f); // Gentle buoyancy sinking
+            }
+        } else {
+            // 3. Gravity & Vertical Drag (Air/Ground)
+            velocity.y = (velocity.y - GRAVITY) * DRAG_Y;
+        }
 
         // 4. Move & Collide with Voxel Terrain (Y first, then X and Z with continuous step-up)
         moveWithCollision(world, velocity.x, velocity.y, velocity.z);

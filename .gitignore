@@ -29,7 +29,12 @@ Faithful*
 public/texturepacks
 *.zip
 
-# Java Build artifacts
+# Java Build artifacts & Scratch tools
 engine/bin/
+engine/scratch/
+*.exe
 .gradle/
 build/
+
+# Heavy Video Binaries (Frames are committed in engine/resources/backgrounds)
+*.mp4

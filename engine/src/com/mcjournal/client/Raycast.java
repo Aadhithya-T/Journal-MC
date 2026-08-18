@@ -59,7 +59,7 @@ public class Raycast {
 
         while (dist <= maxDistance) {
             byte block = world.getBlockAt(x, y, z);
-            if (Block.isSolid(block)) {
+            if (block != Block.AIR && block != Block.WATER) {
                 return new Hit(x, y, z, normalX, normalY, normalZ, block, dist);
             }
 

@@ -1,8 +1,10 @@
 package com.mcjournal.client;
 
 import com.mcjournal.Block;
+import com.mcjournal.Chunk;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.ChunkMeshBuilder;
+import com.mcjournal.FluidPhysicsManager;
 import com.mcjournal.client.gui.*;
 import org.joml.Vector3f;
 
@@ -25,6 +27,8 @@ public class MCJournalApp {
     private VideoBackgroundManager videoBackgroundManager;
     private BlockBreakingManager blockBreakingManager;
     private BlockSelectionRenderer blockSelectionRenderer;
+    private ParticleManager particleManager;
+    private FluidPhysicsManager fluidPhysicsManager;
 
     private ChunkManager chunkManager;
     private ShaderProgram chunkShader;
@@ -48,6 +52,8 @@ public class MCJournalApp {
         this.videoBackgroundManager = new VideoBackgroundManager();
         this.blockBreakingManager = new BlockBreakingManager();
         this.blockSelectionRenderer = new BlockSelectionRenderer();
+        this.particleManager = new ParticleManager();
+        this.fluidPhysicsManager = new FluidPhysicsManager();
     }
 
     public void run() {
@@ -69,6 +75,7 @@ public class MCJournalApp {
 
         videoBackgroundManager.init();
         blockSelectionRenderer.init();
+        particleManager.init();
 
         atlas = new TextureAtlas();
         chunkRenderer = new ChunkRenderer();
@@ -133,8 +140,8 @@ public class MCJournalApp {
         this.currentWorldName = worldName;
         this.currentSeed = seed;
 
-        System.out.println("[MCJournalApp] Generating 100-chunk Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
-        this.chunkManager = new ChunkManager(5, seed);
+        System.out.println("[MCJournalApp] Generating 500+ chunk Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
+        this.chunkManager = new ChunkManager(11, seed);
 
         chunkRenderer.cleanup();
         Map<String, ChunkMeshBuilder.MeshData> meshes = chunkManager.getAllMeshes();
@@ -145,11 +152,11 @@ public class MCJournalApp {
             chunkRenderer.uploadChunkMesh(cx, cz, entry.getValue());
         }
 
-        // Safe spawn point calculation
+        // Safe spawn point calculation (Surface scan from top of world down)
         int spawnX = 8;
         int spawnZ = 8;
-        int spawnY = 16;
-        for (int y = 31; y >= 0; y--) {
+        int spawnY = 66;
+        for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
             if (Block.isSolid(chunkManager.getBlockAt(spawnX, y, spawnZ))) {
                 spawnY = y + 2;
                 break;
@@ -261,10 +268,16 @@ public class MCJournalApp {
 
             player.updateTick(chunkManager, forward, backward, left, right, jump, sprint, sneak);
 
-            // Mine blocks by hand (LMB) & Place blocks (RMB)
+            // Mine blocks by hand (LMB) & Place blocks (RMB) with particles and fluid physics
             boolean lmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_1);
             boolean rmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_2);
-            blockBreakingManager.update(chunkManager, chunkRenderer, player, camera, lmb, rmb);
+            blockBreakingManager.update(chunkManager, chunkRenderer, particleManager, fluidPhysicsManager, player, camera, lmb, rmb);
+
+            // Update Fluid Physics Simulation (Water flows, cascades, and fills cavities)
+            fluidPhysicsManager.updateTicks(chunkManager, chunkRenderer, particleManager);
+
+            // Update Particle simulation
+            particleManager.update(TICK_DURATION, chunkManager);
         }
     }
 
@@ -283,8 +296,8 @@ public class MCJournalApp {
             chunkShader.setUniform("uProjection", camera.getProjectionMatrix());
             chunkShader.setUniform("uView", camera.getViewMatrix());
             chunkShader.setUniform("uFogColor", new Vector3f(0.47f, 0.65f, 1.0f));
-            chunkShader.setUniform("uFogStart", 25.0f);
-            chunkShader.setUniform("uFogEnd", 120.0f);
+            chunkShader.setUniform("uFogStart", 65.0f);
+            chunkShader.setUniform("uFogEnd", 220.0f);
 
             chunkRenderer.renderSolid();
             chunkRenderer.renderWater();
@@ -292,7 +305,7 @@ public class MCJournalApp {
             chunkShader.unbind();
             atlas.unbind();
 
-            // --- 2. RENDER MINECRAFT BLOCK SELECTION & DESTRUCTION OUTLINE ---
+            // --- 2. RENDER MINECRAFT BLOCK CRACKING OVERLAY & SELECTION OUTLINE ---
             if (currentScreen == null) {
                 Raycast.Hit hit = blockBreakingManager.getCurrentHit();
                 if (hit != null) {
@@ -300,7 +313,10 @@ public class MCJournalApp {
                 }
             }
 
-            // --- 3. IN-GAME HARDCORE HUD ---
+            // --- 3. RENDER DISINTEGRATION PARTICLES ---
+            particleManager.render(camera);
+
+            // --- 4. IN-GAME HARDCORE HUD ---
             if (currentScreen == null) {
                 guiRenderer.begin(window.getWidth(), window.getHeight());
                 hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome);
@@ -311,7 +327,7 @@ public class MCJournalApp {
             videoBackgroundManager.render(window.getWidth(), window.getHeight());
         }
 
-        // --- 4. RENDER ACTIVE GUI MENU OVERLAY ---
+        // --- 5. RENDER ACTIVE GUI MENU OVERLAY ---
         if (currentScreen != null) {
             guiRenderer.begin(window.getWidth(), window.getHeight());
             currentScreen.render(guiRenderer, fontRenderer, input.getMouseX(), input.getMouseY(), (float) deltaTime);
@@ -327,6 +343,7 @@ public class MCJournalApp {
         if (fontRenderer != null) fontRenderer.cleanup();
         if (videoBackgroundManager != null) videoBackgroundManager.cleanup();
         if (blockSelectionRenderer != null) blockSelectionRenderer.cleanup();
+        if (particleManager != null) particleManager.cleanup();
         window.destroy();
     }
 

@@ -129,7 +129,7 @@ public class ChunkManager {
         int rx = (int) Math.floor(wx);
         int rz = (int) Math.floor(wz);
 
-        int startY = (currentY != null) ? Math.min(28, (int) Math.floor(currentY + 0.6f)) : 28;
+        int startY = (currentY != null) ? Math.min(Chunk.HEIGHT - 2, (int) Math.floor(currentY + 0.6f)) : Chunk.HEIGHT - 2;
 
         for (int y = startY; y >= 0; y--) {
             byte block = getBlockAt(rx, y, rz);
@@ -138,7 +138,7 @@ public class ChunkManager {
             }
         }
 
-        return 2.0f;
+        return 64.0f;
     }
 
     public boolean isCollidingWithSolid(float px, float py, float pz, float radius, float height) {
