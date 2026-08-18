@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 
-// Block Type Constants
 export const BLOCK = {
   AIR: 0,
   GRASS: 1,
@@ -13,12 +12,20 @@ export const BLOCK = {
   OAK_LEAVES: 8,
   DIAMOND_ORE: 9,
   WATER: 10,
-  TALL_GRASS: 11,
-  POPPY: 12,
-  DANDELION: 13,
-  BIRCH_LOG: 14,
-  BIRCH_LEAVES: 15
+  BIRCH_LOG: 11,
+  BIRCH_LEAVES: 12,
+  TALL_GRASS: 13,
+  POPPY: 14,
+  DANDELION: 15
 };
+
+export function isFloraBlock(blockType) {
+  return blockType === BLOCK.TALL_GRASS || blockType === BLOCK.POPPY || blockType === BLOCK.DANDELION;
+}
+
+export function isSolidBlock(blockType) {
+  return blockType !== BLOCK.AIR && blockType !== BLOCK.WATER && !isFloraBlock(blockType) && blockType > 0;
+}
 
 export const BLOCK_NAMES = {
   [BLOCK.GRASS]: "Grass Block",
@@ -185,9 +192,7 @@ export class TextureAtlas {
     return (
       blockType === BLOCK.AIR ||
       blockType === BLOCK.WATER ||
-      blockType === BLOCK.TALL_GRASS ||
-      blockType === BLOCK.POPPY ||
-      blockType === BLOCK.DANDELION
+      isFloraBlock(blockType)
     );
   }
 

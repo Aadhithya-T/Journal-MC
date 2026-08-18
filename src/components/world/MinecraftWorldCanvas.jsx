@@ -717,14 +717,14 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
           const isDangerousDropX = isSneakingRef.current && isGroundedRef.current && (targetGroundX < curY - 0.6);
 
           if (!isDangerousDropX) {
-            if (canStepUpX) {
+            if (!hitWallX) {
               curX = nextX;
-              curY = targetGroundX;
-            } else if (!hitWallX && curY >= targetGroundX - 0.15) {
-              curX = nextX;
-              if (isGroundedRef.current && targetGroundX <= curY && targetGroundX >= curY - 0.6) {
+              if (isGroundedRef.current && targetGroundX <= curY + 0.05 && targetGroundX >= curY - 0.5) {
                 curY = targetGroundX;
               }
+            } else if (canStepUpX) {
+              curX = nextX;
+              curY = targetGroundX;
             }
           }
         }
@@ -738,14 +738,14 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
           const isDangerousDropZ = isSneakingRef.current && isGroundedRef.current && (targetGroundZ < curY - 0.6);
 
           if (!isDangerousDropZ) {
-            if (canStepUpZ) {
+            if (!hitWallZ) {
               curZ = nextZ;
-              curY = targetGroundZ;
-            } else if (!hitWallZ && curY >= targetGroundZ - 0.15) {
-              curZ = nextZ;
-              if (isGroundedRef.current && targetGroundZ <= curY && targetGroundZ >= curY - 0.6) {
+              if (isGroundedRef.current && targetGroundZ <= curY + 0.05 && targetGroundZ >= curY - 0.5) {
                 curY = targetGroundZ;
               }
+            } else if (canStepUpZ) {
+              curZ = nextZ;
+              curY = targetGroundZ;
             }
           }
         }

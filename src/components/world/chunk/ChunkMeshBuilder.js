@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BLOCK } from './TextureAtlas';
+import { BLOCK, isFloraBlock, isSolidBlock } from './TextureAtlas';
 
 // 6 Cube Faces with Tangent Vectors for Per-Vertex Ambient Occlusion
 const FACES = [
@@ -122,7 +122,7 @@ export class ChunkMeshBuilder {
 
     const isSolid = (x, y, z) => {
       const b = getBlockAt(x, y, z);
-      return b !== BLOCK.AIR && b !== BLOCK.WATER && b < BLOCK.TALL_GRASS && b !== BLOCK.OAK_LEAVES && b !== BLOCK.BIRCH_LEAVES;
+      return isSolidBlock(b) && b !== BLOCK.OAK_LEAVES && b !== BLOCK.BIRCH_LEAVES;
     };
 
     for (let y = 0; y < CHUNK_HEIGHT; y++) {
@@ -132,7 +132,7 @@ export class ChunkMeshBuilder {
           if (block === BLOCK.AIR) continue;
 
           // 1. Foliage Cross-Quads (Tall grass, flowers with natural scatter jitter)
-          if (block >= BLOCK.TALL_GRASS) {
+          if (isFloraBlock(block)) {
             this.buildCrossFoliage(chunk, x, y, z, block, atlas, solidPositions, solidNormals, solidUvs, solidColors);
             continue;
           }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TextureAtlas, BLOCK, BLOCK_NAMES, BLOCK_COLORS } from './TextureAtlas';
+import { TextureAtlas, BLOCK, BLOCK_NAMES, BLOCK_COLORS, isSolidBlock } from './TextureAtlas';
 import { TerrainGenerator } from './TerrainGenerator';
 import { Chunk } from './Chunk';
 import { JavaEngineClient } from './JavaEngineClient';
@@ -309,7 +309,7 @@ export class ChunkManager {
     // Search downwards from startY for the first solid surface block under player
     for (let y = startY; y >= 0; y--) {
       const block = this.getBlockAt(rx, y, rz);
-      if (block !== BLOCK.AIR && block !== BLOCK.WATER && block < BLOCK.TALL_GRASS) {
+      if (isSolidBlock(block)) {
         return y + 1.0;
       }
     }
@@ -336,8 +336,8 @@ export class ChunkManager {
           }
 
           const block = this.getBlockAt(bx, by, bz);
-          // Solid obstacle blocks (blocks that are not air, water, or flowers/grass)
-          if (block !== BLOCK.AIR && block !== BLOCK.WATER && block < BLOCK.TALL_GRASS) {
+          // Solid obstacle blocks (blocks that are solid: grass, dirt, stone, logs, leaves, ores)
+          if (isSolidBlock(block)) {
             return true;
           }
         }
