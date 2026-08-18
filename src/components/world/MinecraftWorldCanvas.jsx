@@ -75,6 +75,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
   const onAddEntryRef = useRef(onAddEntry);
   const worldRef = useRef(world);
   const particleGroupRef = useRef(null);
+  const nearbyPOIRef = useRef(null);
   const waterAnimTimerRef = useRef(0);
   const posSaveTimerRef = useRef(0);
 
