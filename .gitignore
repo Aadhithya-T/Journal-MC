@@ -28,3 +28,8 @@ Faithful*
 *Release*
 public/texturepacks
 *.zip
+
+# Java Build artifacts
+engine/bin/
+.gradle/
+build/

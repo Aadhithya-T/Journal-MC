@@ -4,7 +4,6 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
 import java.io.File;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.HashMap;
@@ -50,7 +49,7 @@ public class TextureAtlas {
     public void load(String texturesDir) {
         ByteBuffer atlasBuffer = MemoryUtil.memAlloc(ATLAS_SIZE * ATLAS_SIZE * 4);
 
-        // Fill with default background color
+        // Fill with default opaque gray background
         for (int i = 0; i < ATLAS_SIZE * ATLAS_SIZE * 4; i += 4) {
             atlasBuffer.put(i, (byte) 120);     // R
             atlasBuffer.put(i + 1, (byte) 120); // G
@@ -58,18 +57,22 @@ public class TextureAtlas {
             atlasBuffer.put(i + 3, (byte) 255); // A
         }
 
-        stbi_set_flip_vertically_on_load(false);
+        // Standard OpenGL bottom-up texture flip
+        stbi_set_flip_vertically_on_load(true);
 
         for (Map.Entry<Integer, String> entry : slotFiles.entrySet()) {
             int slot = entry.getKey();
             String fileName = entry.getValue();
 
-            int slotX = (slot % ATLAS_GRID) * TILE_SIZE;
-            int slotY = (slot / ATLAS_GRID) * TILE_SIZE;
+            int col = slot % ATLAS_GRID;
+            int row = slot / ATLAS_GRID;
+
+            int slotX = col * TILE_SIZE;
+            // In OpenGL texture space, row 0 (top in UV v in [0.75, 1.0]) is at Y in [192, 255]
+            int slotY = ((ATLAS_GRID - 1) - row) * TILE_SIZE;
 
             File file = new File(texturesDir, fileName);
             if (!file.exists()) {
-                // Try fallback relative path
                 file = new File("public/texturepacks/faithful64x", fileName);
             }
 
