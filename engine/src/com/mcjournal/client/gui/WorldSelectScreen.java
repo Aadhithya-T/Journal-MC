@@ -27,10 +27,10 @@ public class WorldSelectScreen extends Screen {
 
     public WorldSelectScreen(MCJournalApp app) {
         super(app);
-        // Default worlds
-        worlds.add(new WorldEntry("world_1", "Adventurer's Frontier", "Plains", "Survival", 4242));
-        worlds.add(new WorldEntry("world_2", "Dense Birch Highlands", "Birch Forest", "Survival", 1337));
-        worlds.add(new WorldEntry("world_3", "Crystal Lake Sanctuary", "River Basin", "Creative", 9999));
+        // Default worlds (Hardcore only)
+        worlds.add(new WorldEntry("world_1", "Adventurer's Frontier", "Plains", "Hardcore", 4242));
+        worlds.add(new WorldEntry("world_2", "Dense Birch Highlands", "Birch Forest", "Hardcore", 1337));
+        worlds.add(new WorldEntry("world_3", "Crystal Lake Sanctuary", "River Basin", "Hardcore", 9999));
     }
 
     @Override
