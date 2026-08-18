@@ -289,9 +289,7 @@ public class MCJournalApp {
             }
         } else {
             // --- 2. RENDER LIVE MP4 VIDEO BACKGROUND (Title / World Select Menus) ---
-            guiRenderer.begin(window.getWidth(), window.getHeight());
-            videoBackgroundManager.render(guiRenderer, window.getWidth(), window.getHeight());
-            guiRenderer.end();
+            videoBackgroundManager.render(window.getWidth(), window.getHeight());
         }
 
         // --- 3. RENDER ACTIVE GUI MENU OVERLAY ---
