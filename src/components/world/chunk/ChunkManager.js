@@ -14,12 +14,20 @@ export class ChunkManager {
     this.atlas = new TextureAtlas(texturePackId);
     this.generator = new TerrainGenerator();
 
-    this.chunks = new Map(); // Key: "cx,cz" => Chunk instance (local state)
-    this.chunkMeshGroups = new Map(); // Key: "cx,cz" => THREE.Group (GPU meshes)
+    this.chunks = new Map(); // Key: "cx,cz" => Chunk instance
+    this.chunkMeshGroups = new Map(); // Key: "cx,cz" => THREE.Group or THREE.Mesh
     this.solidObstacles = new Set(); // Key: "wx,wy,wz" for POI structures
     this.pois = this.generator.pois;
 
-    this.initWorld();
+    // 1. Synchronously populate world and meshes for instant 0-latency spawn
+    this.initWorldSync();
+
+    // 2. Asynchronously connect and stream with Java 26 Native Engine
+    this.syncWithJavaEngine();
+  }
+
+  getChunkKey(cx, cz) {
+    return `${cx},${cz}`;
   }
 
   createMeshFromJavaData(data) {
@@ -54,12 +62,33 @@ export class ChunkManager {
     return group;
   }
 
-  getChunkKey(cx, cz) {
-    return `${cx},${cz}`;
+  initWorldSync() {
+    const minC = -this.renderRadius;
+    const maxC = this.renderRadius - 1;
+
+    // 1. Generate chunk block matrices
+    for (let cx = minC; cx <= maxC; cx++) {
+      for (let cz = minC; cz <= maxC; cz++) {
+        const blocks = this.generator.generateChunkData(cx, cz);
+        const chunk = new Chunk(cx, cz, blocks, this);
+        this.chunks.set(this.getChunkKey(cx, cz), chunk);
+      }
+    }
+
+    // 2. Build initial meshes
+    for (const chunk of this.chunks.values()) {
+      const mesh = chunk.rebuildMesh(this.atlas);
+      if (mesh) {
+        this.chunkMeshGroups.set(this.getChunkKey(chunk.cx, chunk.cz), mesh);
+        this.group.add(mesh);
+      }
+    }
+
+    // 3. Build Lore POI Structures
+    this.buildLoreStructures();
   }
 
-  async initWorld() {
-    // 1. Check & Stream Meshes Directly from Java 26 Engine
+  async syncWithJavaEngine() {
     try {
       const status = await JavaEngineClient.checkStatus();
       if (status) {
@@ -77,40 +106,20 @@ export class ChunkManager {
 
         if (javaMeshes && javaMeshes.size > 0) {
           for (const [key, meshData] of javaMeshes.entries()) {
+            const oldMesh = this.chunkMeshGroups.get(key);
+            if (oldMesh) {
+              this.group.remove(oldMesh);
+            }
             const meshGroup = this.createMeshFromJavaData(meshData);
             this.chunkMeshGroups.set(key, meshGroup);
             this.group.add(meshGroup);
           }
-          console.log(`[ChunkManager] 🚀 Loaded ${javaMeshes.size} Chunks Meshed Natively by Java 26 Engine!`);
-          this.buildLoreStructures();
-          return;
+          console.log(`[ChunkManager] 🚀 Streamed ${javaMeshes.size} Chunks from Java 26 Native Engine!`);
         }
       }
     } catch (e) {
-      console.warn('[ChunkManager] Java streaming fallback:', e.message);
+      console.warn('[ChunkManager] Java streaming notice:', e.message);
     }
-
-    // 2. Offline Fallback: Local Generation if Java server is booting
-    const minC = -this.renderRadius;
-    const maxC = this.renderRadius - 1;
-
-    for (let cx = minC; cx <= maxC; cx++) {
-      for (let cz = minC; cz <= maxC; cz++) {
-        const blocks = this.generator.generateChunkData(cx, cz);
-        const chunk = new Chunk(cx, cz, blocks, this);
-        this.chunks.set(this.getChunkKey(cx, cz), chunk);
-      }
-    }
-
-    for (const chunk of this.chunks.values()) {
-      const mesh = chunk.rebuildMesh(this.atlas);
-      if (mesh) {
-        this.chunkMeshGroups.set(this.getChunkKey(chunk.cx, chunk.cz), mesh);
-        this.group.add(mesh);
-      }
-    }
-
-    this.buildLoreStructures();
   }
 
   buildLoreStructures() {
@@ -209,6 +218,21 @@ export class ChunkManager {
 
     chunk.setBlock(lx, wy, lz, blockType);
 
+    // Rebuild chunk mesh
+    const oldMesh = this.chunkMeshGroups.get(this.getChunkKey(cx, cz));
+    if (oldMesh) this.group.remove(oldMesh);
+    const newMesh = chunk.rebuildMesh(this.atlas);
+    if (newMesh) {
+      this.chunkMeshGroups.set(this.getChunkKey(cx, cz), newMesh);
+      this.group.add(newMesh);
+    }
+
+    // Boundary neighbor chunk updates
+    if (lx === 0) this.rebuildSingleChunk(cx - 1, cz);
+    if (lx === this.chunkSize - 1) this.rebuildSingleChunk(cx + 1, cz);
+    if (lz === 0) this.rebuildSingleChunk(cx, cz - 1);
+    if (lz === this.chunkSize - 1) this.rebuildSingleChunk(cx, cz + 1);
+
     if (blockType === BLOCK.AIR) {
       this.solidObstacles.delete(`${wx},${wy},${wz}`);
     }
@@ -216,7 +240,21 @@ export class ChunkManager {
     return true;
   }
 
-  // Block break handled by Java 26 Native Engine
+  rebuildSingleChunk(cx, cz) {
+    const key = this.getChunkKey(cx, cz);
+    const neighbor = this.chunks.get(key);
+    if (neighbor) {
+      const oldMesh = this.chunkMeshGroups.get(key);
+      if (oldMesh) this.group.remove(oldMesh);
+      const mesh = neighbor.rebuildMesh(this.atlas);
+      if (mesh) {
+        this.chunkMeshGroups.set(key, mesh);
+        this.group.add(mesh);
+      }
+    }
+  }
+
+  // Block break handled synchronously and with Java 26 Native Engine
   async breakBlock(wx, wy, wz) {
     const currentBlock = this.getBlockAt(wx, wy, wz);
     if (currentBlock === BLOCK.AIR || currentBlock === BLOCK.BEDROCK || currentBlock === BLOCK.WATER) {
@@ -226,20 +264,11 @@ export class ChunkManager {
     const blockName = BLOCK_NAMES[currentBlock] || 'Block';
     const blockColor = BLOCK_COLORS[currentBlock] || '#888888';
 
-    // Update local memory state
+    // Update local voxel state & mesh immediately
     this.setBlockAt(wx, wy, wz, BLOCK.AIR);
 
-    // Call Java engine for authoritative re-meshing
-    const javaRes = await JavaEngineClient.breakBlock(wx, wy, wz);
-    if (javaRes && javaRes.parsedMesh) {
-      const key = `${javaRes.parsedMesh.cx},${javaRes.parsedMesh.cz}`;
-      const oldGroup = this.chunkMeshGroups.get(key);
-      if (oldGroup) this.group.remove(oldGroup);
-
-      const newGroup = this.createMeshFromJavaData(javaRes.parsedMesh);
-      this.chunkMeshGroups.set(key, newGroup);
-      this.group.add(newGroup);
-    }
+    // Also notify Java engine in background
+    JavaEngineClient.breakBlock(wx, wy, wz);
 
     return {
       type: currentBlock,
