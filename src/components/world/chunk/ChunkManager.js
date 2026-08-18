@@ -28,28 +28,45 @@ export class ChunkManager {
       if (status) {
         const javaChunks = await JavaEngineClient.fetchAllChunks();
         if (javaChunks && javaChunks.size > 0) {
+          let updatedCount = 0;
           for (const [key, bytes] of javaChunks.entries()) {
             const [cxStr, czStr] = key.split(',');
             const cx = parseInt(cxStr, 10);
             const cz = parseInt(czStr, 10);
             const existing = this.chunks.get(key);
             if (existing) {
-              existing.blocks = bytes;
-              if (existing.mesh) this.group.remove(existing.mesh);
-              const newMesh = existing.rebuildMesh(this.atlas);
-              if (newMesh) this.group.add(newMesh);
+              // Check if bytes differ before reallocating geometry
+              let isDifferent = false;
+              if (!existing.blocks || existing.blocks.length !== bytes.length) {
+                isDifferent = true;
+              } else {
+                for (let i = 0; i < bytes.length; i += 32) {
+                  if (existing.blocks[i] !== bytes[i]) {
+                    isDifferent = true;
+                    break;
+                  }
+                }
+              }
+              if (isDifferent) {
+                existing.blocks = bytes;
+                if (existing.mesh) this.group.remove(existing.mesh);
+                const newMesh = existing.rebuildMesh(this.atlas);
+                if (newMesh) this.group.add(newMesh);
+                updatedCount++;
+              }
             } else {
               const chunk = new Chunk(cx, cz, bytes, this);
               this.chunks.set(key, chunk);
               const mesh = chunk.rebuildMesh(this.atlas);
               if (mesh) this.group.add(mesh);
+              updatedCount++;
             }
           }
-          console.log(`[ChunkManager] Synced ${javaChunks.size} Chunks from Java 26 Engine!`);
+          console.log(`[ChunkManager] Synced with Java 26 Engine (${updatedCount} meshes updated)`);
         }
       }
     } catch (e) {
-      console.warn('[ChunkManager] Java Engine sync error:', e);
+      console.warn('[ChunkManager] Java Engine sync notice:', e);
     }
   }
 
