@@ -9,7 +9,7 @@ public class TitleScreen extends Screen {
         "Native Java 26 + OpenGL 3.3!",
         "Write your adventurer's story!",
         "One Life. One World.",
-        "Faithful 64x Textures!"
+        "Procedural 64x Pixel Art!"
     };
     private String currentSplash;
     private String multiplayerNotice = null;
@@ -24,8 +24,8 @@ public class TitleScreen extends Screen {
     public void init(int width, int height) {
         super.init(width, height);
 
-        int btnWidth = 360;
-        int btnHeight = 48;
+        int btnWidth = 400;
+        int btnHeight = 42;
         int centerX = (width - btnWidth) / 2;
         int startY = height / 2 + 10;
 
@@ -35,8 +35,8 @@ public class TitleScreen extends Screen {
         }));
 
         // 2. Multiplayer Button (Clickable, redirects to nothing)
-        buttons.add(new Button(2, "Multiplayer", centerX, startY + 60, btnWidth, btnHeight, () -> {
-            multiplayerNotice = "Multiplayer servers coming in future update!";
+        buttons.add(new Button(2, "Multiplayer", centerX, startY + 48, btnWidth, btnHeight, () -> {
+            multiplayerNotice = "Multiplayer servers coming in a future update!";
             noticeTimer = 3.0f;
         }));
     }
@@ -49,8 +49,8 @@ public class TitleScreen extends Screen {
             if (noticeTimer <= 0) multiplayerNotice = null;
         }
 
-        // Background: Dark Slate Soil Overlay
-        gui.drawRect(0, 0, width, height, 0.11f, 0.11f, 0.13f, 1.0f);
+        // Background: Classic dark Minecraft background tint
+        gui.drawRect(0, 0, width, height, 0.12f, 0.12f, 0.14f, 1.0f);
 
         // Header Minecraft Title Banner Box
         int bannerW = 560;
@@ -58,7 +58,7 @@ public class TitleScreen extends Screen {
         int bannerX = (width - bannerW) / 2;
         int bannerY = 60;
 
-        gui.drawBevelBox(bannerX, bannerY, bannerW, bannerH, 0x222222, 0x555555, 0x111111);
+        gui.drawBevelBox(bannerX, bannerY, bannerW, bannerH, 0x1f1f1f, 0x555555, 0x111111);
 
         String title = "MINECRAFT JOURNAL";
         float titleW = font.getStringWidth(title, 2.0f);
@@ -69,7 +69,7 @@ public class TitleScreen extends Screen {
         float splashW = font.getStringWidth(currentSplash, scalePulse);
         font.drawString(gui, currentSplash, bannerX + bannerW - splashW + 15, bannerY + bannerH + 4, scalePulse, 0xffff00, true);
 
-        // Multiplayer Notice Toast (if clicked)
+        // Multiplayer Notice Toast
         if (multiplayerNotice != null) {
             float noticeW = font.getStringWidth(multiplayerNotice, 0.9f);
             float toastX = (width - noticeW) / 2.0f;
@@ -79,9 +79,9 @@ public class TitleScreen extends Screen {
         }
 
         // Footer Subtitle
-        String sub = "Hardcore Edition | Java 26 + LWJGL 3.3";
+        String sub = "Hardcore Edition | Java 26 + OpenGL 3.3";
         float subW = font.getStringWidth(sub, 0.85f);
-        font.drawString(gui, sub, (width - subW) / 2.0f, height - 30, 0.85f, 0x777777, false);
+        font.drawString(gui, sub, (width - subW) / 2.0f, height - 28, 0.85f, 0x777777, false);
 
         // Render Buttons
         super.render(gui, font, mouseX, mouseY, deltaTime);

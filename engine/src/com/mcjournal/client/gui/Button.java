@@ -8,6 +8,7 @@ public class Button {
     private float width;
     private float height;
     private boolean isHovered;
+    private boolean isEnabled = true;
     private final Runnable onClick;
 
     public Button(int id, String text, float x, float y, float width, float height, Runnable onClick) {
@@ -21,26 +22,36 @@ public class Button {
     }
 
     public void update(double mouseX, double mouseY) {
+        if (!isEnabled) {
+            isHovered = false;
+            return;
+        }
         this.isHovered = mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
     }
 
     public void render(GuiRenderer gui, FontRenderer font) {
-        int bg = isHovered ? 0x6e6e6e : 0x4a4a4a;
-        int borderLight = isHovered ? 0xffffff : 0x8e8e8e;
-        int borderDark = isHovered ? 0x333333 : 0x222222;
+        // Draw Authentic Vanilla Minecraft 9-Slice Stone Button
+        gui.drawMinecraftButton(x, y, width, height, isHovered, isEnabled);
 
-        gui.drawBevelBox(x, y, width, height, bg, borderLight, borderDark);
-
-        float textW = font.getStringWidth(text, 1.0f);
+        float scale = height > 36 ? 1.05f : 0.92f;
+        float textW = font.getStringWidth(text, scale);
         float textX = x + (width - textW) / 2.0f;
-        float textY = y + (height - 18) / 2.0f;
+        float textY = y + (height - (18 * scale)) / 2.0f + 1;
 
-        int textColor = isHovered ? 0xffffa0 : 0xe0e0e0;
-        font.drawString(gui, text, textX, textY, 1.0f, textColor, true);
+        int textColor;
+        if (!isEnabled) {
+            textColor = 0xa0a0a0;
+        } else if (isHovered) {
+            textColor = 0xffffa0; // Minecraft yellow hover
+        } else {
+            textColor = 0xe0e0e0; // Minecraft crisp light gray
+        }
+
+        font.drawString(gui, text, textX, textY, scale, textColor, true);
     }
 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && isHovered) {
+        if (button == 0 && isEnabled && isHovered) {
             if (onClick != null) onClick.run();
             return true;
         }
@@ -55,6 +66,14 @@ public class Button {
     public void setSize(float width, float height) {
         this.width = width;
         this.height = height;
+    }
+
+    public boolean isEnabled() {
+        return isEnabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.isEnabled = enabled;
     }
 
     public int getId() {

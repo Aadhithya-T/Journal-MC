@@ -17,7 +17,7 @@ public class GuiRenderer {
     private final Matrix4f orthoMatrix = new Matrix4f();
     private int vao;
     private int vbo;
-    private final FloatBuffer vertexBuffer = MemoryUtil.memAllocFloat(6 * 8); // 6 vertices * 8 floats (x, y, u, v, r, g, b, a)
+    private final FloatBuffer vertexBuffer = MemoryUtil.memAllocFloat(6 * 8);
 
     public GuiRenderer() {
         this.guiShader = new ShaderProgram("/shaders/gui_vertex.glsl", "/shaders/gui_fragment.glsl");
@@ -31,7 +31,6 @@ public class GuiRenderer {
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-        // 8 floats per vertex: vec2 pos (offset 0), vec2 uv (offset 8), vec4 color (offset 16)
         int stride = 8 * Float.BYTES;
 
         glVertexAttribPointer(0, 2, GL_FLOAT, false, stride, 0);
@@ -79,7 +78,52 @@ public class GuiRenderer {
         putVertex(x, y + h, 0, 0, r, g, b, a);
         vertexBuffer.flip();
 
-        drawBuffer(0);
+        drawBuffer();
+    }
+
+    public void drawMinecraftButton(float x, float y, float w, float h, boolean isHovered, boolean isEnabled) {
+        int outerTopLeft, outerBottomRight;
+        int innerTopLeft, innerBottomRight;
+        int bodyColor;
+
+        if (!isEnabled) {
+            outerTopLeft = 0x555555;
+            outerBottomRight = 0x111111;
+            innerTopLeft = 0x333333;
+            innerBottomRight = 0x444444;
+            bodyColor = 0x2e2e2e;
+        } else if (isHovered) {
+            // Vanilla Hover: Bright White/Blue highlight
+            outerTopLeft = 0xffffff;
+            outerBottomRight = 0x222233;
+            innerTopLeft = 0x6e6e88;
+            innerBottomRight = 0xa0a0d0;
+            bodyColor = 0x767699;
+        } else {
+            // Vanilla Normal Stone Button
+            outerTopLeft = 0xc6c6c6;
+            outerBottomRight = 0x222222;
+            innerTopLeft = 0x555555;
+            innerBottomRight = 0x8e8e8e;
+            bodyColor = 0x686868;
+        }
+
+        // 1. Body
+        drawHexRect(x + 2, y + 2, w - 4, h - 4, bodyColor, 1.0f);
+
+        // 2. Outer Highlight (Top & Left - 2px)
+        drawHexRect(x, y, w - 2, 2, outerTopLeft, 1.0f);
+        drawHexRect(x, y, 2, h - 2, outerTopLeft, 1.0f);
+
+        // 3. Outer Shadow (Bottom & Right - 2px)
+        drawHexRect(x, y + h - 2, w, 2, outerBottomRight, 1.0f);
+        drawHexRect(x + w - 2, y, 2, h, outerBottomRight, 1.0f);
+
+        // 4. Inner Inset Ridge (1px)
+        drawHexRect(x + 2, y + 2, w - 4, 1, innerTopLeft, 1.0f);
+        drawHexRect(x + 2, y + 2, 1, h - 4, innerTopLeft, 1.0f);
+        drawHexRect(x + 2, y + h - 3, w - 4, 1, innerBottomRight, 1.0f);
+        drawHexRect(x + w - 3, y + 2, 1, h - 4, innerBottomRight, 1.0f);
     }
 
     public void drawBevelBox(float x, float y, float w, float h, int bgHex, int borderLightHex, int borderDarkHex) {
@@ -99,6 +143,13 @@ public class GuiRenderer {
         drawRect(x + w - 2, y, 2, h, dR, dG, dB, 1.0f);
     }
 
+    public void drawHexRect(float x, float y, float w, float h, int hexColor, float alpha) {
+        float r = ((hexColor >> 16) & 0xFF) / 255f;
+        float g = ((hexColor >> 8) & 0xFF) / 255f;
+        float b = (hexColor & 0xFF) / 255f;
+        drawRect(x, y, w, h, r, g, b, alpha);
+    }
+
     public void drawTexturedQuad(int textureId, float x, float y, float w, float h, float u0, float v0, float u1, float v1, float r, float g, float b, float a) {
         guiShader.setUniform("uUseTexture", 1);
         guiShader.setUniform("uTexture", 0);
@@ -116,7 +167,7 @@ public class GuiRenderer {
         putVertex(x, y + h, u0, v1, r, g, b, a);
         vertexBuffer.flip();
 
-        drawBuffer(textureId);
+        drawBuffer();
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
@@ -124,7 +175,7 @@ public class GuiRenderer {
         vertexBuffer.put(x).put(y).put(u).put(v).put(r).put(g).put(b).put(a);
     }
 
-    private void drawBuffer(int textureId) {
+    private void drawBuffer() {
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBufferData(GL_ARRAY_BUFFER, vertexBuffer, GL_DYNAMIC_DRAW);
