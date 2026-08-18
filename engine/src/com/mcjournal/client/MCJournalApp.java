@@ -1,5 +1,6 @@
 package com.mcjournal.client;
 
+import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.ChunkMeshBuilder;
 import com.mcjournal.client.gui.*;
@@ -14,14 +15,17 @@ public class MCJournalApp {
     private final Window window;
     private final InputHandler input;
     private final Camera camera;
+    private final Player player;
 
     private TextureAtlas atlas;
     private ChunkRenderer chunkRenderer;
     private GuiRenderer guiRenderer;
     private FontRenderer fontRenderer;
+    private HardcoreHUD hud;
 
     private ChunkManager chunkManager;
     private ShaderProgram chunkShader;
+    private String currentBiome = "Plains";
 
     private Screen currentScreen;
     private boolean isInWorld = false;
@@ -32,9 +36,10 @@ public class MCJournalApp {
     private double tickAccumulator = 0;
 
     public MCJournalApp() {
-        this.window = new Window("Minecraft Journal - Native Java Edition", 1280, 760);
+        this.window = new Window("Minecraft Journal - Native Hardcore Edition", 1280, 760);
         this.input = new InputHandler();
         this.camera = new Camera();
+        this.player = new Player();
     }
 
     public void run() {
@@ -52,11 +57,11 @@ public class MCJournalApp {
         guiRenderer = new GuiRenderer();
         fontRenderer = new FontRenderer();
         fontRenderer.init();
+        hud = new HardcoreHUD();
 
         atlas = new TextureAtlas();
         chunkRenderer = new ChunkRenderer();
 
-        camera.setPosition(6, 9, -10);
         camera.updateProjection(window.getAspectRatio());
 
         // 3. Load Shaders
@@ -69,7 +74,7 @@ public class MCJournalApp {
         setScreen(new TitleScreen(this));
 
         lastFrameTime = glfwGetTime();
-        System.out.println("[MCJournalApp] Native OpenGL 3.3 Engine & GUI Ready!");
+        System.out.println("[MCJournalApp] Native OpenGL 3.3 Hardcore Engine Ready!");
     }
 
     public void setScreen(Screen screen) {
@@ -91,7 +96,8 @@ public class MCJournalApp {
     }
 
     public void enterWorld(long seed, String worldName, String biome) {
-        System.out.println("[MCJournalApp] Generating 100-chunk world: '" + worldName + "' (Seed: " + seed + ", Biome: " + biome + ")...");
+        this.currentBiome = biome;
+        System.out.println("[MCJournalApp] Generating 100-chunk Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
         this.chunkManager = new ChunkManager(5, seed);
 
         // Upload all 100 precomputed meshes to OpenGL GPU VAO/VBOs
@@ -103,9 +109,27 @@ public class MCJournalApp {
             chunkRenderer.uploadChunkMesh(cx, cz, entry.getValue());
         }
 
+        // Find safe spawn point above ground at (8, 8)
+        int spawnX = 8;
+        int spawnZ = 8;
+        int spawnY = 16;
+        for (int y = 31; y >= 0; y--) {
+            if (Block.isSolid(chunkManager.getBlockAt(spawnX, y, spawnZ))) {
+                spawnY = y + 2;
+                break;
+            }
+        }
+
+        player.pos.set(spawnX, spawnY, spawnZ);
+        player.prevPos.set(spawnX, spawnY, spawnZ);
+        player.velocity.set(0, 0, 0);
+        player.health = 20;
+        player.hunger = 20;
+        player.isDead = false;
+
         this.isInWorld = true;
-        setScreen(null); // Switch directly into 3D gameplay!
-        System.out.println("[MCJournalApp] 🚀 Spawned into World!");
+        setScreen(null); // Switch directly into 3D Hardcore gameplay!
+        System.out.println("[MCJournalApp] 🚀 Spawned into Hardcore World at Y=" + spawnY + "!");
     }
 
     private void loop() {
@@ -124,11 +148,11 @@ public class MCJournalApp {
                 window.setResized(false);
             }
 
-            // Handle Input & Screen Updates
+            // Handle Input
             if (currentScreen != null) {
                 currentScreen.update(input.getMouseX(), input.getMouseY());
             } else {
-                handleInGameInput((float) deltaTime);
+                handleInGameMouseLook();
             }
 
             // Run Fixed 20-TPS Game Ticks
@@ -138,13 +162,14 @@ public class MCJournalApp {
             }
 
             // Render Frame
-            render((float) deltaTime);
+            float partialTick = (float) (tickAccumulator / TICK_DURATION);
+            render(deltaTime, partialTick);
 
             window.update();
         }
     }
 
-    private void handleInGameInput(float deltaTime) {
+    private void handleInGameMouseLook() {
         if (input.isKeyDown(GLFW_KEY_ESCAPE)) {
             setScreen(new TitleScreen(this));
             return;
@@ -155,47 +180,55 @@ public class MCJournalApp {
             double mouseDy = input.consumeMouseDeltaY();
 
             float sensitivity = 0.12f;
-            camera.setYaw(camera.getYaw() + (float) (mouseDx * sensitivity));
-            camera.setPitch(camera.getPitch() + (float) (mouseDy * sensitivity));
+            player.yaw += (float) (mouseDx * sensitivity);
+            player.pitch += (float) (mouseDy * sensitivity);
+            player.pitch = Math.clamp(player.pitch, -89.5f, 89.5f);
 
-            // Locomotion
-            float speed = input.isKeyDown(GLFW_KEY_LEFT_CONTROL) ? 16.0f : 6.5f;
-            float moveStep = speed * deltaTime;
+            camera.setYaw(player.yaw);
+            camera.setPitch(player.pitch);
 
-            Vector3f lookDir = camera.getLookDirection();
-            Vector3f rightDir = new Vector3f(lookDir.z, 0, -lookDir.x).normalize();
-            Vector3f pos = camera.getPosition();
+            // Hotbar selection via number keys 1-9
+            for (int k = GLFW_KEY_1; k <= GLFW_KEY_9; k++) {
+                if (input.isKeyDown(k)) {
+                    player.selectedSlot = k - GLFW_KEY_1;
+                }
+            }
 
-            if (input.isKeyDown(GLFW_KEY_W)) {
-                pos.add(lookDir.x * moveStep, lookDir.y * moveStep, lookDir.z * moveStep);
-            }
-            if (input.isKeyDown(GLFW_KEY_S)) {
-                pos.sub(lookDir.x * moveStep, lookDir.y * moveStep, lookDir.z * moveStep);
-            }
-            if (input.isKeyDown(GLFW_KEY_A)) {
-                pos.add(rightDir.x * moveStep, 0, rightDir.z * moveStep);
-            }
-            if (input.isKeyDown(GLFW_KEY_D)) {
-                pos.sub(rightDir.x * moveStep, 0, rightDir.z * moveStep);
-            }
-            if (input.isKeyDown(GLFW_KEY_SPACE)) {
-                pos.y += moveStep;
-            }
-            if (input.isKeyDown(GLFW_KEY_LEFT_SHIFT)) {
-                pos.y -= moveStep;
+            // Hotbar selection via scroll wheel
+            double scroll = input.consumeScrollDelta();
+            if (scroll != 0) {
+                player.selectedSlot = (player.selectedSlot - (int) Math.signum(scroll) + 9) % 9;
             }
         }
     }
 
     private void tick() {
-        // Fixed 20-TPS tick logic
+        if (isInWorld && currentScreen == null && chunkManager != null) {
+            // Check for death / permadeath
+            if (player.isDead) {
+                setScreen(new GameOverScreen(this));
+                return;
+            }
+
+            boolean forward = input.isKeyDown(GLFW_KEY_W);
+            boolean backward = input.isKeyDown(GLFW_KEY_S);
+            boolean left = input.isKeyDown(GLFW_KEY_A);
+            boolean right = input.isKeyDown(GLFW_KEY_D);
+            boolean jump = input.isKeyDown(GLFW_KEY_SPACE);
+            boolean sprint = input.isKeyDown(GLFW_KEY_LEFT_CONTROL);
+            boolean sneak = input.isKeyDown(GLFW_KEY_LEFT_SHIFT);
+
+            player.updateTick(chunkManager, forward, backward, left, right, jump, sprint, sneak);
+        }
     }
 
-    private void render(float deltaTime) {
+    private void render(double deltaTime, float partialTick) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (isInWorld && currentScreen == null) {
             // --- RENDER 3D VOXEL WORLD ---
+            Vector3f eyePos = player.getEyePosition(partialTick);
+            camera.setPosition(eyePos.x, eyePos.y, eyePos.z);
             camera.updateView();
 
             chunkShader.bind();
@@ -213,25 +246,16 @@ public class MCJournalApp {
             chunkShader.unbind();
             atlas.unbind();
 
-            // Render In-Game Crosshair Overlay
+            // --- RENDER HARDCORE SURVIVAL HUD ---
             guiRenderer.begin(window.getWidth(), window.getHeight());
-            int cx = window.getWidth() / 2;
-            int cy = window.getHeight() / 2;
-            guiRenderer.drawRect(cx - 8, cy - 1, 16, 2, 1.0f, 1.0f, 1.0f, 0.85f);
-            guiRenderer.drawRect(cx - 1, cy - 8, 2, 16, 1.0f, 1.0f, 1.0f, 0.85f);
-
-            // Coordinates Display
-            Vector3f p = camera.getPosition();
-            String coords = String.format("XYZ: %.1f / %.1f / %.1f", p.x, p.y, p.z);
-            fontRenderer.drawString(guiRenderer, coords, 12, 12, 0.85f, 0xffffff, true);
-            fontRenderer.drawString(guiRenderer, "ESC: Menu", 12, 32, 0.75f, 0xaaaaaa, true);
+            hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome);
             guiRenderer.end();
         }
 
         // --- RENDER ACTIVE GUI MENU ---
         if (currentScreen != null) {
             guiRenderer.begin(window.getWidth(), window.getHeight());
-            currentScreen.render(guiRenderer, fontRenderer, input.getMouseX(), input.getMouseY(), deltaTime);
+            currentScreen.render(guiRenderer, fontRenderer, input.getMouseX(), input.getMouseY(), (float) deltaTime);
             guiRenderer.end();
         }
     }
