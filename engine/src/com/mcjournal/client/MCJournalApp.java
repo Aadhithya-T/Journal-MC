@@ -14,10 +14,11 @@ public class MCJournalApp {
     private final Window window;
     private final InputHandler input;
     private final Camera camera;
-    private final TextureAtlas atlas;
-    private final ChunkRenderer chunkRenderer;
-    private final GuiRenderer guiRenderer;
-    private final FontRenderer fontRenderer;
+
+    private TextureAtlas atlas;
+    private ChunkRenderer chunkRenderer;
+    private GuiRenderer guiRenderer;
+    private FontRenderer fontRenderer;
 
     private ChunkManager chunkManager;
     private ShaderProgram chunkShader;
@@ -34,10 +35,6 @@ public class MCJournalApp {
         this.window = new Window("Minecraft Journal - Native Java Edition", 1280, 760);
         this.input = new InputHandler();
         this.camera = new Camera();
-        this.atlas = new TextureAtlas();
-        this.chunkRenderer = new ChunkRenderer();
-        this.guiRenderer = new GuiRenderer();
-        this.fontRenderer = new FontRenderer();
     }
 
     public void run() {
@@ -47,21 +44,28 @@ public class MCJournalApp {
     }
 
     private void init() {
+        // 1. Initialize GLFW Window & OpenGL Context FIRST
         window.init();
         input.init(window.getHandle(), this);
 
+        // 2. Initialize OpenGL GPU Resources AFTER context is active
+        guiRenderer = new GuiRenderer();
+        fontRenderer = new FontRenderer();
         fontRenderer.init();
+
+        atlas = new TextureAtlas();
+        chunkRenderer = new ChunkRenderer();
 
         camera.setPosition(6, 9, -10);
         camera.updateProjection(window.getAspectRatio());
 
-        // 1. Load Shaders
+        // 3. Load Shaders
         chunkShader = new ShaderProgram("/shaders/chunk_vertex.glsl", "/shaders/chunk_fragment.glsl");
 
-        // 2. Load Faithful 64x Texture Atlas
+        // 4. Load Faithful 64x Texture Atlas
         atlas.load("public/texturepacks/faithful64x");
 
-        // 3. Start on Title Screen
+        // 5. Start on Title Screen
         setScreen(new TitleScreen(this));
 
         lastFrameTime = glfwGetTime();
