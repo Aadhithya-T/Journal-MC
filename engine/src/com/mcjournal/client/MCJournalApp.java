@@ -178,6 +178,9 @@ public class MCJournalApp {
                 window.setResized(false);
             }
 
+            // Update Video Background Animation
+            videoBackgroundManager.update(deltaTime);
+
             // Handle Input
             if (currentScreen != null) {
                 currentScreen.update(input.getMouseX(), input.getMouseY());
@@ -221,7 +224,7 @@ public class MCJournalApp {
             camera.setYaw(player.yaw);
             camera.setPitch(player.pitch);
 
-            // Hotbar selection
+            // Hotbar keys
             for (int k = GLFW_KEY_1; k <= GLFW_KEY_9; k++) {
                 if (input.isKeyDown(k)) {
                     player.selectedSlot = k - GLFW_KEY_1;
@@ -257,8 +260,8 @@ public class MCJournalApp {
     private void render(double deltaTime, float partialTick) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // --- 1. RENDER 3D VOXEL WORLD (During active gameplay) ---
         if (isInWorld && chunkManager != null) {
+            // --- 1. RENDER 3D VOXEL WORLD (During active gameplay) ---
             Vector3f eyePos = player.getEyePosition(partialTick);
             camera.setPosition(eyePos.x, eyePos.y, eyePos.z);
             camera.updateView();
@@ -285,8 +288,10 @@ public class MCJournalApp {
                 guiRenderer.end();
             }
         } else {
-            // --- 2. RENDER SESSION VIDEO BACKGROUND (Loading / Main Menus) ---
-            videoBackgroundManager.render(window.getWidth(), window.getHeight(), (float) glfwGetTime());
+            // --- 2. RENDER LIVE MP4 VIDEO BACKGROUND (Title / World Select Menus) ---
+            guiRenderer.begin(window.getWidth(), window.getHeight());
+            videoBackgroundManager.render(guiRenderer, window.getWidth(), window.getHeight());
+            guiRenderer.end();
         }
 
         // --- 3. RENDER ACTIVE GUI MENU OVERLAY ---
