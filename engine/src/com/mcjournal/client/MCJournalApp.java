@@ -69,8 +69,8 @@ public class MCJournalApp {
         // 3. Load Shaders
         chunkShader = new ShaderProgram("/shaders/chunk_vertex.glsl", "/shaders/chunk_fragment.glsl");
 
-        // 4. Load Faithful 64x Texture Atlas
-        atlas.load("public/texturepacks/faithful64x");
+        // 4. Generate Procedural 64x Pixel-Art Texture Atlas
+        atlas.init();
 
         // 5. Start on Title Screen
         setScreen(new TitleScreen(this));
