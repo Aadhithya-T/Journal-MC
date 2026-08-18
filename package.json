@@ -5,8 +5,8 @@
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "start": "npm run app",
-    "dev": "npm run app",
+    "start": "npm run app:prod",
+    "dev": "npm run app:prod",
     "app": "npm run java:build && concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
     "app:prod": "npm run java:build && vite build && electron .",
     "build": "npm run java:build && vite build",

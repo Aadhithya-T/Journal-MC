@@ -14,68 +14,83 @@ export class ChunkManager {
     this.atlas = new TextureAtlas(texturePackId);
     this.generator = new TerrainGenerator();
 
-    this.chunks = new Map(); // Key: "cx,cz" => Chunk instance
+    this.chunks = new Map(); // Key: "cx,cz" => Chunk instance (local state)
+    this.chunkMeshGroups = new Map(); // Key: "cx,cz" => THREE.Group (GPU meshes)
     this.solidObstacles = new Set(); // Key: "wx,wy,wz" for POI structures
     this.pois = this.generator.pois;
 
     this.initWorld();
-    this.initJavaEngine();
   }
 
-  async initJavaEngine() {
-    try {
-      const status = await JavaEngineClient.checkStatus();
-      if (status) {
-        const javaChunks = await JavaEngineClient.fetchAllChunks();
-        if (javaChunks && javaChunks.size > 0) {
-          let updatedCount = 0;
-          for (const [key, bytes] of javaChunks.entries()) {
-            const [cxStr, czStr] = key.split(',');
-            const cx = parseInt(cxStr, 10);
-            const cz = parseInt(czStr, 10);
-            const existing = this.chunks.get(key);
-            if (existing) {
-              // Check if bytes differ before reallocating geometry
-              let isDifferent = false;
-              if (!existing.blocks || existing.blocks.length !== bytes.length) {
-                isDifferent = true;
-              } else {
-                for (let i = 0; i < bytes.length; i += 32) {
-                  if (existing.blocks[i] !== bytes[i]) {
-                    isDifferent = true;
-                    break;
-                  }
-                }
-              }
-              if (isDifferent) {
-                existing.blocks = bytes;
-                if (existing.mesh) this.group.remove(existing.mesh);
-                const newMesh = existing.rebuildMesh(this.atlas);
-                if (newMesh) this.group.add(newMesh);
-                updatedCount++;
-              }
-            } else {
-              const chunk = new Chunk(cx, cz, bytes, this);
-              this.chunks.set(key, chunk);
-              const mesh = chunk.rebuildMesh(this.atlas);
-              if (mesh) this.group.add(mesh);
-              updatedCount++;
-            }
-          }
-          console.log(`[ChunkManager] Synced with Java 26 Engine (${updatedCount} meshes updated)`);
-        }
-      }
-    } catch (e) {
-      console.warn('[ChunkManager] Java Engine sync notice:', e);
+  createMeshFromJavaData(data) {
+    const group = new THREE.Group();
+    const chunkOriginX = data.cx * this.chunkSize;
+    const chunkOriginZ = data.cz * this.chunkSize;
+    group.position.set(chunkOriginX, 0, chunkOriginZ);
+
+    if (data.solid && data.solid.positions.length > 0) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(data.solid.positions, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(data.solid.normals, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(data.solid.uvs, 2));
+      geo.setAttribute('color', new THREE.BufferAttribute(data.solid.colors, 3));
+      const solidMesh = new THREE.Mesh(geo, this.atlas.material);
+      solidMesh.castShadow = true;
+      solidMesh.receiveShadow = true;
+      group.add(solidMesh);
     }
+
+    if (data.water && data.water.positions.length > 0) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(data.water.positions, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(data.water.normals, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(data.water.uvs, 2));
+      geo.setAttribute('color', new THREE.BufferAttribute(data.water.colors, 3));
+      const waterMesh = new THREE.Mesh(geo, this.atlas.waterMaterial);
+      waterMesh.receiveShadow = true;
+      group.add(waterMesh);
+    }
+
+    return group;
   }
 
   getChunkKey(cx, cz) {
     return `${cx},${cz}`;
   }
 
-  initWorld() {
-    // 1. Generate Data for all 100 Chunks (10x10 Grid from cx=-5..4, cz=-5..4)
+  async initWorld() {
+    // 1. Check & Stream Meshes Directly from Java 26 Engine
+    try {
+      const status = await JavaEngineClient.checkStatus();
+      if (status) {
+        const javaMeshes = await JavaEngineClient.fetchPrecomputedMeshes();
+        const rawChunks = await JavaEngineClient.fetchAllChunks();
+
+        if (rawChunks && rawChunks.size > 0) {
+          for (const [key, bytes] of rawChunks.entries()) {
+            const [cxStr, czStr] = key.split(',');
+            const cx = parseInt(cxStr, 10);
+            const cz = parseInt(czStr, 10);
+            this.chunks.set(key, new Chunk(cx, cz, bytes, this));
+          }
+        }
+
+        if (javaMeshes && javaMeshes.size > 0) {
+          for (const [key, meshData] of javaMeshes.entries()) {
+            const meshGroup = this.createMeshFromJavaData(meshData);
+            this.chunkMeshGroups.set(key, meshGroup);
+            this.group.add(meshGroup);
+          }
+          console.log(`[ChunkManager] 🚀 Loaded ${javaMeshes.size} Chunks Meshed Natively by Java 26 Engine!`);
+          this.buildLoreStructures();
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[ChunkManager] Java streaming fallback:', e.message);
+    }
+
+    // 2. Offline Fallback: Local Generation if Java server is booting
     const minC = -this.renderRadius;
     const maxC = this.renderRadius - 1;
 
@@ -87,15 +102,14 @@ export class ChunkManager {
       }
     }
 
-    // 2. Build Meshes for all 100 Chunks
     for (const chunk of this.chunks.values()) {
       const mesh = chunk.rebuildMesh(this.atlas);
       if (mesh) {
+        this.chunkMeshGroups.set(this.getChunkKey(chunk.cx, chunk.cz), mesh);
         this.group.add(mesh);
       }
     }
 
-    // 3. Build Lore POI 3D Structures
     this.buildLoreStructures();
   }
 
@@ -183,7 +197,7 @@ export class ChunkManager {
     return chunk.getBlock(lx, wy, lz);
   }
 
-  // Set block and immediately rebuild chunk mesh + affected neighbor meshes
+  // Set block and immediately update GPU mesh
   setBlockAt(wx, wy, wz, blockType) {
     const cx = Math.floor(wx / this.chunkSize);
     const cz = Math.floor(wz / this.chunkSize);
@@ -195,19 +209,6 @@ export class ChunkManager {
 
     chunk.setBlock(lx, wy, lz, blockType);
 
-    // Rebuild main chunk mesh
-    const oldMesh = chunk.mesh;
-    if (oldMesh) this.group.remove(oldMesh);
-    const newMesh = chunk.rebuildMesh(this.atlas);
-    if (newMesh) this.group.add(newMesh);
-
-    // If on chunk boundary, also update neighbor chunk to show newly exposed faces
-    if (lx === 0) this.rebuildSingleChunk(cx - 1, cz);
-    if (lx === this.chunkSize - 1) this.rebuildSingleChunk(cx + 1, cz);
-    if (lz === 0) this.rebuildSingleChunk(cx, cz - 1);
-    if (lz === this.chunkSize - 1) this.rebuildSingleChunk(cx, cz + 1);
-
-    // Remove from solidObstacles if clearing
     if (blockType === BLOCK.AIR) {
       this.solidObstacles.delete(`${wx},${wy},${wz}`);
     }
@@ -215,19 +216,9 @@ export class ChunkManager {
     return true;
   }
 
-  rebuildSingleChunk(cx, cz) {
-    const neighbor = this.chunks.get(this.getChunkKey(cx, cz));
-    if (neighbor) {
-      if (neighbor.mesh) this.group.remove(neighbor.mesh);
-      const mesh = neighbor.rebuildMesh(this.atlas);
-      if (mesh) this.group.add(mesh);
-    }
-  }
-
-  // Instant block break (Minecraft Java Edition)
-  breakBlock(wx, wy, wz) {
+  // Block break handled by Java 26 Native Engine
+  async breakBlock(wx, wy, wz) {
     const currentBlock = this.getBlockAt(wx, wy, wz);
-    // Air and Bedrock cannot be broken
     if (currentBlock === BLOCK.AIR || currentBlock === BLOCK.BEDROCK || currentBlock === BLOCK.WATER) {
       return null;
     }
@@ -235,8 +226,20 @@ export class ChunkManager {
     const blockName = BLOCK_NAMES[currentBlock] || 'Block';
     const blockColor = BLOCK_COLORS[currentBlock] || '#888888';
 
+    // Update local memory state
     this.setBlockAt(wx, wy, wz, BLOCK.AIR);
-    JavaEngineClient.breakBlock(wx, wy, wz);
+
+    // Call Java engine for authoritative re-meshing
+    const javaRes = await JavaEngineClient.breakBlock(wx, wy, wz);
+    if (javaRes && javaRes.parsedMesh) {
+      const key = `${javaRes.parsedMesh.cx},${javaRes.parsedMesh.cz}`;
+      const oldGroup = this.chunkMeshGroups.get(key);
+      if (oldGroup) this.group.remove(oldGroup);
+
+      const newGroup = this.createMeshFromJavaData(javaRes.parsedMesh);
+      this.chunkMeshGroups.set(key, newGroup);
+      this.group.add(newGroup);
+    }
 
     return {
       type: currentBlock,
@@ -323,7 +326,6 @@ export class ChunkManager {
 
     const startY = currentY !== null ? Math.min(28, Math.floor(currentY + 0.6)) : 28;
 
-    // Search downwards from startY for the first solid surface block under player
     for (let y = startY; y >= 0; y--) {
       const block = this.getBlockAt(rx, y, rz);
       if (isSolidBlock(block)) {
@@ -341,7 +343,6 @@ export class ChunkManager {
     const minBZ = Math.floor(pz - radius);
     const maxBZ = Math.floor(pz + radius);
     
-    // Check vertical overlap with player torso/head (above 0.15m to avoid floor collisions)
     const minBY = Math.floor(py + 0.15);
     const maxBY = Math.floor(py + height - 0.05);
 
@@ -353,7 +354,6 @@ export class ChunkManager {
           }
 
           const block = this.getBlockAt(bx, by, bz);
-          // Solid obstacle blocks (blocks that are solid: grass, dirt, stone, logs, leaves, ores)
           if (isSolidBlock(block)) {
             return true;
           }
