@@ -9,22 +9,26 @@ export class FirstPersonHand {
     this.bobTimer = 0;
     this.swingProgress = 0;
     this.isSwinging = false;
-    this.swingDuration = 0.28;
+    this.swingDuration = 0.24;
+    this.currentSlot = 0;
 
-    // Default rest position (matching screenshot bottom-right angle)
-    this.restPosition = new THREE.Vector3(0.44, -0.40, -0.58);
-    this.restRotation = new THREE.Euler(0.24, -0.42, 0.12);
+    // Default rest position (matching first-person Minecraft view)
+    this.restPosition = new THREE.Vector3(0.42, -0.38, -0.55);
+    this.restRotation = new THREE.Euler(0.22, -0.38, 0.10);
 
     this.group.position.copy(this.restPosition);
     this.group.rotation.copy(this.restRotation);
 
-    this.buildBareSteveFist();
+    this.heldItemContainer = new THREE.Group();
+    this.group.add(this.heldItemContainer);
+
+    this.buildArmModel();
+    this.setHeldItemSlot(0);
   }
 
-  buildBareSteveFist() {
+  buildArmModel() {
     this.armPivot = new THREE.Group();
-    this.armPivot.position.set(0, 0, 0);
-    this.group.add(this.armPivot);
+    this.heldItemContainer.add(this.armPivot);
 
     // Procedural 16x16 Pixel Art Skin Texture Canvas
     const canvas = document.createElement('canvas');
@@ -66,10 +70,106 @@ export class FirstPersonHand {
       side: THREE.FrontSide
     });
 
-    const armGeo = new THREE.BoxGeometry(0.24, 0.58, 0.24);
-    const armMesh = new THREE.Mesh(armGeo, armMat);
-    armMesh.position.set(0, -0.12, 0);
-    this.armPivot.add(armMesh);
+    const armGeo = new THREE.BoxGeometry(0.22, 0.54, 0.22);
+    this.armMesh = new THREE.Mesh(armGeo, armMat);
+    this.armMesh.position.set(0, -0.12, 0);
+    this.armMesh.castShadow = true;
+    this.armPivot.add(this.armMesh);
+
+    // Slot for holding 3D item attached to the hand
+    this.itemAttachment = new THREE.Group();
+    this.itemAttachment.position.set(0, -0.32, -0.05);
+    this.armPivot.add(this.itemAttachment);
+  }
+
+  setHeldItemSlot(slotIndex) {
+    this.currentSlot = slotIndex;
+    while (this.itemAttachment.children.length > 0) {
+      this.itemAttachment.remove(this.itemAttachment.children[0]);
+    }
+
+    const woodMat = new THREE.MeshLambertMaterial({ color: 0x855025 });
+    const diamondMat = new THREE.MeshLambertMaterial({ color: 0x55ffff });
+    const leatherMat = new THREE.MeshLambertMaterial({ color: 0x5c3218 });
+    const paperMat = new THREE.MeshLambertMaterial({ color: 0xe8dcbe });
+    const featherMat = new THREE.MeshLambertMaterial({ color: 0xf5f5f5 });
+    const torchGlowMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+
+    if (slotIndex === 0) {
+      // 📖 3D Book & Quill
+      const book = new THREE.Group();
+      const cover = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.32, 0.06), leatherMat);
+      const pages = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.30, 0.04), paperMat);
+      pages.position.set(0.01, 0, 0.01);
+      const quill = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.24, 0.03), featherMat);
+      quill.position.set(0.10, 0.12, 0.04);
+      quill.rotation.z = -0.35;
+      book.add(cover, pages, quill);
+      book.rotation.set(0.4, 0.3, -0.2);
+      this.itemAttachment.add(book);
+    } else if (slotIndex === 1) {
+      // ⛏️ 3D Diamond Pickaxe
+      const pickaxe = new THREE.Group();
+      const stick = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.55, 0.05), woodMat);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.08, 0.08), diamondMat);
+      head.position.set(0, 0.26, 0);
+      const leftTip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.10, 0.08), diamondMat);
+      leftTip.position.set(-0.16, 0.20, 0);
+      const rightTip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.10, 0.08), diamondMat);
+      rightTip.position.set(0.16, 0.20, 0);
+      pickaxe.add(stick, head, leftTip, rightTip);
+      pickaxe.position.set(0, 0.12, -0.15);
+      pickaxe.rotation.set(-0.2, 0.2, -0.4);
+      this.itemAttachment.add(pickaxe);
+    } else if (slotIndex === 2) {
+      // 🪵 3D Oak Planks Block
+      const blockMat = new THREE.MeshLambertMaterial({ color: 0x966838 });
+      const block = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), blockMat);
+      block.position.set(0, 0.05, -0.12);
+      block.rotation.set(0.3, 0.4, 0);
+      this.itemAttachment.add(block);
+    } else if (slotIndex === 3) {
+      // 🌹 3D Wild Poppy Flower
+      const flower = new THREE.Group();
+      const stem = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.28, 0.03), new THREE.MeshLambertMaterial({ color: 0x3d7428 }));
+      const petal = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.14), new THREE.MeshLambertMaterial({ color: 0xdd2222 }));
+      petal.position.set(0, 0.14, 0);
+      flower.add(stem, petal);
+      flower.position.set(0, 0.08, -0.10);
+      flower.rotation.set(0.2, 0.1, -0.2);
+      this.itemAttachment.add(flower);
+    } else if (slotIndex === 4) {
+      // 🕯️ 3D Torch with Glowing Ember
+      const torch = new THREE.Group();
+      const stick = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.38, 0.05), woodMat);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.07), torchGlowMat);
+      head.position.set(0, 0.18, 0);
+      torch.add(stick, head);
+      torch.position.set(0, 0.10, -0.12);
+      torch.rotation.set(0.3, 0.1, -0.1);
+      this.itemAttachment.add(torch);
+    } else if (slotIndex === 5) {
+      // 🪨 Cobblestone Block
+      const cobbleMat = new THREE.MeshLambertMaterial({ color: 0x5a5a5a });
+      const block = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), cobbleMat);
+      block.position.set(0, 0.05, -0.12);
+      block.rotation.set(0.3, 0.4, 0);
+      this.itemAttachment.add(block);
+    } else if (slotIndex === 6) {
+      // 🏖️ Sand Block
+      const sandMat = new THREE.MeshLambertMaterial({ color: 0xdbd3a0 });
+      const block = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), sandMat);
+      block.position.set(0, 0.05, -0.12);
+      block.rotation.set(0.3, 0.4, 0);
+      this.itemAttachment.add(block);
+    } else if (slotIndex === 7) {
+      // 🌲 Birch Wood Log
+      const birchMat = new THREE.MeshLambertMaterial({ color: 0xeaeaea });
+      const block = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), birchMat);
+      block.position.set(0, 0.05, -0.12);
+      block.rotation.set(0.3, 0.4, 0);
+      this.itemAttachment.add(block);
+    }
   }
 
   triggerSwing() {

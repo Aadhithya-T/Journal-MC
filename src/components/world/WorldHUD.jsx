@@ -7,6 +7,8 @@ export function WorldHUD({
   hardcore = false,
   coords = { x: 0, y: 1, z: 0 },
   nearbyPOI = null,
+  selectedSlot = 0,
+  onSelectSlot,
   onOpenBookModal,
   onMineBlock,
   toastMessage,
@@ -19,7 +21,6 @@ export function WorldHUD({
   isLocked = false
 }) {
   const [drawerTag, setDrawerTag] = useState("all");
-  const [selectedSlot, setSelectedSlot] = useState(0);
 
   const filteredEntries = entries.filter((e) => {
     if (drawerTag === "all") return true;
@@ -301,7 +302,7 @@ export function WorldHUD({
             return (
               <div
                 key={slotIdx}
-                onClick={() => setSelectedSlot(slotIdx)}
+                onClick={() => onSelectSlot && onSelectSlot(slotIdx)}
                 style={{
                   width: "38px",
                   height: "38px",
@@ -316,11 +317,15 @@ export function WorldHUD({
                   margin: "1px"
                 }}
               >
-                {slotIdx === 0 && <span title="Book & Quill">📖</span>}
-                {slotIdx === 1 && <span title="Iron Pickaxe">⛏️</span>}
-                {slotIdx === 2 && <span title="Oak Planks">🪵</span>}
-                {slotIdx === 3 && <span title="Wild Poppy">🌹</span>}
-                {slotIdx === 4 && <span title="Torch">🕯️</span>}
+                {slotIdx === 0 && <span title="[1] Book & Quill">📖</span>}
+                {slotIdx === 1 && <span title="[2] Diamond Pickaxe">⛏️</span>}
+                {slotIdx === 2 && <span title="[3] Oak Planks">🪵</span>}
+                {slotIdx === 3 && <span title="[4] Wild Poppy">🌹</span>}
+                {slotIdx === 4 && <span title="[5] Torch">🕯️</span>}
+                {slotIdx === 5 && <span title="[6] Cobblestone">🪨</span>}
+                {slotIdx === 6 && <span title="[7] Sand">🏖️</span>}
+                {slotIdx === 7 && <span title="[8] Birch Log">🌲</span>}
+                {slotIdx === 8 && <span title="[9] Stone">🧱</span>}
               </div>
             );
           })}

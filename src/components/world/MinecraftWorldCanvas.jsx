@@ -6,18 +6,32 @@ import { ChunkManager } from "./chunk/ChunkManager";
 import { WorldHUD } from "./WorldHUD";
 import { BookAndQuillModal } from "./BookAndQuillModal";
 import { EscapeMenuModal } from "./EscapeMenuModal";
+import { sounds } from "./SoundManager";
+import { BLOCK } from "./chunk/TextureAtlas";
 
-// --- VANILLA MINECRAFT PHYSICS CONSTANTS ---
+// --- VANILLA MINECRAFT CONSTANTS ---
 const WALK_SPEED = 4.317;        // blocks / second
 const SPRINT_SPEED = 5.612;      // blocks / second (1.3x walk)
 const SNEAK_SPEED = 1.31;        // blocks / second (0.3x walk)
-const JUMP_VELOCITY = 8.4;       // blocks / second (0.42 b/tick * 20 TPS)
+const JUMP_VELOCITY = 8.4;       // blocks / second
 const GRAVITY = 30.0;            // blocks / second^2
 const PLAYER_EYE_HEIGHT = 1.62;  // blocks above feet (standing)
 const SNEAK_EYE_HEIGHT = 1.27;   // blocks above feet (sneaking)
 const MOUSE_SENSITIVITY = 0.0022;
-const REACH_DISTANCE = 5.0;      // max block reach in blocks
-const MINING_TIME = 0.38;        // seconds to mine a block
+const REACH_DISTANCE = 5.0;      // max block reach
+const MINING_TIME = 0.35;        // seconds to mine
+
+const HOTBAR_BLOCK_MAP = {
+  0: null, // Book & Quill
+  1: null, // Diamond Pickaxe
+  2: BLOCK.DIRT, // Oak Planks / Earth
+  3: BLOCK.POPPY, // Poppy
+  4: BLOCK.OAK_LOG, // Torch / Oak Wood
+  5: BLOCK.COBBLESTONE, // Cobblestone
+  6: BLOCK.SAND, // Sand
+  7: BLOCK.BIRCH_LOG, // Birch Log
+  8: BLOCK.STONE // Stone
+};
 
 export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
   const mountRef = useRef(null);
@@ -27,17 +41,18 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
   const [nearbyPOI, setNearbyPOI] = useState(null);
   const [isBookModalOpen, setIsBookModalOpen] = useState(false);
   const [activePOIForModal, setActivePOIForModal] = useState(null);
-  const [toastMessage, setToastMessage] = useState("🎮 Left-Click to mine & interact!");
+  const [toastMessage, setToastMessage] = useState("🎮 Left-Click: Mine | Right-Click: Place/Interact | 1-9: Hotbar");
   const [texturePack, setTexturePack] = useState("faithful64");
   const [isEscapeMenuOpen, setIsEscapeMenuOpen] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState(0);
 
   // Movement States
   const [isSprinting, setIsSprinting] = useState(false);
   const [isSneaking, setIsSneaking] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
 
-  // References for values needed inside render loop / event handlers (no re-renders)
+  // References for render loop
   const steveRef = useRef(null);
   const fppHandRef = useRef(null);
   const chunkManagerRef = useRef(null);
@@ -48,25 +63,28 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
   const isSneakingRef = useRef(false);
   const isLeftMouseDownRef = useRef(false);
   const miningProgressRef = useRef(0);
+  const miningHitSoundTimerRef = useRef(0);
+  const footstepTimerRef = useRef(0);
   const currentMiningTargetRef = useRef(null);
   const isEscapeMenuOpenRef = useRef(false);
   const isBookModalOpenRef = useRef(false);
   const showDrawerRef = useRef(false);
   const steveCoordsRef = useRef({ x: 0, y: 5, z: 0 });
   const targetedBlockRef = useRef(null);
-  const nearbyPOIRef = useRef(null);
+  const selectedSlotRef = useRef(0);
   const onAddEntryRef = useRef(onAddEntry);
   const worldRef = useRef(world);
   const particleGroupRef = useRef(null);
   const waterAnimTimerRef = useRef(0);
   const posSaveTimerRef = useRef(0);
 
-  // Keep refs in sync with state
+  // Sync refs
   onAddEntryRef.current = onAddEntry;
   worldRef.current = world;
   isEscapeMenuOpenRef.current = isEscapeMenuOpen;
   isBookModalOpenRef.current = isBookModalOpen;
   showDrawerRef.current = showDrawer;
+  selectedSlotRef.current = selectedSlot;
 
   // Camera Orientation Refs
   const targetYawRef = useRef(0);
@@ -90,15 +108,25 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     }, 3500);
   }, []);
 
+  const handleSelectSlot = useCallback((slotIdx) => {
+    const clamped = Math.max(0, Math.min(8, slotIdx));
+    setSelectedSlot(clamped);
+    selectedSlotRef.current = clamped;
+    if (fppHandRef.current) {
+      fppHandRef.current.setHeldItemSlot(clamped);
+    }
+  }, []);
+
   const handleSelectTexturePack = (packId) => {
     setTexturePack(packId);
     if (chunkManagerRef.current) {
       chunkManagerRef.current.switchTexturePack(packId);
-      showToast(`🎨 Texture Pack applied: ${packId.toUpperCase()}`);
+      showToast(`🎨 Texture Pack: ${packId.toUpperCase()}`);
     }
   };
 
   const handleOpenBookModal = useCallback((poi = null) => {
+    sounds.playPageFlip();
     setActivePOIForModal(poi);
     setIsBookModalOpen(true);
     setIsEscapeMenuOpen(false);
@@ -109,6 +137,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
 
   const handleSaveEntry = async (entryData) => {
     await onAddEntry(entryData);
+    sounds.playPageFlip();
     showToast(`✍️ Recorded: "${entryData.title}"`);
     if (fppHandRef.current) fppHandRef.current.triggerSwing();
     if (steveRef.current) steveRef.current.triggerMining();
@@ -143,18 +172,59 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
   }, []);
 
   // Block Break Execution
-  const executeBreakBlock = useCallback((scene, target) => {
+  const executeBreakBlock = useCallback(async (scene, target) => {
     if (!chunkManagerRef.current || !target) return;
-    const broken = chunkManagerRef.current.breakBlock(target.blockX, target.blockY, target.blockZ);
+    const broken = await chunkManagerRef.current.breakBlock(target.blockX, target.blockY, target.blockZ);
     if (broken) {
+      sounds.playBlockBreak('stone');
       spawnBreakParticles(scene, target.blockX, target.blockY, target.blockZ, broken.color);
-      showToast(`💥 Broke ${broken.name} at (${target.blockX}, ${target.blockY}, ${target.blockZ})`);
+      showToast(`💥 Broke ${broken.name}`);
     } else {
       showToast(`🛡️ Bedrock is unbreakable!`);
     }
   }, [showToast, spawnBreakParticles]);
 
-  // Main Three.js Scene Setup (mounts once and stays persistent across UI interactions)
+  // Block Placement Execution
+  const executePlaceBlock = useCallback((target, slotIndex) => {
+    if (!chunkManagerRef.current || !target || !target.normal) return;
+    const blockType = HOTBAR_BLOCK_MAP[slotIndex];
+    if (blockType === null || blockType === undefined) {
+      // Slot 0 opens book & quill
+      if (slotIndex === 0) {
+        handleOpenBookModal(nearbyPOIRef.current);
+      }
+      return;
+    }
+
+    const placeX = target.blockX + target.normal[0];
+    const placeY = target.blockY + target.normal[1];
+    const placeZ = target.blockZ + target.normal[2];
+
+    // Check player AABB intersection to prevent placing inside player
+    if (steveRef.current) {
+      const p = steveRef.current.group.position;
+      const minPX = p.x - 0.28, maxPX = p.x + 0.28;
+      const minPZ = p.z - 0.28, maxPZ = p.z + 0.28;
+      const minPY = p.y, maxPY = p.y + 1.8;
+
+      if (
+        placeX + 1 > minPX && placeX < maxPX &&
+        placeZ + 1 > minPZ && placeZ < maxPZ &&
+        placeY + 1 > minPY && placeY < maxPY
+      ) {
+        return; // Intersects player
+      }
+    }
+
+    const placed = chunkManagerRef.current.setBlockAt(placeX, placeY, placeZ, blockType);
+    if (placed) {
+      sounds.playBlockPlace('stone');
+      if (fppHandRef.current) fppHandRef.current.triggerSwing();
+      showToast(`🧱 Placed Block at (${placeX}, ${placeY}, ${placeZ})`);
+    }
+  }, [handleOpenBookModal, showToast]);
+
+  // Main Three.js Scene Setup
   useEffect(() => {
     const currentMount = mountRef.current;
     if (!currentMount) return;
@@ -163,8 +233,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     const scene = new THREE.Scene();
     const skyColor = new THREE.Color(0x78a7ff);
     scene.background = skyColor;
-    // Linear Atmospheric Depth Fog (Softly fades distant terrain into sky)
-    const worldFog = new THREE.Fog(0x78a7ff, 22, 105);
+    const worldFog = new THREE.Fog(0x78a7ff, 25, 120);
     scene.fog = worldFog;
 
     const activeParticles = [];
@@ -187,7 +256,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     currentMount.appendChild(renderer.domElement);
 
-    // --- 3D FIRST-PERSON VIEWMODEL HAND (Attached to Camera) ---
+    // --- 3D FIRST-PERSON VIEWMODEL HAND ---
     const fppHand = new FirstPersonHand();
     camera.add(fppHand.group);
     scene.add(camera);
@@ -229,7 +298,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     sunGroup.add(glowMesh);
     scene.add(sunGroup);
 
-    // --- DIRECTIONAL SUNLIGHT & DEEP SHADOW CONTRAST ---
+    // --- DIRECTIONAL SUNLIGHT ---
     const hemiLight = new THREE.HemisphereLight(0x90c2ff, 0x3a4820, 0.45);
     scene.add(hemiLight);
 
@@ -251,15 +320,14 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     scene.add(sunLight);
     scene.add(sunLight.target);
 
-    // --- 100-CHUNK VOXEL PIPELINE (10x10 Chunks = 160x160 blocks) ---
+    // --- 100-CHUNK VOXEL PIPELINE ---
     const chunkManager = new ChunkManager(5, texturePack);
     scene.add(chunkManager.group);
     chunkManagerRef.current = chunkManager;
 
-    // --- STEVE CHARACTER (Invisible in pure 1st Person) ---
+    // --- STEVE CHARACTER ---
     const steve = new SteveCharacter();
 
-    // Retain and Restore Player Position from LocalStorage
     const saveKey = `mc_player_pos_${world?.id || 'default'}`;
     let spawnX = 6, spawnZ = -10, spawnY = null, spawnYaw = 0, spawnPitch = 0;
     const saved = localStorage.getItem(saveKey);
@@ -288,7 +356,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     targetPitchRef.current = spawnPitch;
     cameraPitchRef.current = spawnPitch;
 
-    // --- TARGETED BLOCK OUTLINE (Vanilla Selection Box) ---
+    // --- TARGETED BLOCK OUTLINE ---
     const outlineGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.004, 1.004, 1.004));
     const outlineMat = new THREE.LineBasicMaterial({
       color: 0x000000,
@@ -300,15 +368,8 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     blockOutlineBox.visible = false;
     scene.add(blockOutlineBox);
 
-    // --- PROGRESSIVE MINING CRACK OVERLAY DECAL ---
-    const crackCanvas = document.createElement("canvas");
-    crackCanvas.width = 64;
-    crackCanvas.height = 64;
-    const crackCtx = crackCanvas.getContext("2d");
-    const crackTex = new THREE.CanvasTexture(crackCanvas);
-    crackTex.magFilter = THREE.NearestFilter;
+    // --- 10-STAGE MINING CRACK OVERLAY DECALS ---
     const crackMat = new THREE.MeshBasicMaterial({
-      map: crackTex,
       transparent: true,
       opacity: 0.85,
       depthTest: true,
@@ -320,37 +381,24 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     crackBox.visible = false;
     scene.add(crackBox);
 
-    const updateCrackDecal = (stage) => {
-      crackCtx.clearRect(0, 0, 64, 64);
-      if (stage <= 0) return;
-      crackCtx.fillStyle = "#111111";
+    // Load authentic 10 breaking stage textures
+    const crackTextures = [];
+    const loader = new THREE.TextureLoader();
+    for (let i = 0; i <= 9; i++) {
+      const tex = loader.load(`./texturepacks/faithful64x/destroy_stage_${i}.png`);
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+      crackTextures.push(tex);
+    }
 
-      // 6 Progressive Fractures matching Minecraft breaking stages
-      if (stage >= 1) {
-        crackCtx.fillRect(28, 12, 4, 16);
-        crackCtx.fillRect(20, 24, 20, 4);
+    const updateCrackDecal = (stageIndex) => {
+      if (stageIndex < 0 || stageIndex > 9 || !crackTextures[stageIndex]) {
+        crackBox.visible = false;
+        return;
       }
-      if (stage >= 2) {
-        crackCtx.fillRect(12, 16, 4, 24);
-        crackCtx.fillRect(40, 20, 16, 4);
-        crackCtx.fillRect(44, 32, 4, 20);
-      }
-      if (stage >= 3) {
-        crackCtx.fillRect(8, 40, 24, 4);
-        crackCtx.fillRect(28, 44, 4, 16);
-        crackCtx.fillRect(36, 12, 8, 4);
-      }
-      if (stage >= 4) {
-        crackCtx.fillRect(4, 4, 56, 4);
-        crackCtx.fillRect(4, 56, 56, 4);
-        crackCtx.fillRect(4, 4, 4, 56);
-        crackCtx.fillRect(56, 4, 4, 56);
-      }
-      if (stage >= 5) {
-        crackCtx.fillRect(16, 16, 32, 32);
-        crackCtx.clearRect(24, 24, 16, 16);
-      }
-      crackTex.needsUpdate = true;
+      crackMat.map = crackTextures[stageIndex];
+      crackMat.needsUpdate = true;
+      crackBox.visible = true;
     };
 
     // --- ATMOSPHERIC PARTICLES ---
@@ -367,19 +415,19 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
     const particles = new THREE.Points(particleGeo, particleMat);
     scene.add(particles);
 
-    // --- 2D PIXELATED CLOUDS (Matching Screenshot Horizon) ---
+    // --- CONTINUOUS MINECRAFT CLOUDS (At Y=128) ---
     const cloudGroup = new THREE.Group();
-    const cloudGeo = new THREE.PlaneGeometry(28, 16);
-    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88, side: THREE.DoubleSide });
-    for (let i = 0; i < 35; i++) {
+    const cloudGeo = new THREE.PlaneGeometry(36, 24);
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.82, side: THREE.DoubleSide });
+    for (let i = 0; i < 40; i++) {
       const cloud = new THREE.Mesh(cloudGeo, cloudMat);
       cloud.rotation.x = Math.PI / 2;
-      cloud.position.set((Math.random() - 0.5) * 260, 32 + (i % 2) * 1.5, (Math.random() - 0.5) * 260);
+      cloud.position.set((Math.random() - 0.5) * 280, 36 + (i % 2) * 1.2, (Math.random() - 0.5) * 280);
       cloudGroup.add(cloud);
     }
     scene.add(cloudGroup);
 
-    // --- POINTER LOCK CONTROLS WITH SUB-FRAME SMOOTHING ---
+    // --- POINTER LOCK CONTROLS ---
     const canvasDom = renderer.domElement;
 
     const handlePointerLockChange = () => {
@@ -414,19 +462,35 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
 
     document.addEventListener("mousemove", handleMouseMove);
 
-    // --- MOUSE CLICK INTERACTIONS ---
+    // --- MOUSE WHEEL FOR HOTBAR ---
+    const handleWheel = (e) => {
+      if (document.pointerLockElement !== canvasDom) return;
+      const delta = Math.sign(e.deltaY);
+      const nextSlot = (selectedSlotRef.current + delta + 9) % 9;
+      handleSelectSlot(nextSlot);
+    };
+    window.addEventListener("wheel", handleWheel);
+
+    // --- MOUSE CLICK INTERACTIONS (Mine & Place) ---
     const handleMouseDown = (e) => {
       if (document.pointerLockElement !== canvasDom) return;
       if (isEscapeMenuOpenRef.current || isBookModalOpenRef.current) return;
 
       if (e.button === 0) {
+        // Left Click: Mine Block
         isLeftMouseDownRef.current = true;
         if (fppHandRef.current) fppHandRef.current.triggerSwing();
         if (steveRef.current) steveRef.current.triggerMining();
       } else if (e.button === 2) {
-        const currentPos = steve.group.position;
-        const poi = chunkManager.getNearbyPOI(currentPos);
-        handleOpenBookModal(poi);
+        // Right Click: Place Block or Interact with Lectern
+        const target = targetedBlockRef.current;
+        if (target) {
+          executePlaceBlock(target, selectedSlotRef.current);
+        } else {
+          const currentPos = steve.group.position;
+          const poi = chunkManager.getNearbyPOI(currentPos);
+          if (poi) handleOpenBookModal(poi);
+        }
       }
     };
 
@@ -435,7 +499,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         isLeftMouseDownRef.current = false;
         miningProgressRef.current = 0;
         crackBox.visible = false;
-        updateCrackDecal(0);
+        updateCrackDecal(-1);
       }
     };
 
@@ -471,6 +535,16 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
 
       if (isEscapeMenuOpenRef.current || isBookModalOpenRef.current) return;
 
+      // Hotbar Slot Keys 1-9
+      if (e.code.startsWith("Digit")) {
+        const num = parseInt(e.code.replace("Digit", ""), 10);
+        if (num >= 1 && num <= 9) {
+          handleSelectSlot(num - 1);
+        }
+      } else if (!isNaN(parseInt(key, 10)) && parseInt(key, 10) >= 1 && parseInt(key, 10) <= 9) {
+        handleSelectSlot(parseInt(key, 10) - 1);
+      }
+
       // Sneaking on Left Shift
       if (e.key === "Shift" || e.code === "ShiftLeft") {
         isSneakingRef.current = true;
@@ -498,6 +572,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
       // Jump on Spacebar
       if (e.code === "Space") {
         if (isGroundedRef.current) {
+          sounds.playFootstep('stone');
           velocityYRef.current = JUMP_VELOCITY;
           isGroundedRef.current = false;
 
@@ -559,7 +634,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
       const deltaTime = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
 
-      // Dynamic Procedural Water Wave Ripple Animation (18 FPS texture cycle)
+      // Water Ripple Animation
       waterAnimTimerRef.current += deltaTime;
       if (waterAnimTimerRef.current > 0.055) {
         if (chunkManagerRef.current && chunkManagerRef.current.atlas) {
@@ -568,14 +643,14 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         waterAnimTimerRef.current = 0;
       }
 
-      // Sub-frame smooth mouse rotation interpolation (60-144hz fluid)
+      // Sub-frame smooth mouse look
       cameraYawRef.current = THREE.MathUtils.lerp(cameraYawRef.current, targetYawRef.current, deltaTime * 40);
       cameraPitchRef.current = THREE.MathUtils.lerp(cameraPitchRef.current, targetPitchRef.current, deltaTime * 40);
 
       // Cloud drift
       cloudGroup.children.forEach((c) => {
         c.position.x += deltaTime * 0.8;
-        if (c.position.x > 110) c.position.x = -110;
+        if (c.position.x > 140) c.position.x = -140;
       });
 
       // Floating dust particles
@@ -589,7 +664,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
       }
       particleGeo.attributes.position.needsUpdate = true;
 
-      // Update active block breaking shard particles
+      // Particle decay
       for (let i = activeParticles.length - 1; i >= 0; i--) {
         const p = activeParticles[i];
         p.life -= deltaTime;
@@ -605,7 +680,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         }
       }
 
-      // Progressive Mining & Crack Decals while holding left click
+      // Progressive Mining & 10-Stage Decals
       if (isLeftMouseDownRef.current && !isEscapeMenuOpenRef.current && !isBookModalOpenRef.current) {
         const target = targetedBlockRef.current;
         if (target) {
@@ -615,13 +690,18 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
           }
 
           miningProgressRef.current += deltaTime / MINING_TIME;
-          const stage = Math.min(5, Math.floor(miningProgressRef.current * 5) + 1);
-          updateCrackDecal(stage);
+          const stageIndex = Math.min(9, Math.floor(miningProgressRef.current * 10));
+          updateCrackDecal(stageIndex);
 
           crackBox.position.set(target.blockX + 0.5, target.blockY + 0.5, target.blockZ + 0.5);
-          crackBox.visible = true;
 
-          // Continuous arm swing
+          // Play mining hit tick sound periodically
+          miningHitSoundTimerRef.current += deltaTime;
+          if (miningHitSoundTimerRef.current > 0.18) {
+            sounds.playMiningHit('stone');
+            miningHitSoundTimerRef.current = 0;
+          }
+
           if (fppHandRef.current && !fppHandRef.current.isSwinging) {
             fppHandRef.current.triggerSwing();
           }
@@ -630,15 +710,15 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
             executeBreakBlock(scene, target);
             miningProgressRef.current = 0;
             crackBox.visible = false;
-            updateCrackDecal(0);
+            updateCrackDecal(-1);
           }
         } else {
           crackBox.visible = false;
-          updateCrackDecal(0);
+          updateCrackDecal(-1);
         }
       } else {
         crackBox.visible = false;
-        updateCrackDecal(0);
+        updateCrackDecal(-1);
       }
 
       // If game is paused, render scene without physics
@@ -649,7 +729,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         return;
       }
 
-      // --- PLAYER MOVEMENT RELATIVE TO CAMERA HEADING ---
+      // --- PLAYER MOVEMENT ---
       const keys = keysRef.current;
       let forward = 0;
       let strafe = 0;
@@ -694,6 +774,16 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
 
         const targetRotation = Math.atan2(wishDirX, wishDirZ);
         steve.setRotation(targetRotation);
+
+        // Footstep Audio while moving on ground
+        if (isGroundedRef.current) {
+          const stepInterval = isSprintingRef.current ? 0.28 : (isSneakingRef.current ? 0.55 : 0.38);
+          footstepTimerRef.current += deltaTime;
+          if (footstepTimerRef.current > stepInterval) {
+            sounds.playFootstep('grass');
+            footstepTimerRef.current = 0;
+          }
+        }
       } else {
         const friction = isGroundedRef.current ? 14.0 : 3.0;
         velocityXRef.current = THREE.MathUtils.lerp(velocityXRef.current, 0, deltaTime * friction);
@@ -708,7 +798,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         let curY = steve.group.position.y;
         let curZ = steve.group.position.z;
 
-        // 1. Test X Movement with Auto Step-Up & Wall Sliding
+        // 1. Test X Movement
         if (Math.abs(moveStepX) > 0.0005) {
           const nextX = THREE.MathUtils.clamp(curX + moveStepX, -78, 78);
           const targetGroundX = chunkManager.getGroundHeight(nextX, curZ, curY);
@@ -729,7 +819,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
           }
         }
 
-        // 2. Test Z Movement with Auto Step-Up & Wall Sliding
+        // 2. Test Z Movement
         if (Math.abs(moveStepZ) > 0.0005) {
           const nextZ = THREE.MathUtils.clamp(curZ + moveStepZ, -78, 78);
           const targetGroundZ = chunkManager.getGroundHeight(curX, nextZ, curY);
@@ -755,7 +845,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         steve.group.position.z = curZ;
       }
 
-      // --- JUMP, CEILING BONK & VERTICAL GRAVITY PHYSICS ---
+      // --- JUMP, CEILING BONK & VERTICAL GRAVITY ---
       const curPos = steve.group.position;
       const groundY = chunkManager.getGroundHeight(curPos.x, curPos.z, curPos.y);
 
@@ -763,7 +853,6 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         velocityYRef.current -= GRAVITY * deltaTime;
         const nextY = curPos.y + velocityYRef.current * deltaTime;
 
-        // Bonk head on ceiling if solid block is directly above
         if (velocityYRef.current > 0) {
           const hitCeiling = chunkManager.isCollidingWithSolid(curPos.x, nextY, curPos.z, 0.28, 1.8);
           if (hitCeiling) {
@@ -776,6 +865,10 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         }
 
         if (curPos.y <= groundY) {
+          // Check fall damage
+          if (velocityYRef.current < -14.0) {
+            sounds.playHurt();
+          }
           curPos.y = groundY;
           velocityYRef.current = 0;
           isGroundedRef.current = true;
@@ -789,8 +882,6 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
       }
 
       steve.updateAnimation(deltaTime, isMoving, isGroundedRef.current, isSneakingRef.current);
-
-      // Update 3D First-Person Viewmodel Hand Bobbing & Arm Swing
       fppHand.update(deltaTime, isMoving, isSprintingRef.current, isSneakingRef.current);
 
       const roundedCoords = {
@@ -805,7 +896,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
       nearbyPOIRef.current = poiNearby;
       setNearbyPOI(poiNearby);
 
-      // --- PURE FIRST-PERSON CAMERA POSITIONING ---
+      // --- CAMERA POSITIONING ---
       const pitch = cameraPitchRef.current;
       const eyeY = curPos.y + currentEyeHeightRef.current;
       camera.position.set(curPos.x, eyeY, curPos.z);
@@ -817,11 +908,10 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
       );
       camera.lookAt(camera.position.clone().add(lookDir));
 
-      // Dynamic High-Res Shadow tracking around player
       sunLight.position.set(curPos.x + 40, 95, curPos.z + 40);
       sunLight.target.position.set(curPos.x, curPos.y, curPos.z);
 
-      // --- RAYCAST TARGETED BLOCK (Minecraft Selection Box) ---
+      // --- RAYCAST TARGETED BLOCK ---
       const targeted = chunkManager.raycastBlock(camera.position, lookDir, REACH_DISTANCE);
       targetedBlockRef.current = targeted;
 
@@ -836,7 +926,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         blockOutlineBox.visible = false;
       }
 
-      // Underwater Fog Effect (When eye is below water level y <= 3.5)
+      // Underwater Fog Effect
       const currentBlockAtEye = chunkManager.getBlockAt(Math.floor(curPos.x), Math.floor(eyeY), Math.floor(curPos.z));
       if (currentBlockAtEye === 10 || (eyeY <= 3.4 && groundY <= 3.0)) {
         worldFog.color.setHex(0x1d4ed8);
@@ -846,7 +936,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         worldFog.density = 0.007;
       }
 
-      // Periodically retain player position in LocalStorage
+      // Retain player position in LocalStorage
       posSaveTimerRef.current += deltaTime;
       if (posSaveTimerRef.current > 0.8) {
         posSaveTimerRef.current = 0;
@@ -863,17 +953,14 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
       }
 
       skyMesh.position.copy(camera.position);
-
       renderer.render(scene, camera);
     };
 
     animate();
 
-    // Cleanup
     return () => {
       cancelAnimationFrame(animationFrameId);
 
-      // Retain position on unmount
       const saveKey = `mc_player_pos_${worldRef.current?.id || 'default'}`;
       if (steveRef.current) {
         const curPos = steveRef.current.group.position;
@@ -891,6 +978,7 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
       document.removeEventListener("pointerlockchange", handlePointerLockChange);
       document.removeEventListener("mousemove", handleMouseMove);
       canvasDom.removeEventListener("click", handleCanvasClick);
+      window.removeEventListener("wheel", handleWheel);
       window.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mouseup", handleMouseUp);
       window.removeEventListener("contextmenu", handleContextMenu);
@@ -902,11 +990,10 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
       }
       renderer.dispose();
     };
-  }, [showToast, executeBreakBlock, handleOpenBookModal]);
+  }, [showToast, executeBreakBlock, executePlaceBlock, handleOpenBookModal, handleSelectSlot]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", userSelect: "none" }}>
-      {/* 3D WebGL Canvas Container */}
       <div
         ref={mountRef}
         style={{
@@ -916,13 +1003,14 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         }}
       />
 
-      {/* Minecraft HUD Overlay */}
       <WorldHUD
         worldName={world?.name || "Singleplayer World"}
         biome={world?.biome || "Plains"}
         hardcore={world?.hardcore}
         coords={steveCoords}
         nearbyPOI={nearbyPOI}
+        selectedSlot={selectedSlot}
+        onSelectSlot={handleSelectSlot}
         onOpenBookModal={handleOpenBookModal}
         onMineBlock={() => executeBreakBlock(null, targetedBlockRef.current)}
         toastMessage={toastMessage}
@@ -935,7 +1023,6 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         isLocked={isLocked}
       />
 
-      {/* Minecraft Escape / Pause Game Menu */}
       <EscapeMenuModal
         isOpen={isEscapeMenuOpen}
         onResume={() => setIsEscapeMenuOpen(false)}
@@ -944,7 +1031,6 @@ export function MinecraftWorldCanvas({ world, entries = [], onAddEntry }) {
         onOpenJournalDrawer={() => setShowDrawer(true)}
       />
 
-      {/* In-World Book & Quill Modal */}
       <BookAndQuillModal
         isOpen={isBookModalOpen}
         onClose={() => setIsBookModalOpen(false)}
