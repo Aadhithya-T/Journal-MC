@@ -5,21 +5,31 @@ import static org.lwjgl.glfw.GLFW.*;
 public class InputHandler {
     private final boolean[] keys = new boolean[GLFW_KEY_LAST + 1];
     private final boolean[] mouseButtons = new boolean[GLFW_MOUSE_BUTTON_LAST + 1];
+    private double currentMouseX = 0;
+    private double currentMouseY = 0;
     private double lastMouseX = 0;
     private double lastMouseY = 0;
     private double mouseDeltaX = 0;
     private double mouseDeltaY = 0;
     private double scrollDelta = 0;
     private boolean firstMouse = true;
+    private MCJournalApp app;
 
-    public void init(long windowHandle) {
+    public void init(long windowHandle, MCJournalApp app) {
+        this.app = app;
+
         glfwSetKeyCallback(windowHandle, (window, key, scancode, action, mods) -> {
             if (key >= 0 && key < keys.length) {
                 keys[key] = (action != GLFW_RELEASE);
             }
+            if (app.getCurrentScreen() != null && action == GLFW_PRESS) {
+                app.getCurrentScreen().keyPressed(key, scancode, action, mods);
+            }
         });
 
         glfwSetCursorPosCallback(windowHandle, (window, xpos, ypos) -> {
+            currentMouseX = xpos;
+            currentMouseY = ypos;
             if (firstMouse) {
                 lastMouseX = xpos;
                 lastMouseY = ypos;
@@ -34,6 +44,9 @@ public class InputHandler {
         glfwSetMouseButtonCallback(windowHandle, (window, button, action, mods) -> {
             if (button >= 0 && button < mouseButtons.length) {
                 mouseButtons[button] = (action != GLFW_RELEASE);
+            }
+            if (app.getCurrentScreen() != null && action == GLFW_PRESS) {
+                app.getCurrentScreen().mouseClicked(currentMouseX, currentMouseY, button);
             }
         });
 
@@ -54,6 +67,14 @@ public class InputHandler {
             return mouseButtons[button];
         }
         return false;
+    }
+
+    public double getMouseX() {
+        return currentMouseX;
+    }
+
+    public double getMouseY() {
+        return currentMouseY;
     }
 
     public double consumeMouseDeltaX() {

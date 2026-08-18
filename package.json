@@ -9,7 +9,7 @@
     "dev": "npm run java:run",
     "build": "npm run java:build",
     "lint": "oxlint",
-    "java:build": "javac -cp \"engine/lib/*\" -d engine/bin engine/src/com/mcjournal/*.java engine/src/com/mcjournal/client/*.java",
+    "java:build": "javac -cp \"engine/lib/*\" -d engine/bin engine/src/com/mcjournal/*.java engine/src/com/mcjournal/client/*.java engine/src/com/mcjournal/client/gui/*.java",
     "java:run": "java -cp \"engine/bin;engine/lib/*\" com.mcjournal.client.MCJournalApp",
     "electron": "electron ."
   },
