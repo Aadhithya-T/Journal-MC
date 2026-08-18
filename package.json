@@ -1,35 +1,13 @@
 {
   "name": "mc-journal",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "main": "electron/main.cjs",
+  "version": "1.0.0",
+  "description": "Minecraft Hardcore Journal - Pure Native Java 26 + OpenGL 3.3 Edition",
   "scripts": {
     "start": "npm run java:run",
     "dev": "npm run java:run",
     "build": "npm run java:build",
-    "lint": "oxlint",
     "java:build": "javac -cp \"engine/lib/*\" -d engine/bin engine/src/com/mcjournal/*.java engine/src/com/mcjournal/client/*.java engine/src/com/mcjournal/client/gui/*.java",
-    "java:run": "java -cp \"engine/bin;engine/lib/*\" com.mcjournal.client.MCJournalApp",
-    "electron": "electron ."
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.112.3",
-    "canvas-confetti": "^1.9.4",
-    "lucide-react": "^1.31.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2",
-    "three": "^0.185.1"
-  },
-  "devDependencies": {
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
-    "concurrently": "^10.0.5",
-    "electron": "^43.4.0",
-    "oxlint": "^1.75.0",
-    "vite": "^8.2.0",
-    "wait-on": "^9.1.0"
+    "java:run": "java -cp \"engine/bin;engine/lib/*\" com.mcjournal.client.MCJournalApp"
   }
 }
