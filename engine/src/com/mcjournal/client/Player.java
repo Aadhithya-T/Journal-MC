@@ -10,14 +10,15 @@ public class Player {
     public static final float HEIGHT = 1.8f;
     public static final float EYE_HEIGHT = 1.62f;
     public static final float SNEAK_EYE_HEIGHT = 1.27f;
+    public static final float STEP_HEIGHT = 0.6f; // Vanilla 0.6 block step-up
 
     // Movement constants
     public static final float GRAVITY = 0.08f;       // blocks per tick^2
     public static final float DRAG_Y = 0.98f;        // vertical air drag
     public static final float JUMP_IMPULSE = 0.42f;  // vanilla jump impulse (~1.25 block height)
 
-    public final Vector3f pos = new Vector3f(6.0f, 12.0f, 6.0f);
-    public final Vector3f prevPos = new Vector3f(6.0f, 12.0f, 6.0f);
+    public final Vector3f pos = new Vector3f(8.0f, 16.0f, 8.0f);
+    public final Vector3f prevPos = new Vector3f(8.0f, 16.0f, 8.0f);
     public final Vector3f velocity = new Vector3f(0, 0, 0);
 
     public float yaw = 0;   // In degrees
@@ -31,7 +32,7 @@ public class Player {
     public int maxHealth = 20;
     public int hunger = 20; // 10 Drumsticks
     public float fallDistance = 0;
-    public float highestY = 12.0f;
+    public float highestY = 16.0f;
     public boolean isDead = false;
 
     // Selected hotbar slot (0..8)
@@ -69,18 +70,18 @@ public class Player {
         float slipperiness = onGround ? 0.6f : 1.0f;
         float friction = slipperiness * 0.91f;
 
-        float baseSpeed = isSprinting ? 0.13f : (isSneaking ? 0.03f : 0.098f);
-        if (!onGround) baseSpeed *= 0.2f; // Air control penalty
+        float baseSpeed = isSprinting ? 0.135f : (isSneaking ? 0.035f : 0.10f);
+        if (!onGround) baseSpeed *= 0.25f; // Air control
 
         velocity.x += moveX * baseSpeed;
         velocity.z += moveZ * baseSpeed;
 
-        // 2. Jump Impulse
+        // 2. Jump Impulse (Vanilla 0.42 height impulse)
         if (jump && onGround) {
             velocity.y = JUMP_IMPULSE;
             if (isSprinting) {
-                velocity.x += forwardX * 0.15f;
-                velocity.z += forwardZ * 0.15f;
+                velocity.x += forwardX * 0.12f;
+                velocity.z += forwardZ * 0.12f;
             }
             onGround = false;
         }
@@ -88,7 +89,7 @@ public class Player {
         // 3. Gravity & Vertical Drag
         velocity.y = (velocity.y - GRAVITY) * DRAG_Y;
 
-        // 4. Move & Collide with Voxel Terrain (X, then Z, then Y with step-up)
+        // 4. Move & Collide with Voxel Terrain (Y first, then X and Z with 0.6-block step-up)
         moveWithCollision(world, velocity.x, velocity.y, velocity.z);
 
         // Apply Horizontal Friction
@@ -130,41 +131,7 @@ public class Player {
     }
 
     private void moveWithCollision(ChunkManager world, float dx, float dy, float dz) {
-        float halfW = WIDTH / 2.0f;
-
-        // Step 1: Move X
-        if (dx != 0) {
-            float targetX = pos.x + dx;
-            if (!checkBlockCollision(world, targetX, pos.y, pos.z)) {
-                pos.x = targetX;
-            } else {
-                // Auto Step-Up 0.5-block ledge
-                if (onGround && !checkBlockCollision(world, targetX, pos.y + 0.6f, pos.z)) {
-                    pos.x = targetX;
-                    pos.y += 0.55f;
-                } else {
-                    velocity.x = 0;
-                }
-            }
-        }
-
-        // Step 2: Move Z
-        if (dz != 0) {
-            float targetZ = pos.z + dz;
-            if (!checkBlockCollision(world, pos.x, pos.y, targetZ)) {
-                pos.z = targetZ;
-            } else {
-                // Auto Step-Up 0.5-block ledge
-                if (onGround && !checkBlockCollision(world, pos.x, pos.y + 0.6f, targetZ)) {
-                    pos.z = targetZ;
-                    pos.y += 0.55f;
-                } else {
-                    velocity.z = 0;
-                }
-            }
-        }
-
-        // Step 3: Move Y (Vertical)
+        // Step 1: Move Y (Vertical) FIRST so jump lifts player before checking horizontal walls
         float targetY = pos.y + dy;
         if (dy < 0) {
             // Falling down
@@ -178,21 +145,54 @@ public class Player {
                 onGround = true;
             }
         } else if (dy > 0) {
-            // Jumping / Rising up (Bonking ceiling)
-            if (!checkBlockCollision(world, pos.x, targetY + HEIGHT, pos.z)) {
+            // Jumping / Rising up (Check ceiling collision at head level)
+            if (!checkBlockCollision(world, pos.x, targetY, pos.z)) {
                 pos.y = targetY;
+                onGround = false;
             } else {
                 velocity.y = 0;
+            }
+        }
+
+        // Step 2: Move X (Horizontal with Step-Up)
+        if (dx != 0) {
+            float targetX = pos.x + dx;
+            if (!checkBlockCollision(world, targetX, pos.y, pos.z)) {
+                pos.x = targetX;
+            } else {
+                // Auto Step-Up 0.6-block ledge
+                if (onGround && !checkBlockCollision(world, targetX, pos.y + STEP_HEIGHT, pos.z)) {
+                    pos.x = targetX;
+                    pos.y += STEP_HEIGHT;
+                } else {
+                    velocity.x = 0;
+                }
+            }
+        }
+
+        // Step 3: Move Z (Horizontal with Step-Up)
+        if (dz != 0) {
+            float targetZ = pos.z + dz;
+            if (!checkBlockCollision(world, pos.x, pos.y, targetZ)) {
+                pos.z = targetZ;
+            } else {
+                // Auto Step-Up 0.6-block ledge
+                if (onGround && !checkBlockCollision(world, pos.x, pos.y + STEP_HEIGHT, targetZ)) {
+                    pos.z = targetZ;
+                    pos.y += STEP_HEIGHT;
+                } else {
+                    velocity.z = 0;
+                }
             }
         }
     }
 
     private boolean checkBlockCollision(ChunkManager world, float px, float py, float pz) {
-        float halfW = WIDTH / 2.0f;
+        float halfW = (WIDTH / 2.0f) - 0.02f; // Slight inset to prevent snagging on wall edges
         int minX = (int) Math.floor(px - halfW);
         int maxX = (int) Math.floor(px + halfW);
         int minY = (int) Math.floor(py);
-        int maxY = (int) Math.floor(py + HEIGHT);
+        int maxY = (int) Math.floor(py + HEIGHT - 0.05f);
         int minZ = (int) Math.floor(pz - halfW);
         int maxZ = (int) Math.floor(pz + halfW);
 
