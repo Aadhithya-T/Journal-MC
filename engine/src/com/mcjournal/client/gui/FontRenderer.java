@@ -5,14 +5,12 @@ import org.lwjgl.system.MemoryUtil;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 
 public class FontRenderer {
-    private static final int FONT_TEX_SIZE = 512;
+    private static final int FONT_TEX_SIZE = 256;
     private static final int GLYPH_COUNT = 256;
 
     private int textureId;
@@ -26,24 +24,27 @@ public class FontRenderer {
     public void init() {
         BufferedImage image = new BufferedImage(FONT_TEX_SIZE, FONT_TEX_SIZE, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+        
+        // Crisp pixel rendering without blurry subpixel antialiasing
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
 
-        Font font = new Font(Font.MONOSPACED, Font.BOLD, 22);
+        // Bold blocky Minecraft-like font
+        Font font = new Font("Dialog", Font.BOLD, 18);
         g.setFont(font);
         FontMetrics fm = g.getFontMetrics();
 
-        int x = 4;
-        int y = fm.getAscent() + 4;
+        int x = 2;
+        int y = fm.getAscent() + 2;
         int rowHeight = fm.getHeight() + 4;
 
-        for (int c = 0; c < GLYPH_COUNT; c++) {
+        for (int c = 32; c < 127; c++) {
             char ch = (char) c;
-            int charW = Math.max(1, fm.charWidth(ch));
+            int charW = fm.charWidth(ch);
             int charH = fm.getHeight();
 
             if (x + charW + 4 >= FONT_TEX_SIZE) {
-                x = 4;
+                x = 2;
                 y += rowHeight;
             }
 
@@ -57,7 +58,7 @@ public class FontRenderer {
             glyphWidth[c] = charW;
             glyphHeight[c] = charH;
 
-            x += charW + 6;
+            x += charW + 4;
         }
         g.dispose();
 
@@ -96,9 +97,9 @@ public class FontRenderer {
         if (text == null || text.isEmpty()) return;
 
         if (shadow) {
-            // Shadow offset
-            int shadowColor = 0x222222;
-            renderText(gui, text, x + 2 * scale, y + 2 * scale, scale, shadowColor);
+            // Authentic Minecraft Shadow: dark tinted copy 2px down-right
+            int shadowColor = ((colorHex & 0xFCFCFC) >> 2) | 0x111111;
+            renderText(gui, text, x + 2.0f * scale, y + 2.0f * scale, scale, shadowColor);
         }
 
         renderText(gui, text, x, y, scale, colorHex);
@@ -112,10 +113,10 @@ public class FontRenderer {
 
         for (int i = 0; i < text.length(); i++) {
             int c = text.charAt(i);
-            if (c >= GLYPH_COUNT) c = '?';
+            if (c < 32 || c >= GLYPH_COUNT) c = 32;
 
-            float w = glyphWidth[c] * scale * 0.75f;
-            float h = glyphHeight[c] * scale * 0.75f;
+            float w = glyphWidth[c] * scale;
+            float h = glyphHeight[c] * scale;
 
             gui.drawTexturedQuad(
                 textureId,
@@ -124,7 +125,7 @@ public class FontRenderer {
                 r, g, b, 1.0f
             );
 
-            curX += w + (2 * scale);
+            curX += w + (1.0f * scale);
         }
     }
 
@@ -133,8 +134,8 @@ public class FontRenderer {
         float total = 0;
         for (int i = 0; i < text.length(); i++) {
             int c = text.charAt(i);
-            if (c >= GLYPH_COUNT) c = '?';
-            total += (glyphWidth[c] * scale * 0.75f) + (2 * scale);
+            if (c < 32 || c >= GLYPH_COUNT) c = 32;
+            total += (glyphWidth[c] * scale) + (1.0f * scale);
         }
         return total;
     }

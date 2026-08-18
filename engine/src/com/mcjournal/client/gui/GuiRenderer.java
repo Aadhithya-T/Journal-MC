@@ -53,7 +53,7 @@ public class GuiRenderer {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         orthoMatrix.identity();
-        orthoMatrix.ortho2D(0, screenWidth, screenHeight, 0); // (0,0) at Top-Left
+        orthoMatrix.ortho2D(0, screenWidth, screenHeight, 0);
 
         guiShader.bind();
         guiShader.setUniform("uOrtho", orthoMatrix);
@@ -87,28 +87,28 @@ public class GuiRenderer {
         int bodyColor;
 
         if (!isEnabled) {
-            outerTopLeft = 0x555555;
-            outerBottomRight = 0x111111;
-            innerTopLeft = 0x333333;
-            innerBottomRight = 0x444444;
-            bodyColor = 0x2e2e2e;
+            outerTopLeft = 0x5c5c5c;
+            outerBottomRight = 0x1a1a1a;
+            innerTopLeft = 0x363636;
+            innerBottomRight = 0x484848;
+            bodyColor = 0x303030;
         } else if (isHovered) {
-            // Vanilla Hover: Bright White/Blue highlight
+            // Vanilla Hover: Brilliant White/Blue Highlight and lighter body
             outerTopLeft = 0xffffff;
-            outerBottomRight = 0x222233;
-            innerTopLeft = 0x6e6e88;
-            innerBottomRight = 0xa0a0d0;
-            bodyColor = 0x767699;
+            outerBottomRight = 0x22223a;
+            innerTopLeft = 0x6e6e8c;
+            innerBottomRight = 0x9fa0cc;
+            bodyColor = 0x767698;
         } else {
             // Vanilla Normal Stone Button
-            outerTopLeft = 0xc6c6c6;
-            outerBottomRight = 0x222222;
-            innerTopLeft = 0x555555;
+            outerTopLeft = 0xd4d4d4;
+            outerBottomRight = 0x262626;
+            innerTopLeft = 0x4f4f4f;
             innerBottomRight = 0x8e8e8e;
-            bodyColor = 0x686868;
+            bodyColor = 0x666666;
         }
 
-        // 1. Body
+        // 1. Center Body
         drawHexRect(x + 2, y + 2, w - 4, h - 4, bodyColor, 1.0f);
 
         // 2. Outer Highlight (Top & Left - 2px)
@@ -119,11 +119,20 @@ public class GuiRenderer {
         drawHexRect(x, y + h - 2, w, 2, outerBottomRight, 1.0f);
         drawHexRect(x + w - 2, y, 2, h, outerBottomRight, 1.0f);
 
-        // 4. Inner Inset Ridge (1px)
+        // 4. Inner Ridge Inset (1px)
         drawHexRect(x + 2, y + 2, w - 4, 1, innerTopLeft, 1.0f);
         drawHexRect(x + 2, y + 2, 1, h - 4, innerTopLeft, 1.0f);
         drawHexRect(x + 2, y + h - 3, w - 4, 1, innerBottomRight, 1.0f);
         drawHexRect(x + w - 3, y + 2, 1, h - 4, innerBottomRight, 1.0f);
+    }
+
+    public void drawMenuHeaderFooterStrips(int screenWidth, int screenHeight, int headerHeight, int footerHeight) {
+        // Dark translucent gradient strips for header and footer (Vanilla Minecraft layout)
+        drawRect(0, 0, screenWidth, headerHeight, 0.08f, 0.08f, 0.10f, 0.85f);
+        drawRect(0, headerHeight - 2, screenWidth, 2, 0.0f, 0.0f, 0.0f, 1.0f);
+
+        drawRect(0, screenHeight - footerHeight, screenWidth, footerHeight, 0.08f, 0.08f, 0.10f, 0.85f);
+        drawRect(0, screenHeight - footerHeight, screenWidth, 2, 0.0f, 0.0f, 0.0f, 1.0f);
     }
 
     public void drawBevelBox(float x, float y, float w, float h, int bgHex, int borderLightHex, int borderDarkHex) {
@@ -131,14 +140,11 @@ public class GuiRenderer {
         float lR = ((borderLightHex >> 16) & 0xFF) / 255f, lG = ((borderLightHex >> 8) & 0xFF) / 255f, lB = (borderLightHex & 0xFF) / 255f;
         float dR = ((borderDarkHex >> 16) & 0xFF) / 255f, dG = ((borderDarkHex >> 8) & 0xFF) / 255f, dB = (borderDarkHex & 0xFF) / 255f;
 
-        // Background
-        drawRect(x, y, w, h, bgR, bgG, bgB, 0.92f);
+        drawRect(x, y, w, h, bgR, bgG, bgB, 0.90f);
 
-        // Top & Left Light Border (2px)
         drawRect(x, y, w, 2, lR, lG, lB, 1.0f);
         drawRect(x, y, 2, h, lR, lG, lB, 1.0f);
 
-        // Bottom & Right Dark Border (2px)
         drawRect(x, y + h - 2, w, 2, dR, dG, dB, 1.0f);
         drawRect(x + w - 2, y, 2, h, dR, dG, dB, 1.0f);
     }
