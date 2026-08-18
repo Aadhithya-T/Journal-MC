@@ -38,11 +38,11 @@ export const BLOCK_NAMES = {
   [BLOCK.OAK_LEAVES]: "Oak Leaves",
   [BLOCK.DIAMOND_ORE]: "Diamond Ore",
   [BLOCK.WATER]: "Water",
+  [BLOCK.BIRCH_LOG]: "Birch Log",
+  [BLOCK.BIRCH_LEAVES]: "Birch Leaves",
   [BLOCK.TALL_GRASS]: "Tall Grass",
   [BLOCK.POPPY]: "Poppy",
-  [BLOCK.DANDELION]: "Dandelion",
-  [BLOCK.BIRCH_LOG]: "Birch Log",
-  [BLOCK.BIRCH_LEAVES]: "Birch Leaves"
+  [BLOCK.DANDELION]: "Dandelion"
 };
 
 export const BLOCK_COLORS = {
@@ -56,11 +56,11 @@ export const BLOCK_COLORS = {
   [BLOCK.OAK_LEAVES]: "#4ca028",
   [BLOCK.DIAMOND_ORE]: "#55ffff",
   [BLOCK.WATER]: "#2762d6",
+  [BLOCK.BIRCH_LOG]: "#eaeaea",
+  [BLOCK.BIRCH_LEAVES]: "#5db532",
   [BLOCK.TALL_GRASS]: "#5fa832",
   [BLOCK.POPPY]: "#dd2222",
-  [BLOCK.DANDELION]: "#ffdd00",
-  [BLOCK.BIRCH_LOG]: "#eaeaea",
-  [BLOCK.BIRCH_LEAVES]: "#5db532"
+  [BLOCK.DANDELION]: "#ffdd00"
 };
 
 // Texture Slots in 4x4 Atlas Grid (16 slots total)
@@ -81,6 +81,24 @@ export const ATLAS_SLOTS = {
   POPPY: 13,
   DANDELION: 14,
   BIRCH_LOG_SIDE: 15
+};
+
+const TEXTURE_FILE_MAP = {
+  [ATLAS_SLOTS.GRASS_TOP]: 'grass_block_top.png',
+  [ATLAS_SLOTS.GRASS_SIDE]: 'grass_block_side.png',
+  [ATLAS_SLOTS.DIRT]: 'dirt.png',
+  [ATLAS_SLOTS.STONE]: 'stone.png',
+  [ATLAS_SLOTS.COBBLESTONE]: 'cobblestone.png',
+  [ATLAS_SLOTS.SAND]: 'sand.png',
+  [ATLAS_SLOTS.BEDROCK]: 'bedrock.png',
+  [ATLAS_SLOTS.OAK_LOG_SIDE]: 'oak_log.png',
+  [ATLAS_SLOTS.OAK_LOG_TOP]: 'oak_log_top.png',
+  [ATLAS_SLOTS.OAK_LEAVES]: 'oak_leaves.png',
+  [ATLAS_SLOTS.DIAMOND_ORE]: 'diamond_ore.png',
+  [ATLAS_SLOTS.TALL_GRASS]: 'short_grass.png',
+  [ATLAS_SLOTS.POPPY]: 'poppy.png',
+  [ATLAS_SLOTS.DANDELION]: 'dandelion.png',
+  [ATLAS_SLOTS.BIRCH_LOG_SIDE]: 'birch_log.png'
 };
 
 export class TextureAtlas {
@@ -106,11 +124,11 @@ export class TextureAtlas {
       map: this.threeTexture,
       vertexColors: true,
       transparent: true,
-      alphaTest: 0.4,
+      alphaTest: 0.35,
       side: THREE.DoubleSide
     });
 
-    // 2. Crystal Translucent Water Material (lets lakebed/sand show through)
+    // 2. Crystal Translucent Water Material
     this.waterMaterial = new THREE.MeshLambertMaterial({
       color: new THREE.Color(0x2762d6),
       transparent: true,
@@ -124,11 +142,12 @@ export class TextureAtlas {
       map: this.threeTexture,
       vertexColors: true,
       transparent: true,
-      alphaTest: 0.4,
+      alphaTest: 0.35,
       side: THREE.DoubleSide
     });
 
     this.buildAtlas(this.packId);
+    this.loadRealTextures();
   }
 
   getUVs(slotIndex) {
@@ -209,13 +228,35 @@ export class TextureAtlas {
     this.ctx.restore();
   }
 
+  loadRealTextures() {
+    const basePath = './texturepacks/faithful64x/';
+
+    for (const [slotStr, fileName] of Object.entries(TEXTURE_FILE_MAP)) {
+      const slotIndex = parseInt(slotStr, 10);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = `${basePath}${fileName}`;
+
+      img.onload = () => {
+        const col = slotIndex % this.gridSize;
+        const row = Math.floor(slotIndex / this.gridSize);
+        const x = col * this.tileSize;
+        const y = row * this.tileSize;
+
+        this.ctx.clearRect(x, y, this.tileSize, this.tileSize);
+        this.ctx.drawImage(img, x, y, this.tileSize, this.tileSize);
+        this.threeTexture.needsUpdate = true;
+      };
+    }
+  }
+
   buildAtlas(packId = 'faithful64') {
     this.packId = packId;
     const S = this.tileSize;
 
     this.ctx.clearRect(0, 0, this.atlasCanvas.width, this.atlasCanvas.height);
 
-    // 0: GRASS TOP (Rich vibrant Minecraft 1.19 green)
+    // 0: GRASS TOP
     this.drawTile(ATLAS_SLOTS.GRASS_TOP, (ctx) => {
       ctx.fillStyle = '#5fa832';
       ctx.fillRect(0, 0, S, S);
@@ -227,9 +268,8 @@ export class TextureAtlas {
       for (let i = 0; i < 30; i++) ctx.fillRect(Math.floor(Math.random() * (S - 2)), Math.floor(Math.random() * (S - 2)), 2, 2);
     });
 
-    // 1: GRASS SIDE (Iconic hanging green grass fringe over dark soil)
+    // 1: GRASS SIDE
     this.drawTile(ATLAS_SLOTS.GRASS_SIDE, (ctx) => {
-      // Base Dirt Soil
       ctx.fillStyle = '#866043';
       ctx.fillRect(0, 0, S, S);
       ctx.fillStyle = '#5a3d28';
@@ -237,21 +277,19 @@ export class TextureAtlas {
       ctx.fillStyle = '#a17855';
       for (let i = 0; i < 40; i++) ctx.fillRect(Math.floor(Math.random() * S), Math.floor(Math.random() * S), 3, 3);
 
-      // Top Lush Grass Cap
       ctx.fillStyle = '#5fa832';
-      ctx.fillRect(0, 0, S, 12);
+      ctx.fillRect(0, 0, S, 14);
 
-      // Hanging Grass Fringe Blades
       for (let x = 0; x < S; x += 4) {
-        const fringeLen = 12 + (Math.abs(Math.sin(x * 0.45) * 14) % 12);
+        const fringeLen = 14 + (Math.abs(Math.sin(x * 0.45) * 14) % 12);
         ctx.fillStyle = '#5fa832';
-        ctx.fillRect(x, 12, 4, fringeLen);
+        ctx.fillRect(x, 14, 4, fringeLen);
         ctx.fillStyle = '#4f9129';
-        ctx.fillRect(x, 12, 2, fringeLen - 2);
+        ctx.fillRect(x, 14, 2, fringeLen - 2);
       }
     });
 
-    // 2: DIRT (Rich earthy brown soil)
+    // 2: DIRT
     this.drawTile(ATLAS_SLOTS.DIRT, (ctx) => {
       ctx.fillStyle = '#866043';
       ctx.fillRect(0, 0, S, S);
@@ -261,7 +299,7 @@ export class TextureAtlas {
       for (let i = 0; i < 50; i++) ctx.fillRect(Math.floor(Math.random() * S), Math.floor(Math.random() * S), 3, 3);
     });
 
-    // 3: STONE (Natural stone with subtle noise)
+    // 3: STONE
     this.drawTile(ATLAS_SLOTS.STONE, (ctx) => {
       ctx.fillStyle = '#787878';
       ctx.fillRect(0, 0, S, S);
@@ -281,7 +319,7 @@ export class TextureAtlas {
       for (let i = 0; i < 50; i++) ctx.fillRect(Math.floor(Math.random() * S), Math.floor(Math.random() * S), 4, 4);
     });
 
-    // 5: SAND (Warm golden beach sand)
+    // 5: SAND
     this.drawTile(ATLAS_SLOTS.SAND, (ctx) => {
       ctx.fillStyle = '#dbd3a0';
       ctx.fillRect(0, 0, S, S);
@@ -301,7 +339,7 @@ export class TextureAtlas {
       for (let i = 0; i < 50; i++) ctx.fillRect(Math.floor(Math.random() * S), Math.floor(Math.random() * S), 3, 3);
     });
 
-    // 7: OAK LOG SIDE (Bark ridges)
+    // 7: OAK LOG SIDE
     this.drawTile(ATLAS_SLOTS.OAK_LOG_SIDE, (ctx) => {
       ctx.fillStyle = '#674a27';
       ctx.fillRect(0, 0, S, S);
@@ -311,7 +349,7 @@ export class TextureAtlas {
       for (let y = 4; y < S; y += 8) ctx.fillRect(0, y, S, 2);
     });
 
-    // 8: OAK LOG TOP (Tree rings)
+    // 8: OAK LOG TOP
     this.drawTile(ATLAS_SLOTS.OAK_LOG_TOP, (ctx) => {
       ctx.fillStyle = '#674a27';
       ctx.fillRect(0, 0, S, S);
@@ -321,7 +359,7 @@ export class TextureAtlas {
       ctx.fillRect(14, 14, S - 28, S - 28);
     });
 
-    // 9: OAK & BIRCH LEAVES (Bright, crisp, lush green foliage)
+    // 9: OAK LEAVES
     this.drawTile(ATLAS_SLOTS.OAK_LEAVES, (ctx) => {
       ctx.fillStyle = '#2d631d';
       ctx.fillRect(0, 0, S, S);
@@ -329,8 +367,6 @@ export class TextureAtlas {
       for (let i = 0; i < 110; i++) ctx.fillRect(Math.floor(Math.random() * (S - 4)), Math.floor(Math.random() * (S - 4)), 5, 5);
       ctx.fillStyle = '#5cb832';
       for (let i = 0; i < 60; i++) ctx.fillRect(Math.floor(Math.random() * S), Math.floor(Math.random() * S), 3, 3);
-      ctx.fillStyle = '#6ecc3b';
-      for (let i = 0; i < 30; i++) ctx.fillRect(Math.floor(Math.random() * S), Math.floor(Math.random() * S), 2, 2);
     });
 
     // 10: DIAMOND ORE
@@ -344,9 +380,6 @@ export class TextureAtlas {
       ctx.fillRect(36, 16, 12, 10);
       ctx.fillRect(16, 38, 10, 10);
       ctx.fillRect(40, 40, 12, 10);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(12, 12, 4, 4);
-      ctx.fillRect(38, 18, 4, 4);
     });
 
     // 11: WATER
@@ -360,51 +393,27 @@ export class TextureAtlas {
       ctx.fillStyle = '#3e7520';
       ctx.fillRect(18, 16, 4, 48);
       ctx.fillRect(42, 22, 4, 42);
-
       ctx.fillStyle = '#4f9129';
       ctx.fillRect(24, 8, 4, 56);
       ctx.fillRect(36, 12, 4, 52);
-
-      ctx.fillStyle = '#6cb53b';
-      ctx.fillRect(28, 4, 6, 60);
-      ctx.fillRect(32, 2, 4, 62);
     });
 
     // 13: POPPY
     this.drawTile(ATLAS_SLOTS.POPPY, (ctx) => {
       ctx.fillStyle = '#3e7520';
       ctx.fillRect(30, 24, 4, 40);
-      ctx.fillStyle = '#4f9129';
-      ctx.fillRect(34, 32, 4, 12);
-      ctx.fillRect(26, 40, 4, 10);
-
-      ctx.fillStyle = '#cc1111';
-      ctx.fillRect(20, 8, 24, 18);
       ctx.fillStyle = '#ee2222';
       ctx.fillRect(22, 10, 20, 14);
-      ctx.fillStyle = '#990000';
-      ctx.fillRect(24, 16, 16, 8);
-
       ctx.fillStyle = '#111111';
       ctx.fillRect(28, 12, 8, 8);
-      ctx.fillStyle = '#333333';
-      ctx.fillRect(30, 14, 4, 4);
     });
 
     // 14: DANDELION
     this.drawTile(ATLAS_SLOTS.DANDELION, (ctx) => {
       ctx.fillStyle = '#3e7520';
       ctx.fillRect(30, 26, 4, 38);
-      ctx.fillStyle = '#4f9129';
-      ctx.fillRect(34, 36, 4, 10);
-
       ctx.fillStyle = '#ffcc00';
       ctx.fillRect(20, 10, 24, 18);
-      ctx.fillStyle = '#ffee33';
-      ctx.fillRect(22, 12, 20, 14);
-      ctx.fillStyle = '#e6a800';
-      ctx.fillRect(24, 18, 16, 8);
-
       ctx.fillStyle = '#cc8800';
       ctx.fillRect(28, 14, 8, 6);
     });
@@ -413,25 +422,17 @@ export class TextureAtlas {
     this.drawTile(ATLAS_SLOTS.BIRCH_LOG_SIDE, (ctx) => {
       ctx.fillStyle = '#e8e8e8';
       ctx.fillRect(0, 0, S, S);
-      ctx.fillStyle = '#d0d0d0';
-      for (let i = 0; i < 40; i++) ctx.fillRect(Math.floor(Math.random() * S), Math.floor(Math.random() * S), 4, 2);
-
       ctx.fillStyle = '#1a1a1a';
       ctx.fillRect(4, 10, 16, 4);
       ctx.fillRect(34, 20, 18, 5);
       ctx.fillRect(10, 36, 20, 5);
       ctx.fillRect(40, 48, 16, 4);
-
-      ctx.fillStyle = '#4a4a4a';
-      ctx.fillRect(18, 11, 4, 2);
-      ctx.fillRect(8, 37, 4, 3);
     });
 
     this.threeTexture.needsUpdate = true;
   }
 
   updateWaterAnimation(time) {
-    // Dynamic shimmering opacity and subtle wave color modulation
     const waveSin = (Math.sin(time * 2.0) + 1.0) * 0.5;
     if (this.waterMaterial) {
       this.waterMaterial.opacity = 0.60 + waveSin * 0.08;
