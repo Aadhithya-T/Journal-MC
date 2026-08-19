@@ -173,12 +173,16 @@ public class ChunkRenderer {
         glBindVertexArray(0);
     }
 
-    public void renderWater() {
+    public void renderWater(boolean isUnderwater) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(false);
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
+        if (isUnderwater) {
+            glDisable(GL_CULL_FACE); // Render water ceiling when looking from below
+        } else {
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);
+        }
 
         for (GPUChunkMesh mesh : meshes.values()) {
             if (mesh.waterVao != 0 && mesh.waterVertexCount > 0) {

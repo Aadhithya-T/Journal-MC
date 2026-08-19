@@ -17,6 +17,7 @@ uniform float uFogEnd;
 uniform vec3 uCameraPos;
 uniform float uTime;
 uniform int uIsWater;
+uniform int uIsUnderwater;
 uniform float uExposure;
 uniform int uDebugMode;
 
@@ -124,11 +125,15 @@ void main() {
         linearRadiance = linearAlbedo * finalLight;
     }
 
-    // 4. Atmospheric Perspective Fog (Linear HDR Space before Tone Mapping)
+    // 4. Atmospheric & Underwater Perspective Fog (Linear HDR Space before Tone Mapping)
     float fogFactor = smoothstep(uFogStart, uFogEnd, vFogDist);
     vec3 linearSceneColor;
 
-    if (uIsWater == 1) {
+    if (uIsUnderwater == 1) {
+        // Dense aquatic depth fog and light absorption
+        vec3 aquaticTintedRadiance = linearRadiance * vec3(0.65, 0.88, 1.10);
+        linearSceneColor = mix(aquaticTintedRadiance, uFogColor, fogFactor);
+    } else if (uIsWater == 1) {
         // Preserves the distinct blue identity of distant water so lakes don't bleach to white horizon haze
         vec3 waterFogColor = mix(uFogColor, vec3(0.015, 0.08, 0.32), 0.32);
         linearSceneColor = mix(linearRadiance, waterFogColor, fogFactor * 0.80);

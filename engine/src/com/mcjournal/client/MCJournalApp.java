@@ -46,6 +46,7 @@ public class MCJournalApp {
     private final Vector3f zenithColor = new Vector3f();
     private final Vector3f horizonColor = new Vector3f();
     private final Vector3f sunColor = new Vector3f();
+    private final Vector3f underwaterFogColor = new Vector3f();
 
     private Screen currentScreen;
     private boolean isInWorld = false;
@@ -324,6 +325,12 @@ public class MCJournalApp {
             RenderingConfig.DAY_SUN_COLOR.z * dayWeight + RenderingConfig.SUNSET_SUN_COLOR.z * twilightWeight + RenderingConfig.NIGHT_MOON_COLOR.z * nightWeight
         );
 
+        underwaterFogColor.set(
+            RenderingConfig.UNDERWATER_DAY_FOG_COLOR.x * dayWeight + RenderingConfig.UNDERWATER_SUNSET_FOG_COLOR.x * twilightWeight + RenderingConfig.UNDERWATER_NIGHT_FOG_COLOR.x * nightWeight,
+            RenderingConfig.UNDERWATER_DAY_FOG_COLOR.y * dayWeight + RenderingConfig.UNDERWATER_SUNSET_FOG_COLOR.y * twilightWeight + RenderingConfig.UNDERWATER_NIGHT_FOG_COLOR.y * nightWeight,
+            RenderingConfig.UNDERWATER_DAY_FOG_COLOR.z * dayWeight + RenderingConfig.UNDERWATER_SUNSET_FOG_COLOR.z * twilightWeight + RenderingConfig.UNDERWATER_NIGHT_FOG_COLOR.z * nightWeight
+        );
+
         // Dynamic exposure adaptation: slightly higher at night to preserve silhouette readability
         RenderingConfig.exposure = 1.0f * dayWeight + 1.15f * twilightWeight + 1.35f * nightWeight;
     }
@@ -465,8 +472,22 @@ public class MCJournalApp {
             float curTime = (float) glfwGetTime();
             float timeOfDayFraction = (float) (worldTimeTicks / 24000.0);
 
+            // Check if player's camera eye position is submerged in water
+            int eyeBlockX = (int) Math.floor(eyePos.x);
+            int eyeBlockY = (int) Math.floor(eyePos.y);
+            int eyeBlockZ = (int) Math.floor(eyePos.z);
+            boolean isUnderwater = (chunkManager.getBlockAt(eyeBlockX, eyeBlockY, eyeBlockZ) == Block.WATER);
+
+            float curFogStart = isUnderwater ? RenderingConfig.UNDERWATER_FOG_START : RenderingConfig.FOG_START;
+            float curFogEnd = isUnderwater ? RenderingConfig.UNDERWATER_FOG_END : RenderingConfig.FOG_END;
+            Vector3f curFogColor = isUnderwater ? underwaterFogColor : horizonColor;
+
             // --- 1. RENDER ATMOSPHERIC SKY GRADIENT, SUN, MOON & STARS ---
-            skyRenderer.render(camera, sunDir, zenithColor, horizonColor, sunColor, timeOfDayFraction);
+            if (isUnderwater) {
+                skyRenderer.render(camera, sunDir, underwaterFogColor, underwaterFogColor, sunColor, timeOfDayFraction);
+            } else {
+                skyRenderer.render(camera, sunDir, zenithColor, horizonColor, sunColor, timeOfDayFraction);
+            }
 
             // --- 2. RENDER 3D VOXEL WORLD WITH UNIFIED LIGHTING & FRESNEL WATER ---
             chunkShader.bind();
@@ -478,13 +499,14 @@ public class MCJournalApp {
             chunkShader.setUniform("uDirectLightColor", directLightColor);
             chunkShader.setUniform("uSkyAmbientColor", skyAmbientColor);
             chunkShader.setUniform("uGroundAmbientColor", groundAmbientColor);
-            chunkShader.setUniform("uFogColor", horizonColor);
-            chunkShader.setUniform("uFogStart", RenderingConfig.FOG_START);
-            chunkShader.setUniform("uFogEnd", RenderingConfig.FOG_END);
+            chunkShader.setUniform("uFogColor", curFogColor);
+            chunkShader.setUniform("uFogStart", curFogStart);
+            chunkShader.setUniform("uFogEnd", curFogEnd);
             chunkShader.setUniform("uCameraPos", camera.getPosition());
             chunkShader.setUniform("uTime", curTime);
             chunkShader.setUniform("uExposure", RenderingConfig.exposure);
             chunkShader.setUniform("uDebugMode", RenderingConfig.currentDebugMode);
+            chunkShader.setUniform("uIsUnderwater", isUnderwater ? 1 : 0);
 
             // Water uniforms from RenderingConfig
             chunkShader.setUniform("uWaterShallowColor", RenderingConfig.WATER_SHALLOW_COLOR);
@@ -502,7 +524,7 @@ public class MCJournalApp {
 
             // Render Water Geometry (Stylized Depth Absorption & Fresnel Reflections)
             chunkShader.setUniform("uIsWater", 1);
-            chunkRenderer.renderWater();
+            chunkRenderer.renderWater(isUnderwater);
 
             chunkShader.unbind();
             atlas.unbind();

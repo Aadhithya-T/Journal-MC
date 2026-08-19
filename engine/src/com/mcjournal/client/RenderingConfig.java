@@ -62,15 +62,20 @@ public class RenderingConfig {
     public static final Vector3f NIGHT_HORIZON_COLOR = new Vector3f(0.10f, 0.14f, 0.24f);
 
     // ==========================================
-    // 5. ATMOSPHERIC PERSPECTIVE FOG (UNTOUCHED)
+    // 5. ATMOSPHERIC & UNDERWATER FOG
     // ==========================================
     public static final float FOG_START = 75.0f;
     public static final float FOG_END = 240.0f;
 
+    public static final float UNDERWATER_FOG_START = 1.0f;
+    public static final float UNDERWATER_FOG_END = 28.0f;
+    public static final Vector3f UNDERWATER_DAY_FOG_COLOR = new Vector3f(0.015f, 0.160f, 0.420f);   // Linear rich aquatic blue
+    public static final Vector3f UNDERWATER_SUNSET_FOG_COLOR = new Vector3f(0.008f, 0.090f, 0.280f);
+    public static final Vector3f UNDERWATER_NIGHT_FOG_COLOR = new Vector3f(0.001f, 0.025f, 0.100f);  // Dark abyss blue
+
     // ==========================================
-    // 6. STYLIZED WATER OPTICS & ABSORPTION (CALIBRATED)
+    // 6. STYLIZED WATER OPTICS & ABSORPTION
     // ==========================================
-    // Calibrated linear water colors (low red/green scattering to eliminate milky haze)
     public static final Vector3f WATER_SHALLOW_COLOR = new Vector3f(0.012f, 0.140f, 0.420f); // Pure crystal cyan-azure
     public static final Vector3f WATER_MID_COLOR = new Vector3f(0.005f, 0.065f, 0.380f);     // Vibrant natural cobalt
     public static final Vector3f WATER_DEEP_COLOR = new Vector3f(0.001f, 0.022f, 0.260f);    // Saturated rich sapphire
@@ -80,7 +85,7 @@ public class RenderingConfig {
     public static final float WATER_ABSORPTION_MU = 0.42f;                                    // Beer-Lambert transmission rate
 
     // ==========================================
-    // 7. AMBIENT OCCLUSION & FOLIAGE (UNTOUCHED)
+    // 7. AMBIENT OCCLUSION & FOLIAGE
     // ==========================================
     public static final float AO_MIN_CLAMP = 0.60f;
     public static final float LEAF_ALPHA_CUTOFF = 0.50f;
