@@ -155,6 +155,10 @@ public class MCJournalApp {
         setScreen(new TitleScreen(this));
     }
 
+    public void quitGame() {
+        window.close();
+    }
+
     public void enterWorld(long seed, String worldName, String biome, WorldSaveManager.SavedWorld existingSave) {
         this.currentBiome = biome;
         this.currentWorldName = worldName;

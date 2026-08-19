@@ -89,17 +89,24 @@ public class Player {
             onGround = false;
         }
 
-        // 2.5 Water Physics & Buoyancy (Proportional Entry Plunge & Fluid Drag)
+        // 2.5 Water Physics & Buoyancy (Proportional Entry Plunge, Fluid Drag & Sprint-Jump Water Exit)
         boolean inWater = world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + 0.35f), (int) Math.floor(pos.z)) == Block.WATER
                        || world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + EYE_HEIGHT), (int) Math.floor(pos.z)) == Block.WATER;
         if (inWater) {
             fallDistance = 0; // Water completely breaks fall damage
             highestY = pos.y;
-            friction = 0.80f;
+            friction = 0.82f;
 
             if (jump) {
-                // Swim upwards
-                velocity.y = Math.min(velocity.y + 0.04f, 0.14f);
+                if (isSprinting) {
+                    // Sprint-jump dolphin leap / water exit boost (breaches water surface to jump out onto land)
+                    velocity.y = Math.min(velocity.y + 0.10f, 0.38f);
+                    velocity.x += forwardX * 0.08f;
+                    velocity.z += forwardZ * 0.08f;
+                } else {
+                    // Standard upward swimming
+                    velocity.y = Math.min(velocity.y + 0.05f, 0.20f);
+                }
             } else if (sneak) {
                 // Dive downwards faster
                 velocity.y = Math.max(velocity.y - 0.03f, -0.25f);
@@ -121,7 +128,7 @@ public class Player {
         }
 
         // 4. Move & Collide with Voxel Terrain (Y first, then X and Z with continuous step-up)
-        moveWithCollision(world, velocity.x, velocity.y, velocity.z);
+        moveWithCollision(world, velocity.x, velocity.y, velocity.z, inWater);
 
         // Apply Horizontal Friction
         velocity.x *= friction;
@@ -161,7 +168,7 @@ public class Player {
         }
     }
 
-    private void moveWithCollision(ChunkManager world, float dx, float dy, float dz) {
+    private void moveWithCollision(ChunkManager world, float dx, float dy, float dz, boolean inWater) {
         // Step 1: Move Y (Vertical) FIRST so jump lifts player before checking horizontal walls
         float targetY = pos.y + dy;
         if (dy < 0) {
@@ -194,10 +201,11 @@ public class Player {
                 // Auto Step-Up 0.6-block ledge
                 if (!checkBlockCollision(world, targetX, pos.y + STEP_HEIGHT, pos.z)) {
                     pos.x = targetX;
-                    if (onGround) pos.y += STEP_HEIGHT;
-                } else if (!onGround && velocity.y > 0 && !checkBlockCollision(world, targetX, pos.y + 1.05f, pos.z)) {
-                    // Mid-jump: allow forward traversal over 1-block obstacles
+                    if (onGround || inWater) pos.y += STEP_HEIGHT;
+                } else if ((!onGround || inWater) && (velocity.y > 0 || inWater) && !checkBlockCollision(world, targetX, pos.y + 1.05f, pos.z)) {
+                    // Mid-jump or swimming out of water: allow forward traversal and lift onto 1-block ledge
                     pos.x = targetX;
+                    pos.y += STEP_HEIGHT;
                 } else {
                     velocity.x = 0;
                 }
@@ -213,10 +221,11 @@ public class Player {
                 // Auto Step-Up 0.6-block ledge
                 if (!checkBlockCollision(world, pos.x, pos.y + STEP_HEIGHT, targetZ)) {
                     pos.z = targetZ;
-                    if (onGround) pos.y += STEP_HEIGHT;
-                } else if (!onGround && velocity.y > 0 && !checkBlockCollision(world, pos.x, pos.y + 1.05f, targetZ)) {
-                    // Mid-jump: allow forward traversal over 1-block obstacles
+                    if (onGround || inWater) pos.y += STEP_HEIGHT;
+                } else if ((!onGround || inWater) && (velocity.y > 0 || inWater) && !checkBlockCollision(world, pos.x, pos.y + 1.05f, targetZ)) {
+                    // Mid-jump or swimming out of water: allow forward traversal and lift onto 1-block ledge
                     pos.z = targetZ;
+                    pos.y += STEP_HEIGHT;
                 } else {
                     velocity.z = 0;
                 }

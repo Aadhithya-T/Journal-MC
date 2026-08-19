@@ -369,6 +369,7 @@ public class ChunkMeshBuilder {
         float uMin, float uMax, float vMin, float vMax,
         FloatArrayList pos, FloatArrayList norm, FloatArrayList uv, FloatArrayList col
     ) {
+        // Front Face
         pos.add9(x0, y0, z0, x1, y1, z1, x2, y2, z2);
         pos.add9(x0, y0, z0, x2, y2, z2, x3, y3, z3);
 
@@ -377,6 +378,19 @@ public class ChunkMeshBuilder {
 
         uv.add6(uMin, vMin, uMax, vMin, uMax, vMax);
         uv.add6(uMin, vMin, uMax, vMax, uMin, vMax);
+
+        col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+        col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+
+        // Back Face (Double-sided cross-foliage for 360-degree visibility)
+        pos.add9(x2, y2, z2, x1, y1, z1, x0, y0, z0);
+        pos.add9(x3, y3, z3, x2, y2, z2, x0, y0, z0);
+
+        norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
+        norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
+
+        uv.add6(uMax, vMax, uMax, vMin, uMin, vMin);
+        uv.add6(uMin, vMax, uMax, vMax, uMin, vMin);
 
         col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
         col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
