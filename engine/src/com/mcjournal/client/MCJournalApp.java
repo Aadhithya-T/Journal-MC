@@ -146,6 +146,7 @@ public class MCJournalApp {
                 currentBiome,
                 currentSeed,
                 player,
+                this.worldTimeTicks,
                 chunkManager != null ? chunkManager.getModifiedBlocks() : null
             );
             this.isInWorld = false;
@@ -177,8 +178,9 @@ public class MCJournalApp {
             chunkRenderer.uploadChunkMesh(cx, cz, entry.getValue());
         }
 
-        // 3. Restore or compute player spawn position & stats
+        // 3. Restore or compute player spawn position, stats & time of day
         if (existingSave != null) {
+            this.worldTimeTicks = existingSave.worldTime;
             player.pos.set(existingSave.playerX, existingSave.playerY, existingSave.playerZ);
             player.prevPos.set(existingSave.playerX, existingSave.playerY, existingSave.playerZ);
             player.yaw = existingSave.playerYaw;
@@ -192,8 +194,11 @@ public class MCJournalApp {
             camera.setYaw(player.yaw);
             camera.setPitch(player.pitch);
             System.out.println("[MCJournalApp] 🚀 Restored player state at (" +
-                    String.format("%.1f, %.1f, %.1f", player.pos.x, player.pos.y, player.pos.z) + ", HP: " + player.health + "/20)!");
+                    String.format("%.1f, %.1f, %.1f", player.pos.x, player.pos.y, player.pos.z) + ", HP: " + player.health + "/20, Time: " +
+                    String.format("%.0f", this.worldTimeTicks) + " ticks)!");
         } else {
+            this.worldTimeTicks = 6000.0; // Day 1 baseline
+
             // Safe surface spawn scan for new world
             int spawnX = 8;
             int spawnZ = 8;
@@ -219,7 +224,7 @@ public class MCJournalApp {
             camera.setPitch(0);
 
             // Immediately save initial state
-            WorldSaveManager.saveWorld(worldName, biome, seed, player, null);
+            WorldSaveManager.saveWorld(worldName, biome, seed, player, this.worldTimeTicks, null);
             System.out.println("[MCJournalApp] 🚀 Spawned into fresh Hardcore World at Y=" + spawnY + "!");
         }
 
@@ -241,8 +246,10 @@ public class MCJournalApp {
     }
 
     private void updateAtmosphericSolarCycle(double deltaTime) {
-        // Continuous 24,000 tick Minecraft Day/Night Cycle (20 real minutes)
-        worldTimeTicks = (worldTimeTicks + deltaTime * 20.0) % 24000.0;
+        // Continuous 24,000 tick Minecraft Day/Night Cycle (advances only during active in-world gameplay)
+        if (isInWorld && currentScreen == null) {
+            worldTimeTicks = (worldTimeTicks + deltaTime * 20.0) % 24000.0;
+        }
         float dayFraction = (float) (worldTimeTicks / 24000.0);
 
         // Astronomical solar orbital angle
@@ -537,6 +544,7 @@ public class MCJournalApp {
                 currentBiome,
                 currentSeed,
                 player,
+                this.worldTimeTicks,
                 chunkManager != null ? chunkManager.getModifiedBlocks() : null
             );
         }

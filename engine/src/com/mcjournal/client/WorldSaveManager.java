@@ -26,6 +26,9 @@ public class WorldSaveManager {
         public int hunger = 20;
         public int selectedSlot = 0;
 
+        // Continuous World Time (24,000 tick solar cycle: 6000 = Day Mid-Morning/Noon)
+        public double worldTime = 6000.0;
+
         // Voxel Block State (Every single block broken, placed, or modified)
         public Map<String, Byte> modifiedBlocks = new HashMap<>();
 
@@ -34,6 +37,7 @@ public class WorldSaveManager {
         public SavedWorld(String name, String biome, long seed, String createdAt,
                           float px, float py, float pz, float yaw, float pitch,
                           int health, int hunger, int selectedSlot,
+                          double worldTime,
                           Map<String, Byte> modifiedBlocks) {
             this.name = name;
             this.biome = biome;
@@ -47,6 +51,7 @@ public class WorldSaveManager {
             this.health = health;
             this.hunger = hunger;
             this.selectedSlot = selectedSlot;
+            this.worldTime = (worldTime >= 0.0) ? (worldTime % 24000.0) : 6000.0;
             this.modifiedBlocks = (modifiedBlocks != null) ? new HashMap<>(modifiedBlocks) : new HashMap<>();
         }
     }
@@ -62,8 +67,13 @@ public class WorldSaveManager {
         if (!hasWorld()) return null;
         try (FileReader reader = new FileReader(SAVE_FILE)) {
             SavedWorld world = GSON.fromJson(reader, SavedWorld.class);
-            if (world != null && world.modifiedBlocks == null) {
-                world.modifiedBlocks = new HashMap<>();
+            if (world != null) {
+                if (world.modifiedBlocks == null) {
+                    world.modifiedBlocks = new HashMap<>();
+                }
+                if (world.worldTime <= 0.0 && world.createdAt == null) {
+                    world.worldTime = 6000.0;
+                }
             }
             return world;
         } catch (Exception e) {
@@ -73,7 +83,7 @@ public class WorldSaveManager {
     }
 
     public static void saveWorld(String name, String biome, long seed,
-                                 Player player, Map<String, Byte> modifiedBlocks) {
+                                 Player player, double worldTime, Map<String, Byte> modifiedBlocks) {
         try {
             SAVE_FILE.getParentFile().mkdirs();
             SavedWorld world = new SavedWorld(
@@ -89,6 +99,7 @@ public class WorldSaveManager {
                 player != null ? player.health : 20,
                 player != null ? player.hunger : 20,
                 player != null ? player.selectedSlot : 0,
+                worldTime,
                 modifiedBlocks
             );
 
@@ -96,7 +107,8 @@ public class WorldSaveManager {
                 GSON.toJson(world, writer);
             }
             int modCount = modifiedBlocks != null ? modifiedBlocks.size() : 0;
-            System.out.println("[WorldSaveManager] Hardcore World saved (" + modCount + " block changes, player at " +
+            System.out.println("[WorldSaveManager] Hardcore World saved (" + modCount + " block changes, time: " +
+                    String.format("%.0f", world.worldTime) + " ticks, player at " +
                     String.format("%.1f, %.1f, %.1f", world.playerX, world.playerY, world.playerZ) + ") to " + SAVE_FILE.getAbsolutePath());
         } catch (Exception e) {
             System.err.println("[WorldSaveManager] Failed to save world: " + e.getMessage());
