@@ -89,17 +89,31 @@ public class Player {
             onGround = false;
         }
 
-        // 2.5 Water Physics & Buoyancy
-        boolean inWater = world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + 0.35f), (int) Math.floor(pos.z)) == Block.WATER;
+        // 2.5 Water Physics & Buoyancy (Proportional Entry Plunge & Fluid Drag)
+        boolean inWater = world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + 0.35f), (int) Math.floor(pos.z)) == Block.WATER
+                       || world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + EYE_HEIGHT), (int) Math.floor(pos.z)) == Block.WATER;
         if (inWater) {
             fallDistance = 0; // Water completely breaks fall damage
             highestY = pos.y;
             friction = 0.80f;
 
             if (jump) {
-                velocity.y = 0.14f; // Swim upwards
+                // Swim upwards
+                velocity.y = Math.min(velocity.y + 0.04f, 0.14f);
+            } else if (sneak) {
+                // Dive downwards faster
+                velocity.y = Math.max(velocity.y - 0.03f, -0.25f);
             } else {
-                velocity.y = Math.max(-0.05f, (velocity.y - 0.005f) * 0.85f); // Gentle buoyancy sinking
+                // Natural fluid drag & momentum deceleration
+                // High downward entry velocity decelerates smoothly through the water column in proportion to fall height
+                if (velocity.y < -0.08f) {
+                    velocity.y = (velocity.y - 0.015f) * 0.82f;
+                } else if (velocity.y > 0.02f) {
+                    velocity.y *= 0.82f;
+                } else {
+                    // Gentle terminal buoyancy sinking
+                    velocity.y = Math.max(-0.05f, (velocity.y - 0.005f) * 0.85f);
+                }
             }
         } else {
             // 3. Gravity & Vertical Drag (Air/Ground)
