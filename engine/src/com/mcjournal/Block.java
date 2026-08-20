@@ -79,4 +79,13 @@ public final class Block {
     public static boolean isSolid(byte type) {
         return type != AIR && type != WATER && type != TALL_GRASS && type != POPPY && type != DANDELION;
     }
+
+    public static boolean isPlant(byte type) {
+        return type == TALL_GRASS || type == POPPY || type == DANDELION;
+    }
+
+    public static boolean canPlantSurviveOn(byte blockBelow) {
+        return blockBelow == GRASS || blockBelow == DIRT;
+    }
 }
+

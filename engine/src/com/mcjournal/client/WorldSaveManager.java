@@ -115,6 +115,19 @@ public class WorldSaveManager {
         }
     }
 
+    public static void renameWorld(String newName) {
+        SavedWorld world = loadWorld();
+        if (world != null && newName != null && !newName.trim().isEmpty()) {
+            world.name = newName.trim();
+            try (FileWriter writer = new FileWriter(SAVE_FILE)) {
+                GSON.toJson(world, writer);
+                System.out.println("[WorldSaveManager] World renamed to: " + world.name);
+            } catch (Exception e) {
+                System.err.println("[WorldSaveManager] Failed to rename world: " + e.getMessage());
+            }
+        }
+    }
+
     public static void deleteWorld() {
         if (SAVE_FILE.exists()) {
             boolean deleted = SAVE_FILE.delete();

@@ -30,6 +30,7 @@ public class MCJournalApp {
     private BlockSelectionRenderer blockSelectionRenderer;
     private ParticleManager particleManager;
     private FluidPhysicsManager fluidPhysicsManager;
+    private FirstPersonHandRenderer handRenderer;
 
     private ChunkManager chunkManager;
     private ShaderProgram chunkShader;
@@ -85,11 +86,14 @@ public class MCJournalApp {
         fontRenderer = new FontRenderer();
         fontRenderer.init();
         hud = new HardcoreHUD();
+        hud.init();
 
         skyRenderer.init();
         videoBackgroundManager.init();
         blockSelectionRenderer.init();
         particleManager.init();
+        handRenderer = new FirstPersonHandRenderer();
+        handRenderer.init();
 
         atlas = new TextureAtlas();
         chunkRenderer = new ChunkRenderer();
@@ -455,7 +459,7 @@ public class MCJournalApp {
             // Mine blocks by hand (LMB) & Place blocks (RMB) with particles and fluid physics
             boolean lmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_1);
             boolean rmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_2);
-            blockBreakingManager.update(chunkManager, chunkRenderer, particleManager, fluidPhysicsManager, player, camera, lmb, rmb);
+            blockBreakingManager.update(chunkManager, chunkRenderer, particleManager, fluidPhysicsManager, handRenderer, player, camera, lmb, rmb);
 
             // Update Fluid Physics Simulation (Water flows, cascades, and fills cavities)
             fluidPhysicsManager.updateTicks(chunkManager, chunkRenderer, particleManager);
@@ -544,6 +548,12 @@ public class MCJournalApp {
             // --- 4. RENDER DISINTEGRATION PARTICLES ---
             particleManager.render(camera);
 
+            // --- 4.5 RENDER FIRST-PERSON STEVE HAND & VIEWMODEL ---
+            if (currentScreen == null) {
+                handRenderer.update((float) deltaTime, player);
+                handRenderer.render(camera, player, sunDir, directLightColor, skyAmbientColor, groundAmbientColor, window.getAspectRatio());
+            }
+
             // --- 5. IN-GAME HARDCORE HUD ---
             if (currentScreen == null) {
                 guiRenderer.begin(window.getWidth(), window.getHeight());
@@ -583,6 +593,8 @@ public class MCJournalApp {
         if (videoBackgroundManager != null) videoBackgroundManager.cleanup();
         if (blockSelectionRenderer != null) blockSelectionRenderer.cleanup();
         if (particleManager != null) particleManager.cleanup();
+        if (handRenderer != null) handRenderer.cleanup();
+        if (hud != null) hud.cleanup();
         window.destroy();
     }
 

@@ -22,8 +22,14 @@ public class InputHandler {
             if (key >= 0 && key < keys.length) {
                 keys[key] = (action != GLFW_RELEASE);
             }
-            if (app.getCurrentScreen() != null && action == GLFW_PRESS) {
+            if (app.getCurrentScreen() != null && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
                 app.getCurrentScreen().keyPressed(key, scancode, action, mods);
+            }
+        });
+
+        glfwSetCharCallback(windowHandle, (window, codepoint) -> {
+            if (app.getCurrentScreen() != null && codepoint >= 32 && codepoint <= 126) {
+                app.getCurrentScreen().charTyped((char) codepoint);
             }
         });
 

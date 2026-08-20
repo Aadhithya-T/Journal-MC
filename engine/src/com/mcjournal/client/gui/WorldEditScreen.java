@@ -1,15 +1,17 @@
 package com.mcjournal.client.gui;
 
 import com.mcjournal.client.MCJournalApp;
+import com.mcjournal.client.WorldSaveManager;
 
-public class WorldCreateScreen extends Screen {
-    private String worldName = "New Adventure";
-    private final String gameMode = "Hardcore"; // Hardcore Permadeath
-    private long seed = System.currentTimeMillis() % 1000000L;
+public class WorldEditScreen extends Screen {
+    private final WorldSaveManager.SavedWorld world;
+    private String worldName;
     private float cursorTimer = 0.0f;
 
-    public WorldCreateScreen(MCJournalApp app) {
+    public WorldEditScreen(MCJournalApp app, WorldSaveManager.SavedWorld world) {
         super(app);
+        this.world = world;
+        this.worldName = (world != null && world.name != null) ? world.name : "New Adventure";
     }
 
     @Override
@@ -22,16 +24,19 @@ public class WorldCreateScreen extends Screen {
         int btnH = 38;
         int bottomY = height - 56;
 
-        // 1. Create Hardcore World Button (Left)
-        buttons.add(new Button(1, "Create New World", centerX, bottomY, btnW, btnH, () -> {
-            String finalName = worldName.trim().isEmpty() ? "New Adventure" : worldName.trim();
-            app.enterWorld(seed, finalName, "Multi-Biome", null);
-        }));
+        // 1. Save World Button (Left)
+        buttons.add(new Button(1, "Save", centerX, bottomY, btnW, btnH, this::saveAndExit));
 
         // 2. Cancel Button (Right)
         buttons.add(new Button(2, "Cancel", centerX + btnW + 8, bottomY, btnW, btnH, () -> {
             app.setScreen(new WorldSelectScreen(app));
         }));
+    }
+
+    private void saveAndExit() {
+        String finalName = worldName.trim().isEmpty() ? "New Adventure" : worldName.trim();
+        WorldSaveManager.renameWorld(finalName);
+        app.setScreen(new WorldSelectScreen(app));
     }
 
     @Override
@@ -42,20 +47,20 @@ public class WorldCreateScreen extends Screen {
         gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.40f);
         gui.drawMenuHeaderFooterStrips(width, height, 64, 82);
 
-        // 2. Header Title (Centered with comfortable top margin)
-        String title = "Create New World";
+        // 2. Header Title
+        String title = "Edit World";
         float titleW = font.getStringWidth(title, 1.20f);
         font.drawString(gui, title, (width - titleW) / 2.0f, 16, 1.20f, 0xffffff, true);
 
-        // 3. Form Cards Container (Centered horizontally, 500px wide for spacious breathing room)
+        // 3. Form Cards Container (500px wide, centered)
         int boxW = Math.min(500, width - 48);
         int centerX = (width - boxW) / 2;
-        int startY = 82;
+        int startY = 96;
 
         // --- SECTION 1: World Name Input Box ---
         font.drawString(gui, "World Name", centerX, startY, 0.80f, 0xaaaaaa, true);
         int nameInputY = startY + 18;
-        int nameInputH = 32;
+        int nameInputH = 34;
 
         gui.drawRect(centerX - 1, nameInputY - 1, boxW + 2, nameInputH + 2, 0.65f, 0.65f, 0.65f, 1.0f);
         gui.drawRect(centerX, nameInputY, boxW, nameInputH, 0.0f, 0.0f, 0.0f, 1.0f);
@@ -66,31 +71,15 @@ public class WorldCreateScreen extends Screen {
         float nameTextY = nameInputY + (nameInputH - nameFontH) / 2.0f;
         font.drawString(gui, displayName, centerX + 10, nameTextY, nameScale, 0xffffff, false);
 
-        // --- SECTION 2: Game Mode Display Card (Matching dark stone styling) ---
-        int modeY = nameInputY + nameInputH + 12;
-        font.drawString(gui, "Game Mode", centerX, modeY, 0.80f, 0xaaaaaa, true);
-        int modeCardY = modeY + 18;
-        int modeCardH = 52;
+        // --- SECTION 2: World Info Card ---
+        if (world != null) {
+            int infoCardY = nameInputY + nameInputH + 16;
+            int infoCardH = 56;
 
-        gui.drawBevelBox(centerX, modeCardY, boxW, modeCardH, 0x18181c, 0x585860, 0x222226);
-        font.drawString(gui, "Game Mode: Hardcore", centerX + 14, modeCardY + 10, 0.88f, 0xffffff, true);
-        font.drawString(gui, "Locked at hardest difficulty. Permadeath (1 Life).", centerX + 14, modeCardY + 28, 0.70f, 0xaaaaaa, false);
-
-        // --- SECTION 3: World Type Info Card ---
-        int typeY = modeCardY + modeCardH + 12;
-        font.drawString(gui, "World Type", centerX, typeY, 0.80f, 0xaaaaaa, true);
-        int typeCardY = typeY + 18;
-        int typeCardH = 40;
-
-        gui.drawBevelBox(centerX, typeCardY, boxW, typeCardH, 0x18181c, 0x585860, 0x222226);
-        font.drawString(gui, "World Type: Multi-Biome (1.17 Extended)", centerX + 14, typeCardY + 11, 0.80f, 0xdddddd, true);
-
-        // --- SECTION 4: Seed Info Card ---
-        int seedY = typeCardY + typeCardH + 10;
-        int seedCardH = 38;
-
-        gui.drawBevelBox(centerX, seedY, boxW, seedCardH, 0x141418, 0x484850, 0x1c1c20);
-        font.drawString(gui, "Seed: " + seed + " (Height: 256, 500+ Chunks)", centerX + 14, seedY + 10, 0.76f, 0x999999, false);
+            gui.drawBevelBox(centerX, infoCardY, boxW, infoCardH, 0x18181c, 0x585860, 0x222226);
+            font.drawString(gui, "⚔ Hardcore World (" + world.biome + ")", centerX + 14, infoCardY + 11, 0.84f, 0xdddddd, true);
+            font.drawString(gui, "Seed: " + world.seed + " | Created: " + world.createdAt, centerX + 14, infoCardY + 31, 0.70f, 0xaaaaaa, false);
+        }
 
         // 4. Render Action Buttons
         super.render(gui, font, mouseX, mouseY, deltaTime);
@@ -109,8 +98,7 @@ public class WorldCreateScreen extends Screen {
             if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE && !worldName.isEmpty()) {
                 worldName = worldName.substring(0, worldName.length() - 1);
             } else if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER) {
-                String finalName = worldName.trim().isEmpty() ? "New Adventure" : worldName.trim();
-                app.enterWorld(seed, finalName, "Multi-Biome", null);
+                saveAndExit();
             } else if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
                 app.setScreen(new WorldSelectScreen(app));
             }

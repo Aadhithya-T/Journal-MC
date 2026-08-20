@@ -4,13 +4,14 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 
 public class FontRenderer {
-    private static final int FONT_TEX_SIZE = 256;
+    private static final int FONT_TEX_SIZE = 512;
     private static final int GLYPH_COUNT = 256;
 
     private int textureId;
@@ -20,31 +21,47 @@ public class FontRenderer {
     private final float[] glyphV1 = new float[GLYPH_COUNT];
     private final int[] glyphWidth = new int[GLYPH_COUNT];
     private final int[] glyphHeight = new int[GLYPH_COUNT];
+    private int baseFontHeight = 20;
 
     public void init() {
         BufferedImage image = new BufferedImage(FONT_TEX_SIZE, FONT_TEX_SIZE, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics();
-        
+
         // Crisp pixel rendering without blurry subpixel antialiasing
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+        g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
 
-        // Bold blocky Minecraft-like font
-        Font font = new Font("Dialog", Font.BOLD, 18);
+        Font font = null;
+        try (InputStream is = FontRenderer.class.getResourceAsStream("/fonts/minecraft.ttf")) {
+            if (is != null) {
+                Font baseFont = Font.createFont(Font.TRUETYPE_FONT, is);
+                font = baseFont.deriveFont(Font.PLAIN, 20.0f);
+                System.out.println("[FontRenderer] 🔤 Loaded authentic Minecraft TTF font: " + font.getFontName());
+            }
+        } catch (Exception e) {
+            System.err.println("[FontRenderer] Notice: Using fallback bold font: " + e.getMessage());
+        }
+
+        if (font == null) {
+            font = new Font("Dialog", Font.BOLD, 18);
+        }
+
         g.setFont(font);
         FontMetrics fm = g.getFontMetrics();
+        this.baseFontHeight = fm.getHeight();
 
-        int x = 2;
-        int y = fm.getAscent() + 2;
-        int rowHeight = fm.getHeight() + 4;
+        int x = 4;
+        int y = fm.getAscent() + 4;
+        int rowHeight = fm.getHeight() + 6;
 
         for (int c = 32; c < 127; c++) {
             char ch = (char) c;
             int charW = fm.charWidth(ch);
             int charH = fm.getHeight();
 
-            if (x + charW + 4 >= FONT_TEX_SIZE) {
-                x = 2;
+            if (x + charW + 6 >= FONT_TEX_SIZE) {
+                x = 4;
                 y += rowHeight;
             }
 
@@ -58,7 +75,7 @@ public class FontRenderer {
             glyphWidth[c] = charW;
             glyphHeight[c] = charH;
 
-            x += charW + 4;
+            x += charW + 6;
         }
         g.dispose();
 
@@ -138,6 +155,10 @@ public class FontRenderer {
             total += (glyphWidth[c] * scale) + (1.0f * scale);
         }
         return total;
+    }
+
+    public float getFontHeight(float scale) {
+        return (baseFontHeight > 0 ? baseFontHeight : 20.0f) * scale;
     }
 
     public void cleanup() {

@@ -33,10 +33,18 @@ public class Button {
         // Draw Authentic Vanilla Minecraft 9-Slice Stone Button
         gui.drawMinecraftButton(x, y, width, height, isHovered, isEnabled);
 
-        float scale = height > 36 ? 1.05f : 0.92f;
-        float textW = font.getStringWidth(text, scale);
+        float maxAllowedW = width - 14.0f;
+        float desiredScale = height >= 38 ? 0.88f : 0.78f;
+        float textW = font.getStringWidth(text, desiredScale);
+        float scale = desiredScale;
+        if (textW > maxAllowedW && textW > 0) {
+            scale = desiredScale * (maxAllowedW / textW);
+            textW = font.getStringWidth(text, scale);
+        }
+
         float textX = x + (width - textW) / 2.0f;
-        float textY = y + (height - (18 * scale)) / 2.0f + 1;
+        float fontH = font.getFontHeight(scale);
+        float textY = y + (height - fontH) / 2.0f;
 
         int textColor;
         if (!isEnabled) {

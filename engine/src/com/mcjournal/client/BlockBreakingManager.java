@@ -31,7 +31,7 @@ public class BlockBreakingManager {
         Block.BIRCH_LOG
     };
 
-    public void update(ChunkManager world, ChunkRenderer renderer, ParticleManager particles, FluidPhysicsManager fluidPhysics, Player player, Camera camera, boolean lmbDown, boolean rmbDown) {
+    public void update(ChunkManager world, ChunkRenderer renderer, ParticleManager particles, FluidPhysicsManager fluidPhysics, FirstPersonHandRenderer hand, Player player, Camera camera, boolean lmbDown, boolean rmbDown) {
         // 1. Cast ray from player eye position along look direction
         Vector3f eyePos = player.getEyePosition(1.0f);
         Vector3f lookDir = camera.getLookDirection();
@@ -40,6 +40,12 @@ public class BlockBreakingManager {
 
         if (currentHit == null) {
             resetBreak();
+            if (hand != null) {
+                hand.setMining(false);
+                if (lmbDown && !wasLmbDown) {
+                    hand.triggerSwing(); // Swing at air
+                }
+            }
         } else {
             // Check if looking at a new block
             if (currentHit.bx != targetBx || currentHit.by != targetBy || currentHit.bz != targetBz) {
@@ -55,9 +61,12 @@ public class BlockBreakingManager {
 
                 if (hardness == 0.0f) {
                     // Instant break (Flowers, Tall Grass)
+                    if (hand != null) hand.triggerSwing();
                     breakTargetBlock(world, renderer, particles, fluidPhysics, currentHit.bx, currentHit.by, currentHit.bz);
                     resetBreak();
                 } else if (hardness > 0.0f) {
+                    if (hand != null) hand.setMining(true);
+
                     // Spawn mining chip particles periodically while hitting
                     hitParticleTick++;
                     if (hitParticleTick % 4 == 0 && particles != null) {
@@ -76,6 +85,7 @@ public class BlockBreakingManager {
             } else {
                 breakProgress = 0.0f;
                 hitParticleTick = 0;
+                if (hand != null) hand.setMining(false);
             }
 
             // 3. Handle Block Placement with Right Mouse Button (RMB Click)
@@ -86,9 +96,24 @@ public class BlockBreakingManager {
 
                 byte blockToPlace = HOTBAR_BLOCKS[Math.clamp(player.selectedSlot, 0, 8)];
 
+                // Check plant placement validity (flowers and tall grass cannot be placed in air, on walls/ceilings, or on non-soil)
+                boolean canPlace = true;
+                if (Block.isPlant(blockToPlace)) {
+                    // Plants can only be placed upright on top of soil (Grass Block or Dirt)
+                    if (currentHit.normalY != 1) {
+                        canPlace = false;
+                    } else {
+                        byte blockBelow = world.getBlockAt(placeX, placeY - 1, placeZ);
+                        if (!Block.canPlantSurviveOn(blockBelow)) {
+                            canPlace = false;
+                        }
+                    }
+                }
+
                 // Check that placed block doesn't intersect player bounding box
-                if (!isIntersectingPlayer(player, placeX, placeY, placeZ)) {
-                    if (world.getBlockAt(placeX, placeY, placeZ) == Block.AIR || world.getBlockAt(placeX, placeY, placeZ) == Block.WATER) {
+                if (canPlace && !isIntersectingPlayer(player, placeX, placeY, placeZ)) {
+                    byte targetBlock = world.getBlockAt(placeX, placeY, placeZ);
+                    if (targetBlock == Block.AIR || targetBlock == Block.WATER) {
                         world.setBlockAt(placeX, placeY, placeZ, blockToPlace);
                         reuploadChunkMeshes(world, renderer, placeX, placeZ);
                         if (fluidPhysics != null) {
@@ -113,6 +138,16 @@ public class BlockBreakingManager {
             // Spawn block disintegration debris particle cloud
             if (particles != null) {
                 particles.spawnBlockBreakParticles(bx, by, bz, brokenType);
+            }
+
+            // If a plant was resting on top of this block, break it too
+            byte blockAbove = world.getBlockAt(bx, by + 1, bz);
+            if (Block.isPlant(blockAbove)) {
+                world.setBlockAt(bx, by + 1, bz, Block.AIR);
+                if (particles != null) {
+                    particles.spawnBlockBreakParticles(bx, by + 1, bz, blockAbove);
+                }
+                reuploadChunkMeshes(world, renderer, bx, bz);
             }
 
             // Trigger water filling & flow physics

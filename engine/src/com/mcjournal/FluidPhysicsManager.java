@@ -87,7 +87,7 @@ public class FluidPhysicsManager {
             visitedThisStep.add(posKey);
 
             byte current = world.getBlockAt(x, y, z);
-            if (current != Block.AIR && current != Block.TALL_GRASS && current != Block.POPPY && current != Block.DANDELION) {
+            if (current != Block.AIR && !Block.isPlant(current)) {
                 continue;
             }
 
@@ -106,7 +106,7 @@ public class FluidPhysicsManager {
             int belowY = y - 1;
             if (belowY >= 0) {
                 byte below = world.getBlockAt(x, belowY, z);
-                if (below == Block.AIR || below == Block.TALL_GRASS || below == Block.POPPY || below == Block.DANDELION) {
+                if (below == Block.AIR || Block.isPlant(below)) {
                     queueWaterSpread(x, belowY, z, 1); // Downward flow resets distance counter
                     continue; // When flowing down, horizontal spread is deferred
                 }
