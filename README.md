@@ -57,6 +57,8 @@ Minecraft Journal is a standalone desktop application built directly on the JVM 
 | **Left Mouse Button (Hold)** | Mine Targeted Block |
 | **Right Mouse Button** | Place Selected Block |
 | **1 - 9 / Scroll Wheel** | Select Hotbar Slot |
+| **Q** | Throw / Drop 1 Item from Hand |
+| **Ctrl + Q** | Drop Entire Held Stack |
 | **Escape** | Pause Game / Open Game Menu |
 | **F1** | Standard Rendering Mode |
 | **F2 - F12** | Shader & Buffer Debug Visualization Modes |
