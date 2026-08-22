@@ -1,6 +1,8 @@
 package com.mcjournal.client;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 public class ProceduralTextureGenerator {
@@ -8,8 +10,9 @@ public class ProceduralTextureGenerator {
 
     public static void generateAtlas(ByteBuffer atlasBuffer, int atlasGrid) {
         int atlasSize = atlasGrid * TILE_SIZE;
+        int totalSlots = atlasGrid * atlasGrid;
 
-        for (int slot = 0; slot < 16; slot++) {
+        for (int slot = 0; slot < totalSlots; slot++) {
             int col = slot % atlasGrid;
             int row = slot / atlasGrid;
 
@@ -53,7 +56,10 @@ public class ProceduralTextureGenerator {
             case 13 -> generatePoppy(tile, rand);
             case 14 -> generateDandelion(tile, rand);
             case 15 -> generateBirchLogSide(tile, rand);
-            default -> fillSolid(tile, 128, 128, 128, 255);
+            case 16 -> renderSpriteToTile(tile, IRON_AXE_SPRITE, TOOL_PALETTE);
+            case 17 -> renderSpriteToTile(tile, IRON_SHOVEL_SPRITE, TOOL_PALETTE);
+            case 18 -> renderSpriteToTile(tile, IRON_PICKAXE_SPRITE, TOOL_PALETTE);
+            default -> fillSolid(tile, 0, 0, 0, 0);
         }
 
         return tile;
@@ -806,5 +812,107 @@ public class ProceduralTextureGenerator {
         tile[idx + 1] = (byte) g;
         tile[idx + 2] = (byte) b;
         tile[idx + 3] = (byte) a;
+    }
+
+    // 16: Iron Axe Sprite (16x16 pixels scaled to 64x64)
+    private static final String[] IRON_AXE_SPRITE = {
+        ". . . . . . . . # # # # . . . .",
+        ". . . . . . . # W W w I # . . .",
+        ". . . . . . # W W w I M S # . .",
+        ". . . . . # W W w I M H B # . .",
+        ". . . . # W W w I M H B I M # .",
+        ". . . . # W w I # # H B I M # .",
+        ". . . . . # # # . . H B # # . .",
+        ". . . . . . . . . H B . . . . .",
+        ". . . . . . . . H B . . . . . .",
+        ". . . . . . . H B . . . . . . .",
+        ". . . . . . H B . . . . . . . .",
+        ". . . . . H B . . . . . . . . .",
+        ". . . . H B . . . . . . . . . .",
+        ". . . H B . . . . . . . . . . .",
+        ". . K B . . . . . . . . . . . .",
+        ". . . . . . . . . . . . . . . ."
+    };
+
+    // 17: Iron Shovel Sprite (16x16 pixels scaled to 64x64)
+    private static final String[] IRON_SHOVEL_SPRITE = {
+        ". . . . . . . . . . . # # # . .",
+        ". . . . . . . . . . # W W I # .",
+        ". . . . . . . . . # W W I M S #",
+        ". . . . . . . . # W W I M S # .",
+        ". . . . . . . # W W I M S # . .",
+        ". . . . . . . # W I M S # . . .",
+        ". . . . . . # . # S S # . . . .",
+        ". . . . . # H . . # # . . . . .",
+        ". . . . # H B . . . . . . . . .",
+        ". . . # H B . . . . . . . . . .",
+        ". . # H B . . . . . . . . . . .",
+        ". # H B . . . . . . . . . . . .",
+        "# H B . . . . . . . . . . . . .",
+        "# H B . . . . . . . . . . . . .",
+        "K B . . . . . . . . . . . . . .",
+        ". . . . . . . . . . . . . . . ."
+    };
+
+    // 18: Iron Pickaxe Sprite (16x16 pixels scaled to 64x64)
+    private static final String[] IRON_PICKAXE_SPRITE = {
+        ". . . . # # # # # # # # # . . .",
+        ". . . # W W W I I I I M S # . .",
+        ". . # W W I I M S S S S M D # .",
+        ". # W W I S S D # # # # D M # .",
+        "# W I S S D # . . . . # S M # .",
+        "# I S D # . . . . . H . # D # #",
+        "# S D # . . . . . H B . . # # .",
+        "# D # . . . . . H B . . . . . .",
+        ". # . . . . . H B . . . . . . .",
+        ". . . . . . H B . . . . . . . .",
+        ". . . . . H B . . . . . . . . .",
+        ". . . . H B . . . . . . . . . .",
+        ". . . H B . . . . . . . . . . .",
+        ". . H B . . . . . . . . . . . .",
+        ". K B . . . . . . . . . . . . .",
+        ". . . . . . . . . . . . . . . ."
+    };
+
+    private static final Map<Character, Integer> TOOL_PALETTE = new HashMap<>();
+    static {
+        TOOL_PALETTE.put('.', 0x00000000);
+        TOOL_PALETTE.put('#', 0xFF2B2B2B); // Outline
+        TOOL_PALETTE.put('W', 0xFFFFFFFF); // Highlight
+        TOOL_PALETTE.put('w', 0xFFEDEDED); // Soft white
+        TOOL_PALETTE.put('I', 0xFFDBDBDB); // Light iron base
+        TOOL_PALETTE.put('M', 0xFFB0B0B0); // Midtone iron
+        TOOL_PALETTE.put('S', 0xFF8A8A8A); // Shaded iron
+        TOOL_PALETTE.put('D', 0xFF4D4D4D); // Deep iron shadow
+        TOOL_PALETTE.put('H', 0xFF8E6332); // Oak stick highlight
+        TOOL_PALETTE.put('B', 0xFF5A3716); // Oak stick shadow
+        TOOL_PALETTE.put('K', 0xFF35200C); // Oak stick pommel base
+    }
+
+    private static void renderSpriteToTile(byte[] tile, String[] art, Map<Character, Integer> colorMap) {
+        int scale = TILE_SIZE / art.length; // 64 / 16 = 4x pixel scaling
+        for (int sy = 0; sy < art.length; sy++) {
+            String line = art[sy].replace(" ", "");
+            for (int sx = 0; sx < line.length(); sx++) {
+                char c = line.charAt(sx);
+                int argb = colorMap.getOrDefault(c, 0x00000000);
+                int a = (argb >> 24) & 0xFF;
+                int r = (argb >> 16) & 0xFF;
+                int g = (argb >> 8) & 0xFF;
+                int b = argb & 0xFF;
+
+                for (int dy = 0; dy < scale; dy++) {
+                    for (int dx = 0; dx < scale; dx++) {
+                        int tx = sx * scale + dx;
+                        int ty = sy * scale + dy;
+                        int idx = (ty * TILE_SIZE + tx) * 4;
+                        tile[idx] = (byte) r;
+                        tile[idx + 1] = (byte) g;
+                        tile[idx + 2] = (byte) b;
+                        tile[idx + 3] = (byte) a;
+                    }
+                }
+            }
+        }
     }
 }

@@ -76,6 +76,65 @@ public final class Block {
         };
     }
 
+    public static byte getDrop(byte type) {
+        return switch (type) {
+            case GRASS -> DIRT; // Breaking grass drops dirt
+            case STONE -> COBBLESTONE; // Breaking stone drops cobblestone
+            case DIRT -> DIRT;
+            case COBBLESTONE -> COBBLESTONE;
+            case SAND -> SAND;
+            case OAK_LOG -> OAK_LOG;
+            case BIRCH_LOG -> BIRCH_LOG;
+            case OAK_LEAVES -> OAK_LEAVES;
+            case BIRCH_LEAVES -> BIRCH_LEAVES;
+            case DIAMOND_ORE -> DIAMOND_ORE;
+            case TALL_GRASS -> TALL_GRASS;
+            case POPPY -> POPPY;
+            case DANDELION -> DANDELION;
+            default -> AIR; // Bedrock, Water, Air, etc. drop nothing
+        };
+    }
+
+    public static int getDisplayFaceTile(byte type) {
+        return switch (type) {
+            case GRASS -> 1; // Side texture showing grass + soil
+            case DIRT -> 2;
+            case STONE -> 3;
+            case COBBLESTONE -> 4;
+            case SAND -> 5;
+            case BEDROCK -> 6;
+            case OAK_LOG -> 7;
+            case BIRCH_LOG -> 15;
+            case OAK_LEAVES, BIRCH_LEAVES -> 9;
+            case DIAMOND_ORE -> 10;
+            case WATER -> 11;
+            case TALL_GRASS -> 12;
+            case POPPY -> 13;
+            case DANDELION -> 14;
+            default -> 0;
+        };
+    }
+
+    public static int getBlockFaceSlot(byte blockType, int faceIndex) {
+        return switch (blockType) {
+            case GRASS -> (faceIndex == 2) ? 0 : (faceIndex == 3 ? 2 : 1);
+            case DIRT -> 2;
+            case STONE -> 3;
+            case COBBLESTONE -> 4;
+            case SAND -> 5;
+            case BEDROCK -> 6;
+            case OAK_LOG -> (faceIndex == 2 || faceIndex == 3) ? 8 : 7;
+            case BIRCH_LOG -> (faceIndex == 2 || faceIndex == 3) ? 8 : 15;
+            case OAK_LEAVES, BIRCH_LEAVES -> 9;
+            case DIAMOND_ORE -> 10;
+            case WATER -> 11;
+            case TALL_GRASS -> 12;
+            case POPPY -> 13;
+            case DANDELION -> 14;
+            default -> 2;
+        };
+    }
+
     public static boolean isSolid(byte type) {
         return type != AIR && type != WATER && type != TALL_GRASS && type != POPPY && type != DANDELION;
     }

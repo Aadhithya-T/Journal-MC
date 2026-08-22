@@ -177,6 +177,32 @@ public class GuiRenderer {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
+    public void drawTexturedQuadArbitrary(int textureId,
+                                          float x0, float y0, float u0, float v0,
+                                          float x1, float y1, float u1, float v1,
+                                          float x2, float y2, float u2, float v2,
+                                          float x3, float y3, float u3, float v3,
+                                          float r, float g, float b, float a) {
+        guiShader.setUniform("uUseTexture", 1);
+        guiShader.setUniform("uTexture", 0);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureId);
+
+        vertexBuffer.clear();
+        putVertex(x0, y0, u0, v0, r, g, b, a);
+        putVertex(x1, y1, u1, v1, r, g, b, a);
+        putVertex(x2, y2, u2, v2, r, g, b, a);
+
+        putVertex(x0, y0, u0, v0, r, g, b, a);
+        putVertex(x2, y2, u2, v2, r, g, b, a);
+        putVertex(x3, y3, u3, v3, r, g, b, a);
+        vertexBuffer.flip();
+
+        drawBuffer();
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
     private void putVertex(float x, float y, float u, float v, float r, float g, float b, float a) {
         vertexBuffer.put(x).put(y).put(u).put(v).put(r).put(g).put(b).put(a);
     }

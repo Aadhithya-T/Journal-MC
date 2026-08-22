@@ -10,9 +10,9 @@ import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL30.*;
 
 public class TextureAtlas {
-    public static final int ATLAS_GRID = 4; // 4x4 tiles = 16 block types
-    public static final int ATLAS_SIZE = ATLAS_GRID * ProceduralTextureGenerator.TILE_SIZE; // 256x256 atlas
-    public static final float TILE_UV_SIZE = 1.0f / ATLAS_GRID; // 0.25 UV per block
+    public static final int ATLAS_GRID = 8; // 8x8 tiles = 64 slots
+    public static final int ATLAS_SIZE = ATLAS_GRID * ProceduralTextureGenerator.TILE_SIZE; // 512x512 atlas
+    public static final float TILE_UV_SIZE = 1.0f / ATLAS_GRID; // 0.125 UV per block
 
     private static final int GL_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FE;
 
@@ -59,6 +59,19 @@ public class TextureAtlas {
         if (textureId != 0) {
             glDeleteTextures(textureId);
         }
+    }
+
+    public static float[] getTileUV(int slotIndex) {
+        int col = slotIndex % ATLAS_GRID;
+        int row = slotIndex / ATLAS_GRID;
+        float eps = 0.5f / (float) ATLAS_SIZE;
+
+        float uMin = (float) col / (float) ATLAS_GRID + eps;
+        float uMax = (float) (col + 1) / (float) ATLAS_GRID - eps;
+        float vMin = 1.0f - (float) (row + 1) / (float) ATLAS_GRID + eps;
+        float vMax = 1.0f - (float) row / (float) ATLAS_GRID - eps;
+
+        return new float[]{uMin, uMax, vMin, vMax};
     }
 
     public int getTextureId() {

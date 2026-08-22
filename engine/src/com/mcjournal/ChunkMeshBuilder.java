@@ -94,7 +94,7 @@ public class ChunkMeshBuilder {
     };
 
     private static final float[] AO_CURVE = new float[]{1.0f, 0.78f, 0.58f, 0.42f};
-    private static final int GRID_SIZE = 4; // 4x4 Atlas Grid
+    private static final int GRID_SIZE = 8; // 8x8 Atlas Grid
 
     private static float[] getUVBounds(int slotIndex) {
         int col = slotIndex % GRID_SIZE;
@@ -112,23 +112,7 @@ public class ChunkMeshBuilder {
     }
 
     private static int getBlockFaceSlot(byte blockType, int faceIndex) {
-        return switch (blockType) {
-            case Block.GRASS -> (faceIndex == 2) ? 0 : (faceIndex == 3 ? 2 : 1);
-            case Block.DIRT -> 2;
-            case Block.STONE -> 3;
-            case Block.COBBLESTONE -> 4;
-            case Block.SAND -> 5;
-            case Block.BEDROCK -> 6;
-            case Block.OAK_LOG -> (faceIndex == 2 || faceIndex == 3) ? 8 : 7;
-            case Block.BIRCH_LOG -> (faceIndex == 2 || faceIndex == 3) ? 8 : 15;
-            case Block.OAK_LEAVES, Block.BIRCH_LEAVES -> 9;
-            case Block.DIAMOND_ORE -> 10;
-            case Block.WATER -> 11;
-            case Block.TALL_GRASS -> 12;
-            case Block.POPPY -> 13;
-            case Block.DANDELION -> 14;
-            default -> 2;
-        };
+        return Block.getBlockFaceSlot(blockType, faceIndex);
     }
 
     private static boolean isTransparent(byte blockType) {

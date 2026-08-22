@@ -1,6 +1,9 @@
 package com.mcjournal.client.gui;
 
+import com.mcjournal.Block;
+import com.mcjournal.Item;
 import com.mcjournal.client.Player;
+import com.mcjournal.client.TextureAtlas;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -24,6 +27,9 @@ public class HardcoreHUD {
     public static final int SPRITE_HUNGER_CONTAINER = 6;
     public static final int SPRITE_HUNGER_FULL = 7;
     public static final int SPRITE_HUNGER_HALF = 8;
+    public static final int SPRITE_IRON_AXE = 9;
+    public static final int SPRITE_IRON_SHOVEL = 10;
+    public static final int SPRITE_IRON_PICKAXE = 11;
 
     // 1. Hardcore Heart Sprites (9x9 pixels)
     private static final String[] HARDCORE_HEART_CONTAINER_ART = {
@@ -136,6 +142,66 @@ public class HardcoreHUD {
         ". b b . . . . . ."
     };
 
+    // 4. Iron Axe Sprite (16x16 pixels - Exact Replica)
+    private static final String[] IRON_AXE_ART = {
+        ". . . . . . . . # # # # . . . .",
+        ". . . . . . . # W W w I # . . .",
+        ". . . . . . # W W w I M S # . .",
+        ". . . . . # W W w I M H B # . .",
+        ". . . . # W W w I M H B I M # .",
+        ". . . . # W w I # # H B I M # .",
+        ". . . . . # # # . . H B # # . .",
+        ". . . . . . . . . H B . . . . .",
+        ". . . . . . . . H B . . . . . .",
+        ". . . . . . . H B . . . . . . .",
+        ". . . . . . H B . . . . . . . .",
+        ". . . . . H B . . . . . . . . .",
+        ". . . . H B . . . . . . . . . .",
+        ". . . H B . . . . . . . . . . .",
+        ". . K B . . . . . . . . . . . .",
+        ". . . . . . . . . . . . . . . ."
+    };
+
+    // 5. Iron Shovel Sprite (16x16 pixels - Exact Replica)
+    private static final String[] IRON_SHOVEL_ART = {
+        ". . . . . . . . . . . # # # . .",
+        ". . . . . . . . . . # W W I # .",
+        ". . . . . . . . . # W W I M S #",
+        ". . . . . . . . # W W I M S # .",
+        ". . . . . . . # W W I M S # . .",
+        ". . . . . . . # W I M S # . . .",
+        ". . . . . . # . # S S # . . . .",
+        ". . . . . # H . . # # . . . . .",
+        ". . . . # H B . . . . . . . . .",
+        ". . . # H B . . . . . . . . . .",
+        ". . # H B . . . . . . . . . . .",
+        ". # H B . . . . . . . . . . . .",
+        "# H B . . . . . . . . . . . . .",
+        "# H B . . . . . . . . . . . . .",
+        "K B . . . . . . . . . . . . . .",
+        ". . . . . . . . . . . . . . . ."
+    };
+
+    // 6. Iron Pickaxe Sprite (16x16 pixels - Exact Replica)
+    private static final String[] IRON_PICKAXE_ART = {
+        ". . . . # # # # # # # # # . . .",
+        ". . . # W W W I I I I M S # . .",
+        ". . # W W I I M S S S S M D # .",
+        ". # W W I S S D # # # # D M # .",
+        "# W I S S D # . . . . # S M # .",
+        "# I S D # . . . . . H . # D # #",
+        "# S D # . . . . . H B . . # # .",
+        "# D # . . . . . H B . . . . . .",
+        ". # . . . . . H B . . . . . . .",
+        ". . . . . . H B . . . . . . . .",
+        ". . . . . H B . . . . . . . . .",
+        ". . . . H B . . . . . . . . . .",
+        ". . . H B . . . . . . . . . . .",
+        ". . H B . . . . . . . . . . . .",
+        ". K B . . . . . . . . . . . . .",
+        ". . . . . . . . . . . . . . . ."
+    };
+
     public void init() {
         if (iconTextureId != 0) return;
 
@@ -191,6 +257,19 @@ public class HardcoreHUD {
         hungerFullMap.put('M', 0xFFB86014);
         hungerFullMap.put('D', 0xFF7E3506);
 
+        Map<Character, Integer> axeMap = new HashMap<>();
+        axeMap.put('.', 0x00000000);
+        axeMap.put('#', 0xFF2B2B2B); // Outline
+        axeMap.put('W', 0xFFFFFFFF); // Highlight
+        axeMap.put('w', 0xFFEDEDED); // Soft white
+        axeMap.put('I', 0xFFDBDBDB); // Light iron base
+        axeMap.put('M', 0xFFB0B0B0); // Midtone iron
+        axeMap.put('S', 0xFF8A8A8A); // Shaded iron
+        axeMap.put('D', 0xFF4D4D4D); // Deep iron shadow
+        axeMap.put('H', 0xFF8E6332); // Oak stick highlight
+        axeMap.put('B', 0xFF5A3716); // Oak stick shadow
+        axeMap.put('K', 0xFF35200C); // Oak stick pommel base
+
         // Blit 9x9 sprites onto 64x64 Texture
         blitSprite(buffer, HARDCORE_HEART_CONTAINER_ART, hcContainerMap, 0, 0);
         blitSprite(buffer, HARDCORE_HEART_FULL_ART, hcFullMap, 10, 0);
@@ -203,6 +282,15 @@ public class HardcoreHUD {
         blitSprite(buffer, HUNGER_CONTAINER_ART, hungerContainerMap, 0, 10);
         blitSprite(buffer, HUNGER_FULL_ART, hungerFullMap, 10, 10);
         blitSprite(buffer, HUNGER_HALF_ART, hungerFullMap, 20, 10);
+
+        // Blit 16x16 Iron Axe Sprite
+        blitSprite(buffer, IRON_AXE_ART, axeMap, 0, 24);
+
+        // Blit 16x16 Iron Shovel Sprite
+        blitSprite(buffer, IRON_SHOVEL_ART, axeMap, 18, 24);
+
+        // Blit 16x16 Iron Pickaxe Sprite
+        blitSprite(buffer, IRON_PICKAXE_ART, axeMap, 36, 24);
 
         // Upload to OpenGL Texture
         iconTextureId = glGenTextures();
@@ -218,9 +306,9 @@ public class HardcoreHUD {
     }
 
     private void blitSprite(ByteBuffer buf, String[] art, Map<Character, Integer> colorMap, int startX, int startY) {
-        for (int y = 0; y < 9; y++) {
+        for (int y = 0; y < art.length; y++) {
             String line = art[y].replace(" ", "");
-            for (int x = 0; x < 9; x++) {
+            for (int x = 0; x < line.length(); x++) {
                 char c = line.charAt(x);
                 int argb = colorMap.getOrDefault(c, 0x00000000);
                 int a = (argb >> 24) & 0xFF;
@@ -240,6 +328,33 @@ public class HardcoreHUD {
     public void drawIcon(GuiRenderer gui, int spriteIndex, float x, float y, float w, float h) {
         if (iconTextureId == 0) return;
 
+        if (spriteIndex == SPRITE_IRON_AXE) {
+            float u0 = 0.0f;
+            float v0 = 24.0f / (float) TEX_SIZE;
+            float u1 = 16.0f / (float) TEX_SIZE;
+            float v1 = 40.0f / (float) TEX_SIZE;
+            gui.drawTexturedQuad(iconTextureId, x, y, w, h, u0, v0, u1, v1, 1.0f, 1.0f, 1.0f, 1.0f);
+            return;
+        }
+
+        if (spriteIndex == SPRITE_IRON_SHOVEL) {
+            float u0 = 18.0f / (float) TEX_SIZE;
+            float v0 = 24.0f / (float) TEX_SIZE;
+            float u1 = 34.0f / (float) TEX_SIZE;
+            float v1 = 40.0f / (float) TEX_SIZE;
+            gui.drawTexturedQuad(iconTextureId, x, y, w, h, u0, v0, u1, v1, 1.0f, 1.0f, 1.0f, 1.0f);
+            return;
+        }
+
+        if (spriteIndex == SPRITE_IRON_PICKAXE) {
+            float u0 = 36.0f / (float) TEX_SIZE;
+            float v0 = 24.0f / (float) TEX_SIZE;
+            float u1 = 52.0f / (float) TEX_SIZE;
+            float v1 = 40.0f / (float) TEX_SIZE;
+            gui.drawTexturedQuad(iconTextureId, x, y, w, h, u0, v0, u1, v1, 1.0f, 1.0f, 1.0f, 1.0f);
+            return;
+        }
+
         int x0 = (spriteIndex % 6) * 10;
         int y0 = (spriteIndex / 6) * 10;
         float u0 = (float) x0 / (float) TEX_SIZE;
@@ -250,7 +365,7 @@ public class HardcoreHUD {
         gui.drawTexturedQuad(iconTextureId, x, y, w, h, u0, v0, u1, v1, 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    public void render(GuiRenderer gui, FontRenderer font, Player player, int screenWidth, int screenHeight, String biomeName) {
+    public void render(GuiRenderer gui, FontRenderer font, Player player, int screenWidth, int screenHeight, String biomeName, int atlasTextureId) {
         int centerX = screenWidth / 2;
 
         // 1. Crosshair in Screen Center
@@ -276,8 +391,26 @@ public class HardcoreHUD {
 
             gui.drawBevelBox(slotX, hotbarY, slotSize - 2, slotSize - 2, bg, borderL, borderD);
 
-            // Slot numbers (1-9)
-            font.drawString(gui, String.valueOf(i + 1), slotX + 4, hotbarY + 4, 0.65f, isSelected ? 0xffffa0 : 0x888888, false);
+            // Render Item Icon in Slot (Authentic Minecraft 3D Isometric Block, 2D Foliage, or Tool Sprite)
+            byte blockType = player.hotbarBlocks[i];
+            int count = player.hotbarCounts[i];
+
+            if (blockType != Block.AIR && count > 0) {
+                drawBlockItemInSlot(gui, atlasTextureId, blockType, slotX, hotbarY, slotSize);
+
+                // Render Stack Count in bottom right (Tools like Iron Axe do not display stack numbers)
+                if (count > 1 && !Item.isTool(blockType)) {
+                    String countStr = String.valueOf(count);
+                    float countScale = 0.70f;
+                    int textW = (int) font.getStringWidth(countStr, countScale);
+                    int textX = slotX + slotSize - 4 - textW;
+                    int textY = hotbarY + slotSize - 14;
+                    font.drawString(gui, countStr, textX, textY, countScale, 0xffffff, true);
+                }
+            }
+
+            // Slot numbers (1-9) in top-left
+            font.drawString(gui, String.valueOf(i + 1), slotX + 3, hotbarY + 3, 0.55f, isSelected ? 0xffffa0 : 0x777777, false);
         }
 
         // 3. 10 Hardcore Hearts (Left of Hotbar)
@@ -339,6 +472,90 @@ public class HardcoreHUD {
 
         String modeStr = "Mode: HARDCORE | Biome: " + biomeName;
         font.drawString(gui, modeStr, 12, 32, 0.75f, 0xff5555, true);
+    }
+
+    private void drawBlockItemInSlot(GuiRenderer gui, int atlasTextureId, byte blockType, float slotX, float hotbarY, float slotSize) {
+        if (blockType == Block.AIR) return;
+
+        if (blockType == Item.IRON_AXE) {
+            // Render 2D Pixel-Art Iron Axe Sprite centered in slot
+            float iconSize = 26;
+            float ix = slotX + (slotSize - 2 - iconSize) / 2.0f;
+            float iy = hotbarY + (slotSize - 2 - iconSize) / 2.0f;
+            drawIcon(gui, SPRITE_IRON_AXE, ix, iy, iconSize, iconSize);
+            return;
+        }
+
+        if (blockType == Item.IRON_SHOVEL) {
+            // Render 2D Pixel-Art Iron Shovel Sprite centered in slot
+            float iconSize = 26;
+            float ix = slotX + (slotSize - 2 - iconSize) / 2.0f;
+            float iy = hotbarY + (slotSize - 2 - iconSize) / 2.0f;
+            drawIcon(gui, SPRITE_IRON_SHOVEL, ix, iy, iconSize, iconSize);
+            return;
+        }
+
+        if (blockType == Item.IRON_PICKAXE) {
+            // Render 2D Pixel-Art Iron Pickaxe Sprite centered in slot
+            float iconSize = 26;
+            float ix = slotX + (slotSize - 2 - iconSize) / 2.0f;
+            float iy = hotbarY + (slotSize - 2 - iconSize) / 2.0f;
+            drawIcon(gui, SPRITE_IRON_PICKAXE, ix, iy, iconSize, iconSize);
+            return;
+        }
+
+        if (atlasTextureId == 0) return;
+
+        if (Block.isPlant(blockType)) {
+            // Flat 2D Flower / Tall Grass icon
+            int tile = Block.getDisplayFaceTile(blockType);
+            float[] uv = TextureAtlas.getTileUV(tile);
+            float iconSize = 26;
+            float ix = slotX + (slotSize - 2 - iconSize) / 2.0f;
+            float iy = hotbarY + (slotSize - 2 - iconSize) / 2.0f;
+            gui.drawTexturedQuad(atlasTextureId, ix, iy, iconSize, iconSize, uv[0], uv[3], uv[1], uv[2], 1.0f, 1.0f, 1.0f, 1.0f);
+        } else {
+            // Authentic Minecraft 3D Isometric Cube Item Icon
+            float cx = slotX + (slotSize - 2) / 2.0f;
+            float cy = hotbarY + (slotSize - 2) / 2.0f - 1.0f;
+            float s = 11.5f; // half-width span
+
+            // Top Face (Rhombus) - Full 1.0 Brightness
+            int topSlot = Block.getBlockFaceSlot(blockType, 2);
+            float[] topUV = TextureAtlas.getTileUV(topSlot);
+            gui.drawTexturedQuadArbitrary(
+                atlasTextureId,
+                cx, cy - s * 0.95f, topUV[0], topUV[3],       // Top: (uMin, vMax)
+                cx + s, cy - s * 0.40f, topUV[1], topUV[3],   // Right: (uMax, vMax)
+                cx, cy + s * 0.15f, topUV[1], topUV[2],       // Bottom: (uMax, vMin)
+                cx - s, cy - s * 0.40f, topUV[0], topUV[2],   // Left: (uMin, vMin)
+                1.0f, 1.0f, 1.0f, 1.0f
+            );
+
+            // Left Face (West Side) - 0.70 Shading
+            int leftSlot = Block.getBlockFaceSlot(blockType, 1);
+            float[] leftUV = TextureAtlas.getTileUV(leftSlot);
+            gui.drawTexturedQuadArbitrary(
+                atlasTextureId,
+                cx - s, cy - s * 0.40f, leftUV[0], leftUV[3], // Top-Left
+                cx, cy + s * 0.15f, leftUV[1], leftUV[3],     // Top-Right
+                cx, cy + s * 1.15f, leftUV[1], leftUV[2],     // Bottom-Right
+                cx - s, cy + s * 0.60f, leftUV[0], leftUV[2], // Bottom-Left
+                0.70f, 0.70f, 0.70f, 1.0f
+            );
+
+            // Right Face (South Side) - 0.85 Shading
+            int rightSlot = Block.getBlockFaceSlot(blockType, 4);
+            float[] rightUV = TextureAtlas.getTileUV(rightSlot);
+            gui.drawTexturedQuadArbitrary(
+                atlasTextureId,
+                cx, cy + s * 0.15f, rightUV[0], rightUV[3],     // Top-Left
+                cx + s, cy - s * 0.40f, rightUV[1], rightUV[3], // Top-Right
+                cx + s, cy + s * 0.60f, rightUV[1], rightUV[2], // Bottom-Right
+                cx, cy + s * 1.15f, rightUV[0], rightUV[2],     // Bottom-Left
+                0.85f, 0.85f, 0.85f, 1.0f
+            );
+        }
     }
 
     public void cleanup() {
