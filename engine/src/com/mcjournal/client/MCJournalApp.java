@@ -5,9 +5,11 @@ import com.mcjournal.Chunk;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.ChunkMeshBuilder;
 import com.mcjournal.FluidPhysicsManager;
+import com.mcjournal.Item;
 import com.mcjournal.client.gui.*;
 import org.joml.Vector3f;
 
+import java.util.Arrays;
 import java.util.Map;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -29,6 +31,7 @@ public class MCJournalApp {
     private BlockBreakingManager blockBreakingManager;
     private BlockSelectionRenderer blockSelectionRenderer;
     private ParticleManager particleManager;
+    private ItemEntityManager itemEntityManager;
     private FluidPhysicsManager fluidPhysicsManager;
     private FirstPersonHandRenderer handRenderer;
 
@@ -57,6 +60,10 @@ public class MCJournalApp {
     private double lastFrameTime = 0;
     private double tickAccumulator = 0;
 
+    // Item Throwing / Drop (Q Key)
+    private boolean wasQDown = false;
+    private float qHoldTimer = 0.0f;
+
     public MCJournalApp() {
         this.window = new Window("Minecraft Journal - Native Hardcore Edition", 1280, 760);
         this.input = new InputHandler();
@@ -67,6 +74,7 @@ public class MCJournalApp {
         this.blockBreakingManager = new BlockBreakingManager();
         this.blockSelectionRenderer = new BlockSelectionRenderer();
         this.particleManager = new ParticleManager();
+        this.itemEntityManager = new ItemEntityManager();
         this.fluidPhysicsManager = new FluidPhysicsManager();
     }
 
@@ -92,6 +100,7 @@ public class MCJournalApp {
         videoBackgroundManager.init();
         blockSelectionRenderer.init();
         particleManager.init();
+        itemEntityManager.init();
         handRenderer = new FirstPersonHandRenderer();
         handRenderer.init();
 
@@ -197,6 +206,24 @@ public class MCJournalApp {
             player.health = existingSave.health;
             player.hunger = existingSave.hunger;
             player.selectedSlot = Math.clamp(existingSave.selectedSlot, 0, 8);
+            if (existingSave.hotbarBlocks != null && existingSave.hotbarCounts != null) {
+                System.arraycopy(existingSave.hotbarBlocks, 0, player.hotbarBlocks, 0, 9);
+                System.arraycopy(existingSave.hotbarCounts, 0, player.hotbarCounts, 0, 9);
+                // Ensure tools are never stacked above 1
+                for (int i = 0; i < 9; i++) {
+                    if (Item.isTool(player.hotbarBlocks[i])) {
+                        player.hotbarCounts[i] = Math.min(player.hotbarCounts[i], 1);
+                    }
+                }
+            } else {
+                player.hotbarBlocks[0] = Item.IRON_AXE;
+                player.hotbarCounts[0] = 1;
+                player.hotbarBlocks[1] = Item.IRON_SHOVEL;
+                player.hotbarCounts[1] = 1;
+                player.hotbarBlocks[2] = Item.IRON_PICKAXE;
+                player.hotbarCounts[2] = 1;
+            }
+
             player.velocity.set(0, 0, 0);
             player.isDead = false;
 
@@ -227,6 +254,14 @@ public class MCJournalApp {
             player.health = 20;
             player.hunger = 20;
             player.selectedSlot = 0;
+            Arrays.fill(player.hotbarBlocks, Block.AIR);
+            Arrays.fill(player.hotbarCounts, 0);
+            player.hotbarBlocks[0] = Item.IRON_AXE;
+            player.hotbarCounts[0] = 1;
+            player.hotbarBlocks[1] = Item.IRON_SHOVEL;
+            player.hotbarCounts[1] = 1;
+            player.hotbarBlocks[2] = Item.IRON_PICKAXE;
+            player.hotbarCounts[2] = 1;
             player.isDead = false;
 
             camera.setYaw(0);
@@ -456,16 +491,78 @@ public class MCJournalApp {
 
             player.updateTick(chunkManager, forward, backward, left, right, jump, sprint, sneak);
 
-            // Mine blocks by hand (LMB) & Place blocks (RMB) with particles and fluid physics
+            // Throw held item (Q key)
+            handleItemDropInput();
+
+            // Mine blocks (LMB: by hand / with tools) & Place blocks (RMB) with particles and fluid physics
             boolean lmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_1);
             boolean rmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_2);
-            blockBreakingManager.update(chunkManager, chunkRenderer, particleManager, fluidPhysicsManager, handRenderer, player, camera, lmb, rmb);
+            blockBreakingManager.update(chunkManager, chunkRenderer, particleManager, itemEntityManager, fluidPhysicsManager, handRenderer, player, camera, lmb, rmb);
 
             // Update Fluid Physics Simulation (Water flows, cascades, and fills cavities)
             fluidPhysicsManager.updateTicks(chunkManager, chunkRenderer, particleManager);
 
+            // Update Dropped Item Entities simulation & player magnet
+            itemEntityManager.update(TICK_DURATION, chunkManager, player);
+
             // Update Particle simulation
             particleManager.update(TICK_DURATION, chunkManager);
+        }
+    }
+
+    private void handleItemDropInput() {
+        boolean qDown = input.isKeyDown(GLFW_KEY_Q);
+        if (qDown) {
+            if (!wasQDown) {
+                // First press: throw item immediately
+                throwHeldItem();
+                qHoldTimer = 0.0f;
+            } else {
+                // Holding Q down: repeat throw after 0.35s delay every 0.18s
+                qHoldTimer += (float) TICK_DURATION;
+                if (qHoldTimer >= 0.35f) {
+                    throwHeldItem();
+                    qHoldTimer = 0.18f;
+                }
+            }
+        } else {
+            qHoldTimer = 0.0f;
+        }
+        wasQDown = qDown;
+    }
+
+    private void throwHeldItem() {
+        if (player == null || player.isDead || itemEntityManager == null) return;
+
+        boolean dropAll = input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || input.isKeyDown(GLFW_KEY_RIGHT_CONTROL);
+        int[] dropped = player.dropSelectedItem(dropAll);
+        if (dropped != null && dropped[0] != Block.AIR && dropped[1] > 0) {
+            byte dropType = (byte) dropped[0];
+            int count = dropped[1];
+
+            Vector3f look = camera.getLookDirection();
+            float eyeX = player.pos.x;
+            float eyeY = player.pos.y + Player.EYE_HEIGHT - 0.25f;
+            float eyeZ = player.pos.z;
+
+            // Spawn item slightly in front of the player's eye along the camera look direction
+            float spawnX = eyeX + look.x * 0.35f;
+            float spawnY = eyeY + look.y * 0.35f;
+            float spawnZ = eyeZ + look.z * 0.35f;
+
+            // Throw velocity accurately oriented with the character's camera view angle (yaw and pitch)
+            float throwSpeed = 6.2f;
+            float vx = look.x * throwSpeed + player.velocity.x * 0.35f;
+            float vy = look.y * throwSpeed + 1.2f; // Slight loft upward for authentic Minecraft ballistic trajectory
+            float vz = look.z * throwSpeed + player.velocity.z * 0.35f;
+
+            itemEntityManager.spawnThrownItem(dropType, count, spawnX, spawnY, spawnZ, vx, vy, vz);
+
+            if (handRenderer != null) {
+                handRenderer.triggerSwing();
+            }
+
+            System.out.println("[Inventory] 🏹 Threw " + count + "x " + (Item.isTool(dropType) ? Item.getName(dropType) : Block.getName(dropType)));
         }
     }
 
@@ -530,6 +627,9 @@ public class MCJournalApp {
             chunkShader.setUniform("uIsWater", 0);
             chunkRenderer.renderSolid();
 
+            // Render Dropped 3D Item Entities (Miniature textured voxel blocks)
+            itemEntityManager.render(chunkShader, camera, partialTick);
+
             // Render Water Geometry (Stylized Depth Absorption & Fresnel Reflections)
             chunkShader.setUniform("uIsWater", 1);
             chunkRenderer.renderWater(isUnderwater);
@@ -551,13 +651,13 @@ public class MCJournalApp {
             // --- 4.5 RENDER FIRST-PERSON STEVE HAND & VIEWMODEL ---
             if (currentScreen == null) {
                 handRenderer.update((float) deltaTime, player);
-                handRenderer.render(camera, player, sunDir, directLightColor, skyAmbientColor, groundAmbientColor, window.getAspectRatio());
+                handRenderer.render(camera, player, atlas, sunDir, directLightColor, skyAmbientColor, groundAmbientColor, window.getAspectRatio());
             }
 
             // --- 5. IN-GAME HARDCORE HUD ---
             if (currentScreen == null) {
                 guiRenderer.begin(window.getWidth(), window.getHeight());
-                hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome);
+                hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome, atlas != null ? atlas.getTextureId() : 0);
                 guiRenderer.end();
             }
         } else {
@@ -593,6 +693,7 @@ public class MCJournalApp {
         if (videoBackgroundManager != null) videoBackgroundManager.cleanup();
         if (blockSelectionRenderer != null) blockSelectionRenderer.cleanup();
         if (particleManager != null) particleManager.cleanup();
+        if (itemEntityManager != null) itemEntityManager.cleanup();
         if (handRenderer != null) handRenderer.cleanup();
         if (hud != null) hud.cleanup();
         window.destroy();

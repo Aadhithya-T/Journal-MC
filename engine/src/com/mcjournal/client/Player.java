@@ -2,6 +2,7 @@ package com.mcjournal.client;
 
 import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
+import com.mcjournal.Item;
 import org.joml.Vector3f;
 
 public class Player {
@@ -37,6 +38,124 @@ public class Player {
 
     // Selected hotbar slot (0..8)
     public int selectedSlot = 0;
+
+    // 9-Slot Hotbar Inventory (Slot 0: Iron Axe, Slot 1: Iron Shovel, Slot 2: Iron Pickaxe)
+    public final byte[] hotbarBlocks = new byte[]{
+        Item.IRON_AXE, Item.IRON_SHOVEL, Item.IRON_PICKAXE, Block.AIR, Block.AIR, Block.AIR, Block.AIR, Block.AIR, Block.AIR
+    };
+    public final int[] hotbarCounts = new int[]{
+        1, 1, 1, 0, 0, 0, 0, 0, 0
+    };
+
+    public byte getSelectedBlock() {
+        int slot = Math.clamp(selectedSlot, 0, 8);
+        return (hotbarCounts[slot] > 0) ? hotbarBlocks[slot] : Block.AIR;
+    }
+
+    public int getSelectedCount() {
+        int slot = Math.clamp(selectedSlot, 0, 8);
+        return hotbarCounts[slot];
+    }
+
+    public void consumeSelected() {
+        int slot = Math.clamp(selectedSlot, 0, 8);
+        if (hotbarCounts[slot] > 0 && !Item.isTool(hotbarBlocks[slot])) {
+            hotbarCounts[slot]--;
+            if (hotbarCounts[slot] == 0) {
+                hotbarBlocks[slot] = Block.AIR;
+            }
+        }
+    }
+
+    /**
+     * Drops item(s) from the currently selected hotbar slot.
+     *
+     * @param dropAll If true, drops the entire stack; if false, drops a single item.
+     * @return An array [byte blockType, int countDropped], or null if slot was empty.
+     */
+    public int[] dropSelectedItem(boolean dropAll) {
+        int slot = Math.clamp(selectedSlot, 0, 8);
+        if (hotbarCounts[slot] > 0 && hotbarBlocks[slot] != Block.AIR) {
+            byte type = hotbarBlocks[slot];
+            int countToDrop = (dropAll || Item.isTool(type)) ? hotbarCounts[slot] : 1;
+            hotbarCounts[slot] -= countToDrop;
+            if (hotbarCounts[slot] <= 0) {
+                hotbarCounts[slot] = 0;
+                hotbarBlocks[slot] = Block.AIR;
+            }
+            return new int[]{type, countToDrop};
+        }
+        return null;
+    }
+
+    /**
+     * Checks whether the player's hotbar has capacity to receive at least one item of the specified block/item type.
+     *
+     * @param blockType The block or item byte ID to check.
+     * @return true if there is an existing non-full stack for this item or an empty hotbar slot available.
+     */
+    public boolean canAddItem(byte blockType) {
+        if (blockType == Block.AIR) return false;
+        boolean tool = Item.isTool(blockType);
+
+        // 1. If not a tool, check if it can merge into an existing non-full stack
+        if (!tool) {
+            for (int i = 0; i < 9; i++) {
+                if (hotbarBlocks[i] == blockType && hotbarCounts[i] > 0 && hotbarCounts[i] < 64) {
+                    return true;
+                }
+            }
+        }
+
+        // 2. Check for an empty slot
+        for (int i = 0; i < 9; i++) {
+            if (hotbarBlocks[i] == Block.AIR || hotbarCounts[i] <= 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Adds items to the player's hotbar inventory.
+     * First attempts to merge with existing stacks (max 64), then populates empty slots.
+     *
+     * @param blockType The block byte ID to add.
+     * @param count The number of items to add.
+     * @return Remaining items that could not fit (0 if entire stack was collected).
+     */
+    public int addItem(byte blockType, int count) {
+        if (blockType == Block.AIR || count <= 0) return 0;
+        int remaining = count;
+        boolean tool = Item.isTool(blockType);
+
+        // 1. Fill existing matching stacks (non-tools only)
+        if (!tool) {
+            for (int i = 0; i < 9; i++) {
+                if (hotbarBlocks[i] == blockType && hotbarCounts[i] > 0 && hotbarCounts[i] < 64) {
+                    int space = 64 - hotbarCounts[i];
+                    int toAdd = Math.min(remaining, space);
+                    hotbarCounts[i] += toAdd;
+                    remaining -= toAdd;
+                    if (remaining == 0) return 0;
+                }
+            }
+        }
+
+        // 2. Place into first empty slots
+        for (int i = 0; i < 9; i++) {
+            if (hotbarBlocks[i] == Block.AIR || hotbarCounts[i] <= 0) {
+                hotbarBlocks[i] = blockType;
+                int toAdd = tool ? 1 : Math.min(remaining, 64);
+                hotbarCounts[i] = toAdd;
+                remaining -= toAdd;
+                if (remaining == 0) return 0;
+            }
+        }
+
+        return remaining;
+    }
 
     public void updateTick(ChunkManager world, boolean forward, boolean backward, boolean left, boolean right, boolean jump, boolean sprint, boolean sneak) {
         if (isDead) return;
