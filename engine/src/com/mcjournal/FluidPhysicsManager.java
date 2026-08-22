@@ -150,5 +150,10 @@ public class FluidPhysicsManager {
         if (lx == 15) set.add((cx + 1) + "," + cz);
         if (lz == 0) set.add(cx + "," + (cz - 1));
         if (lz == 15) set.add(cx + "," + (cz + 1));
+
+        if (lx == 0 && lz == 0) set.add((cx - 1) + "," + (cz - 1));
+        if (lx == 0 && lz == 15) set.add((cx - 1) + "," + (cz + 1));
+        if (lx == 15 && lz == 0) set.add((cx + 1) + "," + (cz - 1));
+        if (lx == 15 && lz == 15) set.add((cx + 1) + "," + (cz + 1));
     }
 }

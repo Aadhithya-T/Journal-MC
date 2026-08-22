@@ -147,6 +147,11 @@ public class ChunkManager {
         if (lz == 0) rebuildSingleMesh(cx, cz - 1);
         if (lz == 15) rebuildSingleMesh(cx, cz + 1);
 
+        if (lx == 0 && lz == 0) rebuildSingleMesh(cx - 1, cz - 1);
+        if (lx == 0 && lz == 15) rebuildSingleMesh(cx - 1, cz + 1);
+        if (lx == 15 && lz == 0) rebuildSingleMesh(cx + 1, cz - 1);
+        if (lx == 15 && lz == 15) rebuildSingleMesh(cx + 1, cz + 1);
+
         return true;
     }
 
