@@ -25,6 +25,8 @@ public class WorldSaveManager {
         public int health = 20;
         public int hunger = 20;
         public int selectedSlot = 0;
+        public byte[] hotbarBlocks = new byte[9];
+        public int[] hotbarCounts = new int[9];
 
         // Continuous World Time (24,000 tick solar cycle: 6000 = Day Mid-Morning/Noon)
         public double worldTime = 6000.0;
@@ -37,6 +39,7 @@ public class WorldSaveManager {
         public SavedWorld(String name, String biome, long seed, String createdAt,
                           float px, float py, float pz, float yaw, float pitch,
                           int health, int hunger, int selectedSlot,
+                          byte[] hotbarBlocks, int[] hotbarCounts,
                           double worldTime,
                           Map<String, Byte> modifiedBlocks) {
             this.name = name;
@@ -51,6 +54,8 @@ public class WorldSaveManager {
             this.health = health;
             this.hunger = hunger;
             this.selectedSlot = selectedSlot;
+            this.hotbarBlocks = (hotbarBlocks != null) ? hotbarBlocks.clone() : new byte[9];
+            this.hotbarCounts = (hotbarCounts != null) ? hotbarCounts.clone() : new int[9];
             this.worldTime = (worldTime >= 0.0) ? (worldTime % 24000.0) : 6000.0;
             this.modifiedBlocks = (modifiedBlocks != null) ? new HashMap<>(modifiedBlocks) : new HashMap<>();
         }
@@ -70,6 +75,12 @@ public class WorldSaveManager {
             if (world != null) {
                 if (world.modifiedBlocks == null) {
                     world.modifiedBlocks = new HashMap<>();
+                }
+                if (world.hotbarBlocks == null) {
+                    world.hotbarBlocks = new byte[9];
+                }
+                if (world.hotbarCounts == null) {
+                    world.hotbarCounts = new int[9];
                 }
                 if (world.worldTime <= 0.0 && world.createdAt == null) {
                     world.worldTime = 6000.0;
@@ -99,6 +110,8 @@ public class WorldSaveManager {
                 player != null ? player.health : 20,
                 player != null ? player.hunger : 20,
                 player != null ? player.selectedSlot : 0,
+                player != null ? player.hotbarBlocks : new byte[9],
+                player != null ? player.hotbarCounts : new int[9],
                 worldTime,
                 modifiedBlocks
             );
