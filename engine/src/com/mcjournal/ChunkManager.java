@@ -1,5 +1,9 @@
 package com.mcjournal;
 
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.Blocks;
+
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -8,7 +12,8 @@ public class ChunkManager {
     private final TerrainGenerator generator;
     private final ConcurrentMap<String, Chunk> chunks = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, ChunkMeshBuilder.MeshData> meshes = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, Byte> modifiedBlocks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, BlockState> modifiedBlockStates = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Byte> modifiedBlocksLegacy = new ConcurrentHashMap<>();
     private final Set<String> solidObstacles = ConcurrentHashMap.newKeySet();
 
     public ChunkManager(int radiusChunks, long seed) {
@@ -52,20 +57,33 @@ public class ChunkManager {
     }
 
     public Map<String, Byte> getModifiedBlocks() {
-        return modifiedBlocks;
+        return modifiedBlocksLegacy;
+    }
+
+    public Map<String, BlockState> getModifiedBlockStates() {
+        return modifiedBlockStates;
     }
 
     public void applyModifiedBlocks(Map<String, Byte> deltas) {
         if (deltas == null || deltas.isEmpty()) return;
+        Map<String, BlockState> stateDeltas = new HashMap<>();
+        for (Map.Entry<String, Byte> entry : deltas.entrySet()) {
+            stateDeltas.put(entry.getKey(), BlockStateRegistry.getDefaultState(entry.getValue()));
+        }
+        applyModifiedBlockStates(stateDeltas);
+    }
+
+    public void applyModifiedBlockStates(Map<String, BlockState> deltas) {
+        if (deltas == null || deltas.isEmpty()) return;
         Set<String> dirtyChunkKeys = new HashSet<>();
 
-        for (Map.Entry<String, Byte> entry : deltas.entrySet()) {
+        for (Map.Entry<String, BlockState> entry : deltas.entrySet()) {
             try {
                 String[] pos = entry.getKey().split(",");
                 int wx = Integer.parseInt(pos[0]);
                 int wy = Integer.parseInt(pos[1]);
                 int wz = Integer.parseInt(pos[2]);
-                byte type = entry.getValue();
+                BlockState state = entry.getValue();
 
                 int cx = Math.floorDiv(wx, 16);
                 int cz = Math.floorDiv(wz, 16);
@@ -73,8 +91,9 @@ public class ChunkManager {
                 if (chunk != null) {
                     int lx = Math.floorMod(wx, 16);
                     int lz = Math.floorMod(wz, 16);
-                    chunk.setBlock(lx, wy, lz, type);
-                    modifiedBlocks.put(entry.getKey(), type);
+                    chunk.setBlockState(lx, wy, lz, state);
+                    modifiedBlockStates.put(entry.getKey(), state);
+                    modifiedBlocksLegacy.put(entry.getKey(), state.getLegacyId());
 
                     dirtyChunkKeys.add(cx + "," + cz);
                     if (lx == 0) dirtyChunkKeys.add((cx - 1) + "," + cz);
@@ -110,22 +129,26 @@ public class ChunkManager {
         return meshes;
     }
 
-    public byte getBlockAt(int wx, int wy, int wz) {
-        if (wy < 0 || wy >= Chunk.HEIGHT) return Block.AIR;
+    public BlockState getBlockStateAt(int wx, int wy, int wz) {
+        if (wy < 0 || wy >= Chunk.HEIGHT) return Blocks.AIR.getDefaultState();
 
         int cx = Math.floorDiv(wx, 16);
         int cz = Math.floorDiv(wz, 16);
         Chunk chunk = getChunk(cx, cz);
-        if (chunk == null) return Block.AIR;
+        if (chunk == null) return Blocks.AIR.getDefaultState();
 
         int lx = Math.floorMod(wx, 16);
         int lz = Math.floorMod(wz, 16);
 
-        return chunk.getBlock(lx, wy, lz);
+        return chunk.getBlockState(lx, wy, lz);
     }
 
-    public boolean setBlockAt(int wx, int wy, int wz, byte type) {
-        if (wy < 0 || wy >= Chunk.HEIGHT) return false;
+    public byte getBlockAt(int wx, int wy, int wz) {
+        return getBlockStateAt(wx, wy, wz).getLegacyId();
+    }
+
+    public boolean setBlockStateAt(int wx, int wy, int wz, BlockState state) {
+        if (wy < 0 || wy >= Chunk.HEIGHT || state == null) return false;
 
         int cx = Math.floorDiv(wx, 16);
         int cz = Math.floorDiv(wz, 16);
@@ -135,8 +158,9 @@ public class ChunkManager {
         int lx = Math.floorMod(wx, 16);
         int lz = Math.floorMod(wz, 16);
 
-        chunk.setBlock(lx, wy, lz, type);
-        modifiedBlocks.put(wx + "," + wy + "," + wz, type);
+        chunk.setBlockState(lx, wy, lz, state);
+        modifiedBlockStates.put(wx + "," + wy + "," + wz, state);
+        modifiedBlocksLegacy.put(wx + "," + wy + "," + wz, state.getLegacyId());
 
         // Rebuild mesh for this chunk
         rebuildSingleMesh(cx, cz);
@@ -155,6 +179,10 @@ public class ChunkManager {
         return true;
     }
 
+    public boolean setBlockAt(int wx, int wy, int wz, byte type) {
+        return setBlockStateAt(wx, wy, wz, BlockStateRegistry.getDefaultState(type));
+    }
+
     public void rebuildSingleMesh(int cx, int cz) {
         Chunk chunk = getChunk(cx, cz);
         if (chunk != null) {
@@ -163,16 +191,16 @@ public class ChunkManager {
         }
     }
 
-    public record BreakResult(byte blockType, String name, String color, int x, int y, int z) {}
+    public record BreakResult(byte blockType, BlockState blockState, String name, String color, int x, int y, int z) {}
 
     public BreakResult breakBlock(int wx, int wy, int wz) {
-        byte current = getBlockAt(wx, wy, wz);
-        if (current == Block.AIR || current == Block.BEDROCK || current == Block.WATER) {
+        BlockState current = getBlockStateAt(wx, wy, wz);
+        if (current.isAir() || current.is(Blocks.BEDROCK) || current.is(Blocks.WATER)) {
             return null;
         }
 
-        setBlockAt(wx, wy, wz, Block.AIR);
-        return new BreakResult(current, Block.getName(current), Block.getColor(current), wx, wy, wz);
+        setBlockStateAt(wx, wy, wz, Blocks.AIR.getDefaultState());
+        return new BreakResult(current.getLegacyId(), current, current.getBlock().getName(), current.getBlock().getColorHex(), wx, wy, wz);
     }
 
     public float getGroundHeight(float wx, float wz, Float currentY) {
@@ -182,42 +210,11 @@ public class ChunkManager {
         int startY = (currentY != null) ? Math.min(Chunk.HEIGHT - 2, (int) Math.floor(currentY + 0.6f)) : Chunk.HEIGHT - 2;
 
         for (int y = startY; y >= 0; y--) {
-            byte block = getBlockAt(rx, y, rz);
-            if (Block.isSolid(block)) {
+            BlockState block = getBlockStateAt(rx, y, rz);
+            if (block.isSolid()) {
                 return y + 1.0f;
             }
         }
-
-        return 64.0f;
-    }
-
-    public boolean isCollidingWithSolid(float px, float py, float pz, float radius, float height) {
-        int minBX = (int) Math.floor(px - radius);
-        int maxBX = (int) Math.floor(px + radius);
-        int minBZ = (int) Math.floor(pz - radius);
-        int maxBZ = (int) Math.floor(pz + radius);
-
-        int minBY = (int) Math.floor(py + 0.15f);
-        int maxBY = (int) Math.floor(py + height - 0.05f);
-
-        for (int bx = minBX; bx <= maxBX; bx++) {
-            for (int bz = minBZ; bz <= maxBZ; bz++) {
-                for (int by = minBY; by <= maxBY; by++) {
-                    if (solidObstacles.contains(bx + "," + by + "," + bz)) {
-                        return true;
-                    }
-
-                    byte block = getBlockAt(bx, by, bz);
-                    if (Block.isSolid(block)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    public List<TerrainGenerator.POI> getPois() {
-        return generator.getPois();
+        return 1.0f;
     }
 }

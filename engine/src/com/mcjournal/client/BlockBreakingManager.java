@@ -4,6 +4,11 @@ import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.FluidPhysicsManager;
 import com.mcjournal.Item;
+import com.mcjournal.block.BlockProperties;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.Blocks;
+import com.mcjournal.block.property.Axis;
 import org.joml.Vector3f;
 
 public class BlockBreakingManager {
@@ -114,15 +119,21 @@ public class BlockBreakingManager {
 
                     // Check that placed block doesn't intersect player bounding box
                     if (canPlace && !isIntersectingPlayer(player, placeX, placeY, placeZ)) {
-                        byte targetBlock = world.getBlockAt(placeX, placeY, placeZ);
-                        if (targetBlock == Block.AIR || targetBlock == Block.WATER) {
-                            world.setBlockAt(placeX, placeY, placeZ, blockToPlace);
+                        BlockState targetBlock = world.getBlockStateAt(placeX, placeY, placeZ);
+                        if (targetBlock.isAir() || targetBlock.is(com.mcjournal.block.Blocks.WATER)) {
+                            BlockState stateToPlace = com.mcjournal.block.BlockStateRegistry.getDefaultState(blockToPlace);
+                            if (stateToPlace.contains(com.mcjournal.block.BlockProperties.AXIS)) {
+                                com.mcjournal.block.property.Axis axis = com.mcjournal.block.property.Axis.fromNormal(currentHit.normalX, currentHit.normalY, currentHit.normalZ);
+                                stateToPlace = stateToPlace.with(com.mcjournal.block.BlockProperties.AXIS, axis);
+                            }
+
+                            world.setBlockStateAt(placeX, placeY, placeZ, stateToPlace);
                             player.consumeSelected();
                             reuploadChunkMeshes(world, renderer, placeX, placeZ);
                             if (fluidPhysics != null) {
                                 fluidPhysics.onBlockChanged(world, renderer, particles, placeX, placeY, placeZ);
                             }
-                            System.out.println("[Building] 🧱 Placed " + Block.getName(blockToPlace) + " at (" + placeX + ", " + placeY + ", " + placeZ + ")");
+                            System.out.println("[Building] 🧱 Placed " + stateToPlace.getSerializedName() + " at (" + placeX + ", " + placeY + ", " + placeZ + ")");
                         }
                     }
                 }

@@ -1,6 +1,9 @@
 package com.mcjournal;
 
-import java.util.Arrays;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.Blocks;
+
 import java.util.Base64;
 
 public class Chunk {
@@ -10,19 +13,31 @@ public class Chunk {
 
     private final int cx;
     private final int cz;
-    private final byte[] blocks;
+    private final short[] blockStates;
     private boolean isDirty = false;
 
     public Chunk(int cx, int cz) {
         this.cx = cx;
         this.cz = cz;
-        this.blocks = new byte[TOTAL_VOXELS];
+        this.blockStates = new short[TOTAL_VOXELS];
     }
 
-    public Chunk(int cx, int cz, byte[] blocks) {
+    public Chunk(int cx, int cz, short[] states) {
         this.cx = cx;
         this.cz = cz;
-        this.blocks = blocks;
+        this.blockStates = (states != null) ? states : new short[TOTAL_VOXELS];
+    }
+
+    public Chunk(int cx, int cz, byte[] legacyBlocks) {
+        this.cx = cx;
+        this.cz = cz;
+        this.blockStates = new short[TOTAL_VOXELS];
+        if (legacyBlocks != null) {
+            int len = Math.min(legacyBlocks.length, TOTAL_VOXELS);
+            for (int i = 0; i < len; i++) {
+                this.blockStates[i] = (short) BlockStateRegistry.getDefaultState(legacyBlocks[i]).getStateId();
+            }
+        }
     }
 
     public int getCx() {
@@ -33,27 +48,35 @@ public class Chunk {
         return cz;
     }
 
-    public byte[] getBlocks() {
-        return blocks;
+    public short[] getBlockStates() {
+        return blockStates;
     }
 
     public static int getIndex(int x, int y, int z) {
         return (y * SIZE + z) * SIZE + x;
     }
 
-    public byte getBlock(int x, int y, int z) {
+    public BlockState getBlockState(int x, int y, int z) {
         if (x < 0 || x >= SIZE || z < 0 || z >= SIZE || y < 0 || y >= HEIGHT) {
-            return Block.AIR;
+            return Blocks.AIR.getDefaultState();
         }
-        return blocks[getIndex(x, y, z)];
+        return BlockStateRegistry.getStateById(blockStates[getIndex(x, y, z)] & 0xFFFF);
+    }
+
+    public void setBlockState(int x, int y, int z, BlockState state) {
+        if (x < 0 || x >= SIZE || z < 0 || z >= SIZE || y < 0 || y >= HEIGHT || state == null) {
+            return;
+        }
+        blockStates[getIndex(x, y, z)] = (short) state.getStateId();
+        isDirty = true;
+    }
+
+    public byte getBlock(int x, int y, int z) {
+        return getBlockState(x, y, z).getLegacyId();
     }
 
     public void setBlock(int x, int y, int z, byte type) {
-        if (x < 0 || x >= SIZE || z < 0 || z >= SIZE || y < 0 || y >= HEIGHT) {
-            return;
-        }
-        blocks[getIndex(x, y, z)] = type;
-        isDirty = true;
+        setBlockState(x, y, z, BlockStateRegistry.getDefaultState(type));
     }
 
     public boolean isDirty() {
@@ -62,9 +85,5 @@ public class Chunk {
 
     public void setDirty(boolean dirty) {
         isDirty = dirty;
-    }
-
-    public String toBase64() {
-        return Base64.getEncoder().encodeToString(blocks);
     }
 }

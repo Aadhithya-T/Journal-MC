@@ -2,6 +2,8 @@ package com.mcjournal.client;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
 
 import java.io.File;
 import java.io.FileReader;
@@ -31,7 +33,10 @@ public class WorldSaveManager {
         // Continuous World Time (24,000 tick solar cycle: 6000 = Day Mid-Morning/Noon)
         public double worldTime = 6000.0;
 
-        // Voxel Block State (Every single block broken, placed, or modified)
+        // Voxel Block State (String-serialized states, e.g. "oak_log[axis=x]")
+        public Map<String, String> modifiedBlockStates = new HashMap<>();
+
+        // Legacy numeric fallback
         public Map<String, Byte> modifiedBlocks = new HashMap<>();
 
         public SavedWorld() {}
@@ -41,7 +46,7 @@ public class WorldSaveManager {
                           int health, int hunger, int selectedSlot,
                           byte[] hotbarBlocks, int[] hotbarCounts,
                           double worldTime,
-                          Map<String, Byte> modifiedBlocks) {
+                          Map<String, BlockState> blockStates) {
             this.name = name;
             this.biome = biome;
             this.seed = seed;
@@ -57,7 +62,30 @@ public class WorldSaveManager {
             this.hotbarBlocks = (hotbarBlocks != null) ? hotbarBlocks.clone() : new byte[9];
             this.hotbarCounts = (hotbarCounts != null) ? hotbarCounts.clone() : new int[9];
             this.worldTime = (worldTime >= 0.0) ? (worldTime % 24000.0) : 6000.0;
-            this.modifiedBlocks = (modifiedBlocks != null) ? new HashMap<>(modifiedBlocks) : new HashMap<>();
+            this.modifiedBlockStates = new HashMap<>();
+            this.modifiedBlocks = new HashMap<>();
+
+            if (blockStates != null) {
+                for (Map.Entry<String, BlockState> entry : blockStates.entrySet()) {
+                    BlockState s = entry.getValue();
+                    this.modifiedBlockStates.put(entry.getKey(), s.getSerializedName());
+                    this.modifiedBlocks.put(entry.getKey(), s.getLegacyId());
+                }
+            }
+        }
+
+        public Map<String, BlockState> getBlockStateDeltas() {
+            Map<String, BlockState> result = new HashMap<>();
+            if (modifiedBlockStates != null && !modifiedBlockStates.isEmpty()) {
+                for (Map.Entry<String, String> entry : modifiedBlockStates.entrySet()) {
+                    result.put(entry.getKey(), BlockStateRegistry.parse(entry.getValue()));
+                }
+            } else if (modifiedBlocks != null) {
+                for (Map.Entry<String, Byte> entry : modifiedBlocks.entrySet()) {
+                    result.put(entry.getKey(), BlockStateRegistry.getDefaultState(entry.getValue()));
+                }
+            }
+            return result;
         }
     }
 
@@ -73,6 +101,9 @@ public class WorldSaveManager {
         try (FileReader reader = new FileReader(SAVE_FILE)) {
             SavedWorld world = GSON.fromJson(reader, SavedWorld.class);
             if (world != null) {
+                if (world.modifiedBlockStates == null) {
+                    world.modifiedBlockStates = new HashMap<>();
+                }
                 if (world.modifiedBlocks == null) {
                     world.modifiedBlocks = new HashMap<>();
                 }
@@ -94,7 +125,7 @@ public class WorldSaveManager {
     }
 
     public static void saveWorld(String name, String biome, long seed,
-                                 Player player, double worldTime, Map<String, Byte> modifiedBlocks) {
+                                 Player player, double worldTime, Map<String, BlockState> modifiedBlocks) {
         try {
             SAVE_FILE.getParentFile().mkdirs();
             SavedWorld world = new SavedWorld(
@@ -120,7 +151,7 @@ public class WorldSaveManager {
                 GSON.toJson(world, writer);
             }
             int modCount = modifiedBlocks != null ? modifiedBlocks.size() : 0;
-            System.out.println("[WorldSaveManager] Hardcore World saved (" + modCount + " block changes, time: " +
+            System.out.println("[WorldSaveManager] Hardcore World saved (" + modCount + " block state changes, time: " +
                     String.format("%.0f", world.worldTime) + " ticks, player at " +
                     String.format("%.1f, %.1f, %.1f", world.playerX, world.playerY, world.playerZ) + ") to " + SAVE_FILE.getAbsolutePath());
         } catch (Exception e) {
@@ -144,7 +175,7 @@ public class WorldSaveManager {
     public static void deleteWorld() {
         if (SAVE_FILE.exists()) {
             boolean deleted = SAVE_FILE.delete();
-            System.out.println("[WorldSaveManager] Hardcore World deleted: " + deleted);
+            System.out.println("[WorldSaveManager] World save deleted: " + deleted);
         }
     }
 }

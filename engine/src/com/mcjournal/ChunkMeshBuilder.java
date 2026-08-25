@@ -1,5 +1,8 @@
 package com.mcjournal;
 
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.Blocks;
+
 public class ChunkMeshBuilder {
 
     public static class MeshData {
@@ -111,13 +114,12 @@ public class ChunkMeshBuilder {
         return new float[]{uMin, uMax, vMin, vMax};
     }
 
-    private static int getBlockFaceSlot(byte blockType, int faceIndex) {
-        return Block.getBlockFaceSlot(blockType, faceIndex);
+    private static int getBlockFaceSlot(BlockState state, int faceIndex) {
+        return state.getFaceTextureSlot(faceIndex);
     }
 
-    private static boolean isTransparent(byte blockType) {
-        return blockType == Block.AIR || blockType == Block.WATER ||
-               blockType == Block.TALL_GRASS || blockType == Block.POPPY || blockType == Block.DANDELION;
+    private static boolean isTransparent(BlockState state) {
+        return state.isTransparent();
     }
 
     private static float computeVertexAO(ChunkManager manager, int x, int y, int z, FaceDef face, int uSign, int vSign) {
@@ -150,8 +152,8 @@ public class ChunkMeshBuilder {
     }
 
     private static boolean isAOSolid(ChunkManager manager, int wx, int wy, int wz) {
-        byte b = manager.getBlockAt(wx, wy, wz);
-        return Block.isSolid(b) && b != Block.OAK_LEAVES && b != Block.BIRCH_LEAVES;
+        BlockState state = manager.getBlockStateAt(wx, wy, wz);
+        return state.isSolid() && !state.is(com.mcjournal.block.Blocks.OAK_LEAVES) && !state.is(com.mcjournal.block.Blocks.BIRCH_LEAVES);
     }
 
     private static float computeWaterColumnDepth(ChunkManager manager, int wx, int y, int wz) {
@@ -159,8 +161,8 @@ public class ChunkMeshBuilder {
         for (int dy = 1; dy <= 16; dy++) {
             int checkY = y - dy;
             if (checkY < 0) break;
-            byte b = manager.getBlockAt(wx, checkY, wz);
-            if (b == Block.WATER) {
+            BlockState state = manager.getBlockStateAt(wx, checkY, wz);
+            if (state.is(com.mcjournal.block.Blocks.WATER)) {
                 depth++;
             } else {
                 break;
@@ -170,10 +172,10 @@ public class ChunkMeshBuilder {
     }
 
     private static float computeWaterShoreline(ChunkManager manager, int wx, int y, int wz) {
-        if (Block.isSolid(manager.getBlockAt(wx + 1, y, wz)) ||
-            Block.isSolid(manager.getBlockAt(wx - 1, y, wz)) ||
-            Block.isSolid(manager.getBlockAt(wx, y, wz + 1)) ||
-            Block.isSolid(manager.getBlockAt(wx, y, wz - 1))) {
+        if (manager.getBlockStateAt(wx + 1, y, wz).isSolid() ||
+            manager.getBlockStateAt(wx - 1, y, wz).isSolid() ||
+            manager.getBlockStateAt(wx, y, wz + 1).isSolid() ||
+            manager.getBlockStateAt(wx, y, wz - 1).isSolid()) {
             return 1.0f;
         }
         return 0.0f;
@@ -196,15 +198,15 @@ public class ChunkMeshBuilder {
         for (int y = 0; y < Chunk.HEIGHT; y++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 for (int x = 0; x < Chunk.SIZE; x++) {
-                    byte block = chunk.getBlock(x, y, z);
-                    if (block == Block.AIR) continue;
+                    BlockState block = chunk.getBlockState(x, y, z);
+                    if (block.isAir()) continue;
 
                     int wx = worldOriginX + x;
                     int wz = worldOriginZ + z;
 
                     // 1. Cross-Foliage (Tall Grass, Poppy, Dandelion)
-                    if (block == Block.TALL_GRASS || block == Block.POPPY || block == Block.DANDELION) {
-                        buildCrossFoliage(chunk, x, y, z, wx, wz, block, solidPos, solidNorm, solidUv, solidCol);
+                    if (block.isPlant()) {
+                        buildCrossFoliage(chunk, x, y, z, wx, wz, block.getLegacyId(), solidPos, solidNorm, solidUv, solidCol);
                         continue;
                     }
 
@@ -215,15 +217,15 @@ public class ChunkMeshBuilder {
                         int ny = y + face.dir[1];
                         int nz = wz + face.dir[2];
 
-                        byte neighbor = manager.getBlockAt(nx, ny, nz);
+                        BlockState neighbor = manager.getBlockStateAt(nx, ny, nz);
 
-                        boolean isWater = (block == Block.WATER);
+                        boolean isWater = block.is(com.mcjournal.block.Blocks.WATER);
                         boolean shouldDrawFace;
 
                         if (isWater) {
-                            shouldDrawFace = (neighbor != Block.WATER && isTransparent(neighbor));
-                        } else if (block == Block.OAK_LEAVES || block == Block.BIRCH_LEAVES) {
-                            shouldDrawFace = (neighbor != block && isTransparent(neighbor));
+                            shouldDrawFace = (!neighbor.is(com.mcjournal.block.Blocks.WATER) && isTransparent(neighbor));
+                        } else if (block.is(com.mcjournal.block.Blocks.OAK_LEAVES) || block.is(com.mcjournal.block.Blocks.BIRCH_LEAVES)) {
+                            shouldDrawFace = (!neighbor.is(block.getBlock()) && isTransparent(neighbor));
                         } else {
                             shouldDrawFace = isTransparent(neighbor);
                         }
@@ -235,7 +237,7 @@ public class ChunkMeshBuilder {
 
                             // Texture De-Tiling Rotation on Top Faces
                             float[] uv0 = {uMin, vMin}, uv1 = {uMax, vMin}, uv2 = {uMax, vMax}, uv3 = {uMin, vMax};
-                            if (f == 2 && (block == Block.STONE || block == Block.DIRT || block == Block.SAND || block == Block.BEDROCK || block == Block.COBBLESTONE)) {
+                            if (f == 2 && (block.is(com.mcjournal.block.Blocks.STONE) || block.is(com.mcjournal.block.Blocks.DIRT) || block.is(com.mcjournal.block.Blocks.SAND) || block.is(com.mcjournal.block.Blocks.BEDROCK) || block.is(com.mcjournal.block.Blocks.COBBLESTONE))) {
                                 int rot = Math.abs((wx * 374761393 + wz * 668265263) ^ (chunk.getCx() * 31 + chunk.getCz())) % 4;
                                 if (rot == 1) {
                                     uv0 = new float[]{uMax, vMin}; uv1 = new float[]{uMax, vMax}; uv2 = new float[]{uMin, vMax}; uv3 = new float[]{uMin, vMin};
@@ -329,7 +331,7 @@ public class ChunkMeshBuilder {
         Chunk chunk, int x, int y, int z, int wx, int wz, byte block,
         FloatArrayList pos, FloatArrayList norm, FloatArrayList uv, FloatArrayList col
     ) {
-        int slot = getBlockFaceSlot(block, 0);
+        int slot = Block.getBlockFaceSlot(block, 0);
         float[] uvBounds = getUVBounds(slot);
         float uMin = uvBounds[0], uMax = uvBounds[1], vMin = uvBounds[2], vMax = uvBounds[3];
 

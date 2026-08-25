@@ -1,5 +1,10 @@
 package com.mcjournal;
 
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.BlockType;
+import com.mcjournal.block.Blocks;
+
 public final class Block {
     public static final byte AIR = 0;
     public static final byte GRASS = 1;
@@ -20,131 +25,71 @@ public final class Block {
 
     private Block() {}
 
-    public static String getName(byte type) {
-        return switch (type) {
-            case GRASS -> "Grass Block";
-            case DIRT -> "Dirt";
-            case STONE -> "Stone";
-            case COBBLESTONE -> "Cobblestone";
-            case SAND -> "Sand";
-            case BEDROCK -> "Bedrock";
-            case OAK_LOG -> "Oak Log";
-            case OAK_LEAVES -> "Oak Leaves";
-            case DIAMOND_ORE -> "Diamond Ore";
-            case WATER -> "Water";
-            case BIRCH_LOG -> "Birch Log";
-            case BIRCH_LEAVES -> "Birch Leaves";
-            case TALL_GRASS -> "Tall Grass";
-            case POPPY -> "Poppy";
-            case DANDELION -> "Dandelion";
-            default -> "Air";
-        };
+    public static BlockState getState(int type) {
+        return BlockStateRegistry.getDefaultState((byte) type);
     }
 
-    public static String getColor(byte type) {
-        return switch (type) {
-            case GRASS -> "#5fa832";
-            case DIRT -> "#866043";
-            case STONE -> "#787878";
-            case COBBLESTONE -> "#555555";
-            case SAND -> "#dbd3a0";
-            case BEDROCK -> "#222222";
-            case OAK_LOG -> "#674a27";
-            case OAK_LEAVES -> "#4ca028";
-            case DIAMOND_ORE -> "#55ffff";
-            case WATER -> "#2762d6";
-            case BIRCH_LOG -> "#eaeaea";
-            case BIRCH_LEAVES -> "#5db532";
-            case TALL_GRASS -> "#5fa832";
-            case POPPY -> "#dd2222";
-            case DANDELION -> "#ffdd00";
-            default -> "#888888";
-        };
+    public static BlockType getType(int type) {
+        return BlockStateRegistry.getBlockType((byte) type);
     }
 
-    public static float getHardness(byte type) {
-        return switch (type) {
-            case BEDROCK, WATER -> -1.0f; // Unbreakable
-            case TALL_GRASS, POPPY, DANDELION -> 0.0f; // Instant Break
-            case OAK_LEAVES, BIRCH_LEAVES -> 0.2f;
-            case DIRT, SAND -> 0.5f;
-            case GRASS -> 0.6f;
-            case STONE -> 1.5f;
-            case COBBLESTONE, OAK_LOG, BIRCH_LOG -> 2.0f;
-            case DIAMOND_ORE -> 3.0f;
-            default -> 0.5f;
-        };
+    public static String getName(int type) {
+        return getType(type).getName();
     }
 
-    public static byte getDrop(byte type) {
-        return switch (type) {
-            case GRASS -> DIRT; // Breaking grass drops dirt
-            case STONE -> COBBLESTONE; // Breaking stone drops cobblestone
-            case DIRT -> DIRT;
-            case COBBLESTONE -> COBBLESTONE;
-            case SAND -> SAND;
-            case OAK_LOG -> OAK_LOG;
-            case BIRCH_LOG -> BIRCH_LOG;
-            case OAK_LEAVES -> OAK_LEAVES;
-            case BIRCH_LEAVES -> BIRCH_LEAVES;
-            case DIAMOND_ORE -> DIAMOND_ORE;
-            case TALL_GRASS -> TALL_GRASS;
-            case POPPY -> POPPY;
-            case DANDELION -> DANDELION;
-            default -> AIR; // Bedrock, Water, Air, etc. drop nothing
-        };
+    public static String getColor(int type) {
+        return getType(type).getColorHex();
     }
 
-    public static int getDisplayFaceTile(byte type) {
-        return switch (type) {
-            case GRASS -> 1; // Side texture showing grass + soil
-            case DIRT -> 2;
-            case STONE -> 3;
-            case COBBLESTONE -> 4;
-            case SAND -> 5;
-            case BEDROCK -> 6;
-            case OAK_LOG -> 7;
-            case BIRCH_LOG -> 15;
-            case OAK_LEAVES, BIRCH_LEAVES -> 9;
-            case DIAMOND_ORE -> 10;
-            case WATER -> 11;
-            case TALL_GRASS -> 12;
-            case POPPY -> 13;
-            case DANDELION -> 14;
-            default -> 0;
-        };
+    public static float getHardness(int type) {
+        return getType(type).getHardness();
     }
 
-    public static int getBlockFaceSlot(byte blockType, int faceIndex) {
-        return switch (blockType) {
-            case GRASS -> (faceIndex == 2) ? 0 : (faceIndex == 3 ? 2 : 1);
-            case DIRT -> 2;
-            case STONE -> 3;
-            case COBBLESTONE -> 4;
-            case SAND -> 5;
-            case BEDROCK -> 6;
-            case OAK_LOG -> (faceIndex == 2 || faceIndex == 3) ? 8 : 7;
-            case BIRCH_LOG -> (faceIndex == 2 || faceIndex == 3) ? 8 : 15;
-            case OAK_LEAVES, BIRCH_LEAVES -> 9;
-            case DIAMOND_ORE -> 10;
-            case WATER -> 11;
-            case TALL_GRASS -> 12;
-            case POPPY -> 13;
-            case DANDELION -> 14;
-            default -> 2;
-        };
+    public static byte getDrop(int type) {
+        return getType(type).getDrop(getState(type)).getLegacyId();
     }
 
-    public static boolean isSolid(byte type) {
-        return type != AIR && type != WATER && type != TALL_GRASS && type != POPPY && type != DANDELION;
+    public static int getDisplayFaceTile(int type) {
+        return getType(type).getDisplayFaceTile();
     }
 
-    public static boolean isPlant(byte type) {
-        return type == TALL_GRASS || type == POPPY || type == DANDELION;
+    public static int getBlockFaceSlot(int blockType, int faceIndex) {
+        return getState(blockType).getFaceTextureSlot(faceIndex);
     }
 
-    public static boolean canPlantSurviveOn(byte blockBelow) {
+    public static int getBlockFaceSlot(BlockState state, int faceIndex) {
+        return state != null ? state.getFaceTextureSlot(faceIndex) : 2;
+    }
+
+    public static boolean isSolid(int type) {
+        return getType(type).isSolid();
+    }
+
+    public static boolean isSolid(BlockState state) {
+        return state != null && state.isSolid();
+    }
+
+    public static boolean isPlant(int type) {
+        return getType(type).isPlant();
+    }
+
+    public static boolean isPlant(BlockState state) {
+        return state != null && state.isPlant();
+    }
+
+    public static boolean isTransparent(int type) {
+        return getType(type).isTransparent();
+    }
+
+    public static boolean isTransparent(BlockState state) {
+        return state != null && state.isTransparent();
+    }
+
+    public static boolean canPlantSurviveOn(int blockBelow) {
         return blockBelow == GRASS || blockBelow == DIRT;
     }
-}
 
+    public static boolean canPlantSurviveOn(BlockState stateBelow) {
+        return stateBelow != null && (stateBelow.is(Blocks.GRASS) || stateBelow.is(Blocks.DIRT));
+    }
+}

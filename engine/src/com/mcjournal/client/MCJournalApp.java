@@ -161,7 +161,7 @@ public class MCJournalApp {
                 currentSeed,
                 player,
                 this.worldTimeTicks,
-                chunkManager != null ? chunkManager.getModifiedBlocks() : null
+                chunkManager != null ? chunkManager.getModifiedBlockStates() : null
             );
             this.isInWorld = false;
         }
@@ -181,9 +181,12 @@ public class MCJournalApp {
         this.chunkManager = new ChunkManager(11, seed);
 
         // 1. If loading an existing save, apply all persisted voxel block changes!
-        if (existingSave != null && existingSave.modifiedBlocks != null && !existingSave.modifiedBlocks.isEmpty()) {
-            System.out.println("[MCJournalApp] Restoring " + existingSave.modifiedBlocks.size() + " modified world blocks from save file...");
-            chunkManager.applyModifiedBlocks(existingSave.modifiedBlocks);
+        if (existingSave != null) {
+            Map<String, com.mcjournal.block.BlockState> deltas = existingSave.getBlockStateDeltas();
+            if (deltas != null && !deltas.isEmpty()) {
+                System.out.println("[MCJournalApp] Restoring " + deltas.size() + " modified world block states from save file...");
+                chunkManager.applyModifiedBlockStates(deltas);
+            }
         }
 
         // 2. Upload all computed chunk meshes to GPU
@@ -681,7 +684,7 @@ public class MCJournalApp {
                 currentSeed,
                 player,
                 this.worldTimeTicks,
-                chunkManager != null ? chunkManager.getModifiedBlocks() : null
+                chunkManager != null ? chunkManager.getModifiedBlockStates() : null
             );
         }
         if (chunkShader != null) chunkShader.cleanup();
