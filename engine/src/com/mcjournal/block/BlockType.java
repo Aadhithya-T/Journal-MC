@@ -72,6 +72,9 @@ public class BlockType {
     }
 
     public BlockState getDefaultState() {
+        if (defaultState == null) {
+            return BlockStateRegistry.getDefaultState(legacyId);
+        }
         return defaultState;
     }
 

@@ -48,8 +48,13 @@ public class TitleScreen extends Screen {
             noticeTimer = 3.0f;
         }));
 
-        // 3. Quit Game Button (Row 3, full-width matching Singleplayer & Multiplayer)
-        buttons.add(new Button(3, "Quit Game", centerX, startY + 96, btnWidth, btnHeight, () -> {
+        // 3. Options... & Quit Game (Row 3, split 2-column)
+        int splitW = (btnWidth - 8) / 2; // 196px
+        buttons.add(new Button(3, "Options...", centerX, startY + 96, splitW, btnHeight, () -> {
+            app.setScreen(new OptionsScreen(app, this));
+        }));
+
+        buttons.add(new Button(4, "Quit Game", centerX + splitW + 8, startY + 96, splitW, btnHeight, () -> {
             app.quitGame();
         }));
     }

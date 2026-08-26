@@ -38,3 +38,7 @@ build/
 
 # Heavy Video Binaries (Frames are committed in engine/resources/backgrounds)
 *.mp4
+
+# User Runtime Saves & Options
+options.json
+saves/

@@ -60,6 +60,11 @@ public final class Blocks {
     public static final BlockType DANDELION = register(new BlockType.Builder("dandelion", (byte) 15)
             .name("Dandelion").color("#ffdd00").plant(true).build());
 
+    static {
+        // Eagerly trigger BlockStateRegistry so default states are bound on class load
+        BlockStateRegistry.getTotalStates();
+    }
+
     private Blocks() {}
 
     public static List<BlockType> getAll() {

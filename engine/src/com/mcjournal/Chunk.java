@@ -48,6 +48,10 @@ public class Chunk {
         return cz;
     }
 
+    public ChunkPos getPos() {
+        return new ChunkPos(cx, cz);
+    }
+
     public short[] getBlockStates() {
         return blockStates;
     }

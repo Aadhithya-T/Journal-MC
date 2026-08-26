@@ -4,6 +4,7 @@ import com.mcjournal.Block;
 import com.mcjournal.Chunk;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.ChunkMeshBuilder;
+import com.mcjournal.ChunkPos;
 import com.mcjournal.FluidPhysicsManager;
 import com.mcjournal.Item;
 import com.mcjournal.client.gui.*;
@@ -37,6 +38,7 @@ public class MCJournalApp {
 
     private ChunkManager chunkManager;
     private ShaderProgram chunkShader;
+    private final FrustumCuller frustumCuller = new FrustumCuller();
     private String currentBiome = "Plains";
     private String currentWorldName = "Hardcore World";
     private long currentSeed = 4242;
@@ -60,6 +62,12 @@ public class MCJournalApp {
     private double lastFrameTime = 0;
     private double tickAccumulator = 0;
 
+    // Real-Time FPS Tracking & Frame Rate Limiting
+    private final GameSettings settings = GameSettings.load();
+    private int currentFps = 60;
+    private int frameCount = 0;
+    private double fpsTimer = 0.0;
+
     // Item Throwing / Drop (Q Key)
     private boolean wasQDown = false;
     private float qHoldTimer = 0.0f;
@@ -78,6 +86,35 @@ public class MCJournalApp {
         this.fluidPhysicsManager = new FluidPhysicsManager();
     }
 
+    public GameSettings getSettings() {
+        return settings;
+    }
+
+    public Window getWindow() {
+        return window;
+    }
+
+    public Camera getCamera() {
+        return camera;
+    }
+
+    public int getFps() {
+        return currentFps;
+    }
+
+    public void applySettings() {
+        if (window != null) {
+            window.setVsync(settings.vsync || settings.maxFps == 0);
+        }
+        if (camera != null) {
+            camera.setFov(settings.fov);
+            camera.updateProjection(window.getAspectRatio());
+        }
+        if (chunkManager != null) {
+            chunkManager.setRenderDistance(settings.renderDistance);
+        }
+    }
+
     public void run() {
         init();
         loop();
@@ -88,6 +125,7 @@ public class MCJournalApp {
         // 1. Initialize GLFW Window & OpenGL Context FIRST
         window.init();
         input.init(window.getHandle(), this);
+        applySettings();
 
         // 2. Initialize OpenGL GPU Resources AFTER context is active
         guiRenderer = new GuiRenderer();
@@ -137,10 +175,6 @@ public class MCJournalApp {
         return currentScreen;
     }
 
-    public Window getWindow() {
-        return window;
-    }
-
     public TextureAtlas getAtlas() {
         return atlas;
     }
@@ -177,8 +211,9 @@ public class MCJournalApp {
         this.currentWorldName = worldName;
         this.currentSeed = seed;
 
-        System.out.println("[MCJournalApp] Generating 500+ chunk Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
-        this.chunkManager = new ChunkManager(11, seed);
+        System.out.println("[MCJournalApp] Initializing infinite streamed Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
+        java.io.File worldDir = new java.io.File("saves/" + worldName.toLowerCase().replaceAll("[^a-z0-9_-]", "_"));
+        this.chunkManager = new ChunkManager(settings.renderDistance, seed, worldDir);
 
         // 1. If loading an existing save, apply all persisted voxel block changes!
         if (existingSave != null) {
@@ -189,14 +224,19 @@ public class MCJournalApp {
             }
         }
 
-        // 2. Upload all computed chunk meshes to GPU
+        // 2. Clear previous GPU meshes and synchronously load initial spawn chunk neighborhood
         chunkRenderer.cleanup();
-        Map<String, ChunkMeshBuilder.MeshData> meshes = chunkManager.getAllMeshes();
-        for (Map.Entry<String, ChunkMeshBuilder.MeshData> entry : meshes.entrySet()) {
-            String[] parts = entry.getKey().split(",");
-            int cx = Integer.parseInt(parts[0]);
-            int cz = Integer.parseInt(parts[1]);
-            chunkRenderer.uploadChunkMesh(cx, cz, entry.getValue());
+        int spawnCx = Math.floorDiv((int) (existingSave != null ? existingSave.playerX : 8), 16);
+        int spawnCz = Math.floorDiv((int) (existingSave != null ? existingSave.playerZ : 8), 16);
+        chunkManager.waitForInitialChunks(spawnCx, spawnCz, 3); // 7x7 core chunks generated & meshed
+
+        // Upload initial spawn meshes to GPU
+        ChunkPos uploadPos;
+        while ((uploadPos = chunkManager.pollPendingMeshUpload()) != null) {
+            ChunkMeshBuilder.MeshData mesh = chunkManager.getChunkMesh(uploadPos);
+            if (mesh != null) {
+                chunkRenderer.uploadChunkMesh(uploadPos, mesh);
+            }
         }
 
         // 3. Restore or compute player spawn position, stats & time of day
@@ -389,6 +429,14 @@ public class MCJournalApp {
 
             tickAccumulator += deltaTime;
 
+            frameCount++;
+            fpsTimer += deltaTime;
+            if (fpsTimer >= 1.0) {
+                currentFps = frameCount;
+                frameCount = 0;
+                fpsTimer -= 1.0;
+            }
+
             if (window.isResized()) {
                 camera.updateProjection(window.getAspectRatio());
                 if (currentScreen != null) {
@@ -427,6 +475,23 @@ public class MCJournalApp {
             render(deltaTime, partialTick);
 
             window.update();
+
+            // Frame Rate Limiter (when VSync is OFF and maxFps > 0)
+            if (!settings.vsync && settings.maxFps > 0) {
+                double targetFrameDuration = 1.0 / settings.maxFps;
+                double elapsed = glfwGetTime() - currentFrameTime;
+                while (elapsed < targetFrameDuration) {
+                    double remaining = targetFrameDuration - elapsed;
+                    if (remaining > 0.002) {
+                        try {
+                            Thread.sleep((long) ((remaining - 0.001) * 1000));
+                        } catch (InterruptedException ignored) {}
+                    } else {
+                        Thread.onSpinWait();
+                    }
+                    elapsed = glfwGetTime() - currentFrameTime;
+                }
+            }
         }
     }
 
@@ -493,6 +558,12 @@ public class MCJournalApp {
             boolean sneak = input.isKeyDown(GLFW_KEY_LEFT_SHIFT);
 
             player.updateTick(chunkManager, forward, backward, left, right, jump, sprint, sneak);
+
+            // Stream chunks dynamically based on player position & look direction
+            int playerCx = Math.floorDiv((int) Math.floor(player.pos.x), 16);
+            int playerCz = Math.floorDiv((int) Math.floor(player.pos.z), 16);
+            Vector3f look = camera.getLookDirection();
+            chunkManager.updatePlayerPosition(playerCx, playerCz, look.x, look.z);
 
             // Throw held item (Q key)
             handleItemDropInput();
@@ -573,9 +644,36 @@ public class MCJournalApp {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (isInWorld && chunkManager != null) {
+            // Drain pending GPU unloads
+            ChunkPos unloadPos;
+            while ((unloadPos = chunkManager.pollPendingMeshUnload()) != null) {
+                chunkRenderer.unloadChunkMesh(unloadPos);
+            }
+
+            // Drain pending GPU uploads (budget: 8 uploads per frame for smooth 60+ FPS streaming)
+            for (int i = 0; i < 8; i++) {
+                ChunkPos uploadPos = chunkManager.pollPendingMeshUpload();
+                if (uploadPos == null) break;
+                ChunkMeshBuilder.MeshData mesh = chunkManager.getChunkMesh(uploadPos);
+                if (mesh != null) {
+                    chunkRenderer.uploadChunkMesh(uploadPos, mesh);
+                }
+            }
+
             Vector3f eyePos = player.getEyePosition(partialTick);
             camera.setPosition(eyePos.x, eyePos.y, eyePos.z);
+
+            // Damage Screen Shake / Hurt Camera Tilt (Authentic Vanilla Minecraft mechanic)
+            float damageTilt = 0.0f;
+            if (player.hurtTime > 0) {
+                float hurtFraction = Math.clamp(((float) player.hurtTime - partialTick) / (float) player.maxHurtTime, 0.0f, 1.0f);
+                if (hurtFraction > 0.0f) {
+                    damageTilt = (float) Math.sin(hurtFraction * Math.PI) * player.hurtAngle;
+                }
+            }
+            camera.setRoll(damageTilt);
             camera.updateView();
+            frustumCuller.update(camera.getProjectionMatrix(), camera.getViewMatrix());
 
             float curTime = (float) glfwGetTime();
             float timeOfDayFraction = (float) (worldTimeTicks / 24000.0);
@@ -586,8 +684,9 @@ public class MCJournalApp {
             int eyeBlockZ = (int) Math.floor(eyePos.z);
             boolean isUnderwater = (chunkManager.getBlockAt(eyeBlockX, eyeBlockY, eyeBlockZ) == Block.WATER);
 
-            float curFogStart = isUnderwater ? RenderingConfig.UNDERWATER_FOG_START : RenderingConfig.FOG_START;
-            float curFogEnd = isUnderwater ? RenderingConfig.UNDERWATER_FOG_END : RenderingConfig.FOG_END;
+            // Dynamically calibrate atmospheric horizon fog to current render distance (zero pop-in at horizon)
+            float curFogStart = isUnderwater ? RenderingConfig.UNDERWATER_FOG_START : Math.max(32.0f, (chunkManager.getRenderDistance() - 2.5f) * 16.0f);
+            float curFogEnd = isUnderwater ? RenderingConfig.UNDERWATER_FOG_END : (chunkManager.getRenderDistance() - 0.5f) * 16.0f;
             Vector3f curFogColor = isUnderwater ? underwaterFogColor : horizonColor;
 
             // --- 1. RENDER ATMOSPHERIC SKY GRADIENT, SUN, MOON & STARS ---
@@ -626,16 +725,16 @@ public class MCJournalApp {
             chunkShader.setUniform("uWaterAbsorptionMu", RenderingConfig.WATER_ABSORPTION_MU);
             chunkShader.setUniform("uAoMinClamp", RenderingConfig.AO_MIN_CLAMP);
 
-            // Render Solid Geometry (Opaque Voxel Blocks)
+            // Render Solid Geometry (Opaque Voxel Blocks with Frustum Culling)
             chunkShader.setUniform("uIsWater", 0);
-            chunkRenderer.renderSolid();
+            chunkRenderer.renderSolid(frustumCuller);
 
             // Render Dropped 3D Item Entities (Miniature textured voxel blocks)
             itemEntityManager.render(chunkShader, camera, partialTick);
 
-            // Render Water Geometry (Stylized Depth Absorption & Fresnel Reflections)
+            // Render Water Geometry (Stylized Depth Absorption & Fresnel Reflections with Frustum Culling)
             chunkShader.setUniform("uIsWater", 1);
-            chunkRenderer.renderWater(isUnderwater);
+            chunkRenderer.renderWater(frustumCuller, isUnderwater);
 
             chunkShader.unbind();
             atlas.unbind();
@@ -660,7 +759,19 @@ public class MCJournalApp {
             // --- 5. IN-GAME HARDCORE HUD ---
             if (currentScreen == null) {
                 guiRenderer.begin(window.getWidth(), window.getHeight());
-                hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome, atlas != null ? atlas.getTextureId() : 0);
+                int renderedCount = (chunkRenderer != null) ? chunkRenderer.getLastRenderedChunks() : 0;
+                int loadedCount = (chunkRenderer != null) ? chunkRenderer.getLoadedMeshCount() : 0;
+                hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(), currentBiome, atlas != null ? atlas.getTextureId() : 0, currentFps, settings.showFps, renderedCount, loadedCount);
+
+                // --- 5.5 RED DAMAGE HURT FLASH / VIGNETTE ---
+                if (player.hurtTime > 0) {
+                    float hurtFraction = Math.clamp(((float) player.hurtTime - partialTick) / (float) player.maxHurtTime, 0.0f, 1.0f);
+                    if (hurtFraction > 0.0f) {
+                        float alpha = hurtFraction * 0.32f;
+                        guiRenderer.drawRect(0, 0, window.getWidth(), window.getHeight(), 0.90f, 0.05f, 0.05f, alpha);
+                    }
+                }
+
                 guiRenderer.end();
             }
         } else {
@@ -691,6 +802,7 @@ public class MCJournalApp {
         if (skyRenderer != null) skyRenderer.cleanup();
         if (atlas != null) atlas.cleanup();
         if (chunkRenderer != null) chunkRenderer.cleanup();
+        if (chunkManager != null) chunkManager.shutdown();
         if (guiRenderer != null) guiRenderer.cleanup();
         if (fontRenderer != null) fontRenderer.cleanup();
         if (videoBackgroundManager != null) videoBackgroundManager.cleanup();
