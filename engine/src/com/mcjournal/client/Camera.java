@@ -7,6 +7,7 @@ public class Camera {
     private final Vector3f position = new Vector3f(6, 6, -10);
     private float yaw = 0;   // In degrees
     private float pitch = 0; // In degrees
+    private float roll = 0;  // In degrees (Hurt camera tilt / screen shake)
     private float fov = 70.0f; // In degrees
     private float near = 0.05f;
     private float far = 350.0f;
@@ -21,9 +22,20 @@ public class Camera {
 
     public void updateView() {
         viewMatrix.identity();
+        if (roll != 0.0f) {
+            viewMatrix.rotate((float) Math.toRadians(roll), new Vector3f(0, 0, 1));
+        }
         viewMatrix.rotate((float) Math.toRadians(pitch), new Vector3f(1, 0, 0));
         viewMatrix.rotate((float) Math.toRadians(yaw), new Vector3f(0, 1, 0));
         viewMatrix.translate(-position.x, -position.y, -position.z);
+    }
+
+    public float getRoll() {
+        return roll;
+    }
+
+    public void setRoll(float roll) {
+        this.roll = roll;
     }
 
     public Vector3f getLookDirection() {

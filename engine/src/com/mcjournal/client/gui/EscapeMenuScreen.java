@@ -28,7 +28,7 @@ public class EscapeMenuScreen extends Screen {
         }));
 
         buttons.add(new Button(3, "Options...", centerX + splitW + 8, startY + 48, splitW, btnH, () -> {
-            // Options view
+            app.setScreen(new OptionsScreen(app, this));
         }));
 
         // 3. Save and Quit to Title

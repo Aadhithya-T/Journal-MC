@@ -99,6 +99,10 @@ public class Window {
         }
     }
 
+    public void setVsync(boolean vsync) {
+        glfwSwapInterval(vsync ? 1 : 0);
+    }
+
     public boolean isCursorLocked() {
         return isCursorLocked;
     }

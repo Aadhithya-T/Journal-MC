@@ -8,52 +8,283 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class ChunkManager {
-    private final int radius;
+    public static final int DEFAULT_RENDER_DISTANCE = 12; // 12 chunks = 192 blocks radius
+    public static final int UNLOAD_PADDING = 3;            // Unload at renderDistance + 3 (15 chunks)
+
+    private int renderDistance;
+    private int unloadDistance;
     private final TerrainGenerator generator;
-    private final ConcurrentMap<String, Chunk> chunks = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, ChunkMeshBuilder.MeshData> meshes = new ConcurrentHashMap<>();
+    private final RegionManager regionManager;
+
+    private final ConcurrentMap<ChunkPos, Chunk> chunks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ChunkPos, ChunkMeshBuilder.MeshData> meshes = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, BlockState> modifiedBlockStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Byte> modifiedBlocksLegacy = new ConcurrentHashMap<>();
-    private final Set<String> solidObstacles = ConcurrentHashMap.newKeySet();
+    private final ConcurrentMap<ChunkPos, Map<Integer, BlockState>> chunkDeltas = new ConcurrentHashMap<>();
 
-    public ChunkManager(int radiusChunks, long seed) {
-        this.radius = radiusChunks;
+    private final Set<ChunkPos> loadingInProgress = ConcurrentHashMap.newKeySet();
+    private final ConcurrentLinkedQueue<ChunkPos> pendingMeshUploads = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<ChunkPos> pendingMeshUnloads = new ConcurrentLinkedQueue<>();
+
+    private final ExecutorService chunkWorkers;
+    private volatile List<ChunkOffset> spiralOffsets;
+    private volatile ChunkPos lastPlayerChunkPos = null;
+
+    private record ChunkOffset(int dx, int dz, int distSq) implements Comparable<ChunkOffset> {
+        @Override
+        public int compareTo(ChunkOffset o) {
+            return Integer.compare(this.distSq, o.distSq);
+        }
+    }
+
+    public ChunkManager(long seed) {
+        this(DEFAULT_RENDER_DISTANCE, seed, null);
+    }
+
+    public ChunkManager(int renderDistance, long seed) {
+        this(renderDistance, seed, null);
+    }
+
+    public ChunkManager(int renderDistance, long seed, java.io.File worldDir) {
+        this.renderDistance = Math.max(2, renderDistance);
+        this.unloadDistance = this.renderDistance + UNLOAD_PADDING;
         this.generator = new TerrainGenerator(seed);
-        initWorld();
+        this.regionManager = (worldDir != null) ? new RegionManager(worldDir) : null;
+
+        int numWorkers = Math.clamp(Runtime.getRuntime().availableProcessors() - 1, 2, 8);
+        this.chunkWorkers = Executors.newFixedThreadPool(numWorkers, r -> {
+            Thread t = new Thread(r, "ChunkWorker");
+            t.setDaemon(true);
+            return t;
+        });
+
+        this.spiralOffsets = computeSpiralOffsets(this.renderDistance);
     }
 
-    public static String getChunkKey(int cx, int cz) {
-        return cx + "," + cz;
-    }
-
-    private void initWorld() {
-        // Phase 1: Generate Chunk Block Data in Parallel
-        List<CompletableFuture<Void>> genFutures = new ArrayList<>();
-        for (int cx = -radius; cx < radius; cx++) {
-            for (int cz = -radius; cz < radius; cz++) {
-                final int finalCx = cx;
-                final int finalCz = cz;
-                genFutures.add(CompletableFuture.runAsync(() -> {
-                    Chunk chunk = generator.generateChunk(finalCx, finalCz);
-                    chunks.put(getChunkKey(finalCx, finalCz), chunk);
-                }));
+    private static List<ChunkOffset> computeSpiralOffsets(int radius) {
+        List<ChunkOffset> offsets = new ArrayList<>();
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if (Math.max(Math.abs(dx), Math.abs(dz)) <= radius) {
+                    offsets.add(new ChunkOffset(dx, dz, dx * dx + dz * dz));
+                }
             }
         }
-        CompletableFuture.allOf(genFutures.toArray(new CompletableFuture[0])).join();
-
-        // Phase 2: Compute Full Chunk Meshes with Ambient Occlusion in Parallel
-        buildAllMeshes();
+        Collections.sort(offsets);
+        return Collections.unmodifiableList(offsets);
     }
 
-    public void buildAllMeshes() {
-        List<CompletableFuture<Void>> meshFutures = new ArrayList<>();
-        for (Chunk chunk : chunks.values()) {
-            meshFutures.add(CompletableFuture.runAsync(() -> {
-                ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(chunk, this);
-                meshes.put(getChunkKey(chunk.getCx(), chunk.getCz()), mesh);
-            }));
+    public synchronized void setRenderDistance(int newDistance) {
+        this.renderDistance = Math.clamp(newDistance, 4, 24);
+        this.unloadDistance = this.renderDistance + UNLOAD_PADDING;
+        this.spiralOffsets = computeSpiralOffsets(this.renderDistance);
+    }
+
+    public TerrainGenerator getGenerator() {
+        return generator;
+    }
+
+    public int getRenderDistance() {
+        return renderDistance;
+    }
+
+    /**
+     * Synchronously generates and meshes the initial spawn area (e.g. 5x5 chunks around spawn)
+     * so the player spawns with solid ground and immediate surroundings rendered.
+     */
+    public void waitForInitialChunks(int spawnCx, int spawnCz, int radius) {
+        List<CompletableFuture<Void>> genFutures = new ArrayList<>();
+        List<ChunkPos> initialPositions = new ArrayList<>();
+
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                ChunkPos pos = new ChunkPos(spawnCx + dx, spawnCz + dz);
+                initialPositions.add(pos);
+                loadingInProgress.add(pos);
+
+                genFutures.add(CompletableFuture.runAsync(() -> {
+                    generateChunkInternal(pos);
+                }, chunkWorkers));
+            }
         }
+
+        CompletableFuture.allOf(genFutures.toArray(new CompletableFuture[0])).join();
+
+        // Mesh initial chunks in parallel
+        List<CompletableFuture<Void>> meshFutures = new ArrayList<>();
+        for (ChunkPos pos : initialPositions) {
+            meshFutures.add(CompletableFuture.runAsync(() -> {
+                Chunk chunk = chunks.get(pos);
+                if (chunk != null) {
+                    ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(chunk, this);
+                    meshes.put(pos, mesh);
+                    pendingMeshUploads.offer(pos);
+                }
+                loadingInProgress.remove(pos);
+            }, chunkWorkers));
+        }
+
         CompletableFuture.allOf(meshFutures.toArray(new CompletableFuture[0])).join();
+        this.lastPlayerChunkPos = new ChunkPos(spawnCx, spawnCz);
+    }
+
+    private void submitWorkerTask(Runnable r) {
+        if (chunkWorkers.isShutdown()) return;
+        try {
+            chunkWorkers.submit(r);
+        } catch (RejectedExecutionException ignored) {
+            // Pool is shutting down
+        }
+    }
+
+    public void updatePlayerPosition(int playerCx, int playerCz) {
+        updatePlayerPosition(playerCx, playerCz, 0.0f, 0.0f);
+    }
+
+    /**
+     * Called every tick to update world streaming around the player.
+     * Loads newly visible chunks in spiral order and unloads distant chunks.
+     */
+    public void updatePlayerPosition(int playerCx, int playerCz, float lookDirX, float lookDirZ) {
+        if (chunkWorkers.isShutdown()) return;
+        ChunkPos currentPos = new ChunkPos(playerCx, playerCz);
+
+        // 1. Queue generation for chunks in render distance (spiral closest-first)
+        for (ChunkOffset offset : spiralOffsets) {
+            ChunkPos pos = new ChunkPos(playerCx + offset.dx, playerCz + offset.dz);
+            if (!chunks.containsKey(pos) && loadingInProgress.add(pos)) {
+                submitWorkerTask(() -> {
+                    try {
+                        generateAndMeshChunk(pos);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    } finally {
+                        loadingInProgress.remove(pos);
+                    }
+                });
+            }
+        }
+
+        // 2. Unload chunks beyond unload distance
+        if (lastPlayerChunkPos == null || !lastPlayerChunkPos.equals(currentPos)) {
+            lastPlayerChunkPos = currentPos;
+            for (ChunkPos pos : chunks.keySet()) {
+                if (pos.distanceChebyshev(currentPos) > unloadDistance) {
+                    Chunk chunkToUnload = chunks.remove(pos);
+                    if (chunkToUnload != null && regionManager != null && chunkToUnload.isDirty()) {
+                        submitWorkerTask(() -> regionManager.saveChunk(chunkToUnload));
+                    }
+                    meshes.remove(pos);
+                    loadingInProgress.remove(pos);
+                    pendingMeshUnloads.offer(pos);
+                }
+            }
+        }
+    }
+
+    private void generateChunkInternal(ChunkPos pos) {
+        Chunk chunk = null;
+        if (regionManager != null) {
+            chunk = regionManager.loadChunk(pos.x(), pos.z());
+        }
+        if (chunk == null) {
+            chunk = generator.generateChunk(pos.x(), pos.z());
+        }
+
+        // Apply any saved block state deltas for this chunk
+        Map<Integer, BlockState> deltas = chunkDeltas.get(pos);
+        if (deltas != null) {
+            short[] blockStates = chunk.getBlockStates();
+            for (Map.Entry<Integer, BlockState> entry : deltas.entrySet()) {
+                int idx = entry.getKey();
+                if (idx >= 0 && idx < blockStates.length) {
+                    blockStates[idx] = (short) entry.getValue().getStateId();
+                }
+            }
+            chunk.setDirty(true);
+        }
+
+        chunks.put(pos, chunk);
+    }
+
+    private void generateAndMeshChunk(ChunkPos pos) {
+        generateChunkInternal(pos);
+
+        Chunk chunk = chunks.get(pos);
+        if (chunk != null) {
+            ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(chunk, this);
+            meshes.put(pos, mesh);
+            pendingMeshUploads.offer(pos);
+
+            // Rebuild loaded neighbor chunk boundary meshes if they were generated before this chunk
+            rebuildNeighborIfLoaded(new ChunkPos(pos.x() - 1, pos.z()));
+            rebuildNeighborIfLoaded(new ChunkPos(pos.x() + 1, pos.z()));
+            rebuildNeighborIfLoaded(new ChunkPos(pos.x(), pos.z() - 1));
+            rebuildNeighborIfLoaded(new ChunkPos(pos.x(), pos.z() + 1));
+        }
+    }
+
+    private void rebuildNeighborIfLoaded(ChunkPos neighborPos) {
+        Chunk neighborChunk = chunks.get(neighborPos);
+        if (neighborChunk != null && !loadingInProgress.contains(neighborPos)) {
+            submitWorkerTask(() -> {
+                ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(neighborChunk, this);
+                meshes.put(neighborPos, mesh);
+                pendingMeshUploads.offer(neighborPos);
+            });
+        }
+    }
+
+    public ChunkPos pollPendingMeshUpload() {
+        return pendingMeshUploads.poll();
+    }
+
+    public ChunkPos pollPendingMeshUnload() {
+        return pendingMeshUnloads.poll();
+    }
+
+    public boolean hasPendingUploads() {
+        return !pendingMeshUploads.isEmpty();
+    }
+
+    public boolean hasPendingUnloads() {
+        return !pendingMeshUnloads.isEmpty();
+    }
+
+    public int getLoadedChunkCount() {
+        return chunks.size();
+    }
+
+    public boolean isChunkLoaded(int cx, int cz) {
+        return isChunkLoaded(new ChunkPos(cx, cz));
+    }
+
+    public boolean isChunkLoaded(ChunkPos pos) {
+        return chunks.containsKey(pos);
+    }
+
+    public Chunk getChunk(int cx, int cz) {
+        return getChunk(new ChunkPos(cx, cz));
+    }
+
+    public Chunk getChunk(ChunkPos pos) {
+        return chunks.get(pos);
+    }
+
+    public Collection<Chunk> getAllChunks() {
+        return chunks.values();
+    }
+
+    public ChunkMeshBuilder.MeshData getChunkMesh(int cx, int cz) {
+        return getChunkMesh(new ChunkPos(cx, cz));
+    }
+
+    public ChunkMeshBuilder.MeshData getChunkMesh(ChunkPos pos) {
+        return meshes.get(pos);
+    }
+
+    public Map<ChunkPos, ChunkMeshBuilder.MeshData> getAllMeshes() {
+        return meshes;
     }
 
     public Map<String, Byte> getModifiedBlocks() {
@@ -75,7 +306,7 @@ public class ChunkManager {
 
     public void applyModifiedBlockStates(Map<String, BlockState> deltas) {
         if (deltas == null || deltas.isEmpty()) return;
-        Set<String> dirtyChunkKeys = new HashSet<>();
+        Set<ChunkPos> dirtyChunks = new HashSet<>();
 
         for (Map.Entry<String, BlockState> entry : deltas.entrySet()) {
             try {
@@ -87,46 +318,32 @@ public class ChunkManager {
 
                 int cx = Math.floorDiv(wx, 16);
                 int cz = Math.floorDiv(wz, 16);
-                Chunk chunk = getChunk(cx, cz);
-                if (chunk != null) {
-                    int lx = Math.floorMod(wx, 16);
-                    int lz = Math.floorMod(wz, 16);
-                    chunk.setBlockState(lx, wy, lz, state);
-                    modifiedBlockStates.put(entry.getKey(), state);
-                    modifiedBlocksLegacy.put(entry.getKey(), state.getLegacyId());
+                int lx = Math.floorMod(wx, 16);
+                int lz = Math.floorMod(wz, 16);
+                int idx = Chunk.getIndex(lx, wy, lz);
 
-                    dirtyChunkKeys.add(cx + "," + cz);
-                    if (lx == 0) dirtyChunkKeys.add((cx - 1) + "," + cz);
-                    if (lx == 15) dirtyChunkKeys.add((cx + 1) + "," + cz);
-                    if (lz == 0) dirtyChunkKeys.add(cx + "," + (cz - 1));
-                    if (lz == 15) dirtyChunkKeys.add(cx + "," + (cz + 1));
+                ChunkPos cpos = new ChunkPos(cx, cz);
+                chunkDeltas.computeIfAbsent(cpos, k -> new ConcurrentHashMap<>()).put(idx, state);
+                modifiedBlockStates.put(entry.getKey(), state);
+                modifiedBlocksLegacy.put(entry.getKey(), state.getLegacyId());
+
+                Chunk chunk = chunks.get(cpos);
+                if (chunk != null) {
+                    chunk.setBlockState(lx, wy, lz, state);
+                    dirtyChunks.add(cpos);
+                    if (lx == 0) dirtyChunks.add(new ChunkPos(cx - 1, cz));
+                    if (lx == 15) dirtyChunks.add(new ChunkPos(cx + 1, cz));
+                    if (lz == 0) dirtyChunks.add(new ChunkPos(cx, cz - 1));
+                    if (lz == 15) dirtyChunks.add(new ChunkPos(cx, cz + 1));
                 }
             } catch (Exception e) {
                 // Ignore malformed key
             }
         }
 
-        // Rebuild meshes for all modified chunks
-        for (String key : dirtyChunkKeys) {
-            String[] parts = key.split(",");
-            rebuildSingleMesh(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+        for (ChunkPos cpos : dirtyChunks) {
+            rebuildSingleMesh(cpos.x(), cpos.z());
         }
-    }
-
-    public Chunk getChunk(int cx, int cz) {
-        return chunks.get(getChunkKey(cx, cz));
-    }
-
-    public Collection<Chunk> getAllChunks() {
-        return chunks.values();
-    }
-
-    public ChunkMeshBuilder.MeshData getChunkMesh(int cx, int cz) {
-        return meshes.get(getChunkKey(cx, cz));
-    }
-
-    public Map<String, ChunkMeshBuilder.MeshData> getAllMeshes() {
-        return meshes;
     }
 
     public BlockState getBlockStateAt(int wx, int wy, int wz) {
@@ -152,20 +369,23 @@ public class ChunkManager {
 
         int cx = Math.floorDiv(wx, 16);
         int cz = Math.floorDiv(wz, 16);
-        Chunk chunk = getChunk(cx, cz);
-        if (chunk == null) return false;
-
+        ChunkPos cpos = new ChunkPos(cx, cz);
         int lx = Math.floorMod(wx, 16);
         int lz = Math.floorMod(wz, 16);
+        int idx = Chunk.getIndex(lx, wy, lz);
 
-        chunk.setBlockState(lx, wy, lz, state);
+        chunkDeltas.computeIfAbsent(cpos, k -> new ConcurrentHashMap<>()).put(idx, state);
         modifiedBlockStates.put(wx + "," + wy + "," + wz, state);
         modifiedBlocksLegacy.put(wx + "," + wy + "," + wz, state.getLegacyId());
 
-        // Rebuild mesh for this chunk
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk != null) {
+            chunk.setBlockState(lx, wy, lz, state);
+        }
+
+        // Rebuild mesh for this chunk and neighbors
         rebuildSingleMesh(cx, cz);
 
-        // Rebuild neighbor chunk meshes if on chunk boundary
         if (lx == 0) rebuildSingleMesh(cx - 1, cz);
         if (lx == 15) rebuildSingleMesh(cx + 1, cz);
         if (lz == 0) rebuildSingleMesh(cx, cz - 1);
@@ -184,10 +404,15 @@ public class ChunkManager {
     }
 
     public void rebuildSingleMesh(int cx, int cz) {
-        Chunk chunk = getChunk(cx, cz);
+        rebuildSingleMesh(new ChunkPos(cx, cz));
+    }
+
+    public void rebuildSingleMesh(ChunkPos pos) {
+        Chunk chunk = getChunk(pos);
         if (chunk != null) {
             ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(chunk, this);
-            meshes.put(getChunkKey(cx, cz), mesh);
+            meshes.put(pos, mesh);
+            pendingMeshUploads.offer(pos);
         }
     }
 
@@ -216,5 +441,22 @@ public class ChunkManager {
             }
         }
         return 1.0f;
+    }
+
+    public void saveAllModifiedChunks() {
+        if (regionManager == null) return;
+        for (Chunk chunk : chunks.values()) {
+            if (chunk != null && chunk.isDirty()) {
+                regionManager.saveChunk(chunk);
+            }
+        }
+    }
+
+    public void shutdown() {
+        saveAllModifiedChunks();
+        chunkWorkers.shutdownNow();
+        if (regionManager != null) {
+            regionManager.close();
+        }
     }
 }

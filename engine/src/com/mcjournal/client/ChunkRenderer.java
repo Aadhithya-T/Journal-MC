@@ -1,5 +1,6 @@
 package com.mcjournal.client;
 
+import com.mcjournal.ChunkPos;
 import com.mcjournal.ChunkMeshBuilder;
 import org.lwjgl.system.MemoryUtil;
 
@@ -42,14 +43,21 @@ public class ChunkRenderer {
             if (waterVboNorm != 0) glDeleteBuffers(waterVboNorm);
 
             solidVao = waterVao = 0;
+            solidVboPos = solidVboUv = solidVboCol = solidVboNorm = 0;
+            waterVboPos = waterVboUv = waterVboCol = waterVboNorm = 0;
+            solidVertexCount = waterVertexCount = 0;
         }
     }
 
-    private final Map<String, GPUChunkMesh> meshes = new ConcurrentHashMap<>();
+    private final Map<ChunkPos, GPUChunkMesh> meshes = new ConcurrentHashMap<>();
 
     public void uploadChunkMesh(int cx, int cz, ChunkMeshBuilder.MeshData meshData) {
-        String key = cx + "," + cz;
-        GPUChunkMesh mesh = meshes.computeIfAbsent(key, k -> new GPUChunkMesh());
+        uploadChunkMesh(new ChunkPos(cx, cz), meshData);
+    }
+
+    public void uploadChunkMesh(ChunkPos pos, ChunkMeshBuilder.MeshData meshData) {
+        if (meshData == null) return;
+        GPUChunkMesh mesh = meshes.computeIfAbsent(pos, k -> new GPUChunkMesh());
 
         // Upload Solid Mesh
         if (meshData.solidPositions != null && meshData.solidPositions.length > 0) {
@@ -160,20 +168,43 @@ public class ChunkRenderer {
         }
     }
 
+    private int lastRenderedChunks = 0;
+
+    public int getLastRenderedChunks() {
+        return lastRenderedChunks;
+    }
+
     public void renderSolid() {
+        renderSolid(null);
+    }
+
+    public void renderSolid(FrustumCuller culler) {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
 
-        for (GPUChunkMesh mesh : meshes.values()) {
+        int count = 0;
+        for (Map.Entry<ChunkPos, GPUChunkMesh> entry : meshes.entrySet()) {
+            ChunkPos pos = entry.getKey();
+            if (culler != null && !culler.isChunkInFrustum(pos.x(), pos.z())) {
+                continue;
+            }
+
+            GPUChunkMesh mesh = entry.getValue();
             if (mesh.solidVao != 0 && mesh.solidVertexCount > 0) {
                 glBindVertexArray(mesh.solidVao);
                 glDrawArrays(GL_TRIANGLES, 0, mesh.solidVertexCount);
+                count++;
             }
         }
         glBindVertexArray(0);
+        this.lastRenderedChunks = count;
     }
 
     public void renderWater(boolean isUnderwater) {
+        renderWater(null, isUnderwater);
+    }
+
+    public void renderWater(FrustumCuller culler, boolean isUnderwater) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(false);
@@ -184,7 +215,13 @@ public class ChunkRenderer {
             glCullFace(GL_BACK);
         }
 
-        for (GPUChunkMesh mesh : meshes.values()) {
+        for (Map.Entry<ChunkPos, GPUChunkMesh> entry : meshes.entrySet()) {
+            ChunkPos pos = entry.getKey();
+            if (culler != null && !culler.isChunkInFrustum(pos.x(), pos.z())) {
+                continue;
+            }
+
+            GPUChunkMesh mesh = entry.getValue();
             if (mesh.waterVao != 0 && mesh.waterVertexCount > 0) {
                 glBindVertexArray(mesh.waterVao);
                 glDrawArrays(GL_TRIANGLES, 0, mesh.waterVertexCount);
@@ -193,6 +230,21 @@ public class ChunkRenderer {
         glBindVertexArray(0);
 
         glDepthMask(true);
+    }
+
+    public void unloadChunkMesh(int cx, int cz) {
+        unloadChunkMesh(new ChunkPos(cx, cz));
+    }
+
+    public void unloadChunkMesh(ChunkPos pos) {
+        GPUChunkMesh mesh = meshes.remove(pos);
+        if (mesh != null) {
+            mesh.cleanup();
+        }
+    }
+
+    public int getLoadedMeshCount() {
+        return meshes.size();
     }
 
     public void cleanup() {

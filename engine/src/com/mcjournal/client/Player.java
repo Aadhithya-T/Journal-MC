@@ -36,6 +36,11 @@ public class Player {
     public float highestY = 16.0f;
     public boolean isDead = false;
 
+    // Damage, Screen Shake & Hurt Camera Tilt
+    public int hurtTime = 0;
+    public int maxHurtTime = 10;
+    public float hurtAngle = 0; // In degrees
+
     // Selected hotbar slot (0..8)
     public int selectedSlot = 0;
 
@@ -185,71 +190,81 @@ public class Player {
             moveZ /= inputLen;
         }
 
-        // Vanilla Movement Slipperiness & Acceleration
-        float slipperiness = onGround ? 0.6f : 1.0f;
-        float friction = slipperiness * 0.91f;
-
-        float baseSpeed = isSprinting ? 0.14f : (isSneaking ? 0.035f : 0.10f);
-        if (!onGround) baseSpeed *= 0.35f; // Air control
-
-        velocity.x += moveX * baseSpeed;
-        velocity.z += moveZ * baseSpeed;
-
-        // 2. Jump Impulse (Vanilla 0.42 height impulse)
-        if (jump && onGround) {
-            velocity.y = JUMP_IMPULSE;
-            if (isSprinting) {
-                velocity.x += forwardX * 0.20f;
-                velocity.z += forwardZ * 0.20f;
-            } else if (forward) {
-                velocity.x += forwardX * 0.10f;
-                velocity.z += forwardZ * 0.10f;
-            }
-            onGround = false;
-        }
-
-        // 2.5 Water Physics & Buoyancy (Proportional Entry Plunge, Fluid Drag & Sprint-Jump Water Exit)
-        boolean inWater = world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + 0.35f), (int) Math.floor(pos.z)) == Block.WATER
+        // 2. Water Contact Detection (Full Player Body Check: Feet, Mid-Body, Head)
+        boolean inWater = world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + 0.1f), (int) Math.floor(pos.z)) == Block.WATER
+                       || world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + 0.8f), (int) Math.floor(pos.z)) == Block.WATER
                        || world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + EYE_HEIGHT), (int) Math.floor(pos.z)) == Block.WATER;
+
+        float friction;
+
         if (inWater) {
             fallDistance = 0; // Water completely breaks fall damage
             highestY = pos.y;
-            friction = 0.82f;
 
+            // Water Fluid Drag (Substantial drag to rapidly attenuate high momentum)
+            friction = 0.80f;
+
+            // Significantly reduced movement speed in water (~75% reduction compared to land)
+            float baseSpeed = isSprinting ? 0.035f : (isSneaking ? 0.015f : 0.024f);
+            velocity.x += moveX * baseSpeed;
+            velocity.z += moveZ * baseSpeed;
+
+            // Fluid vertical dynamics & swimming
             if (jump) {
-                if (isSprinting) {
-                    // Sprint-jump dolphin leap / water exit boost (breaches water surface to jump out onto land)
-                    velocity.y = Math.min(velocity.y + 0.10f, 0.38f);
-                    velocity.x += forwardX * 0.08f;
-                    velocity.z += forwardZ * 0.08f;
+                if (onGround) {
+                    // Jumping off waterbed floor
+                    velocity.y = Math.min(velocity.y + 0.08f, 0.22f);
+                    onGround = false;
                 } else {
-                    // Standard upward swimming
-                    velocity.y = Math.min(velocity.y + 0.05f, 0.20f);
+                    // Standard upward swimming stroke (no horizontal velocity impulse)
+                    velocity.y = Math.min(velocity.y + 0.05f, 0.15f);
                 }
             } else if (sneak) {
-                // Dive downwards faster
-                velocity.y = Math.max(velocity.y - 0.03f, -0.25f);
+                // Dive downwards
+                velocity.y = Math.max(velocity.y - 0.03f, -0.20f);
             } else {
                 // Natural fluid drag & momentum deceleration
-                // High downward entry velocity decelerates smoothly through the water column in proportion to fall height
-                if (velocity.y < -0.08f) {
-                    velocity.y = (velocity.y - 0.015f) * 0.82f;
+                if (velocity.y < -0.06f) {
+                    velocity.y = (velocity.y - 0.01f) * 0.80f;
                 } else if (velocity.y > 0.02f) {
-                    velocity.y *= 0.82f;
+                    velocity.y *= 0.80f;
                 } else {
-                    // Gentle terminal buoyancy sinking
-                    velocity.y = Math.max(-0.05f, (velocity.y - 0.005f) * 0.85f);
+                    // Gentle terminal sinking in deep water
+                    velocity.y = Math.max(-0.04f, (velocity.y - 0.005f) * 0.80f);
                 }
             }
         } else {
-            // 3. Gravity & Vertical Drag (Air/Ground)
+            // Land / Air Movement Slipperiness & Acceleration
+            float slipperiness = onGround ? 0.6f : 1.0f;
+            friction = slipperiness * 0.91f;
+
+            float baseSpeed = isSprinting ? 0.14f : (isSneaking ? 0.035f : 0.10f);
+            if (!onGround) baseSpeed *= 0.35f; // Air control
+
+            velocity.x += moveX * baseSpeed;
+            velocity.z += moveZ * baseSpeed;
+
+            // Jump Impulse (Vanilla 0.42 height impulse on dry land)
+            if (jump && onGround) {
+                velocity.y = JUMP_IMPULSE;
+                if (isSprinting) {
+                    velocity.x += forwardX * 0.20f;
+                    velocity.z += forwardZ * 0.20f;
+                } else if (forward) {
+                    velocity.x += forwardX * 0.10f;
+                    velocity.z += forwardZ * 0.10f;
+                }
+                onGround = false;
+            }
+
+            // Gravity & Vertical Drag (Air/Ground)
             velocity.y = (velocity.y - GRAVITY) * DRAG_Y;
         }
 
-        // 4. Move & Collide with Voxel Terrain (Y first, then X and Z with continuous step-up)
+        // 3. Move & Collide with Voxel Terrain (Y first, then X and Z with continuous step-up)
         moveWithCollision(world, velocity.x, velocity.y, velocity.z, inWater);
 
-        // Apply Horizontal Friction
+        // Apply Horizontal Friction / Fluid Resistance
         velocity.x *= friction;
         velocity.z *= friction;
 
@@ -272,6 +287,11 @@ public class Player {
             }
         }
 
+        // 6. Hurt animation timer decay
+        if (hurtTime > 0) {
+            hurtTime--;
+        }
+
         // Void Damage
         if (pos.y < -10) {
             takeDamage(20);
@@ -279,7 +299,10 @@ public class Player {
     }
 
     public void takeDamage(int amount) {
+        if (amount <= 0) return;
         health -= amount;
+        hurtTime = maxHurtTime;
+        hurtAngle = (Math.random() < 0.5) ? -14.0f : 14.0f;
         if (health <= 0) {
             health = 0;
             isDead = true;

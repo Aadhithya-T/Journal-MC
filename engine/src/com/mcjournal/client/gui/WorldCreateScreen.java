@@ -4,7 +4,7 @@ import com.mcjournal.client.MCJournalApp;
 
 public class WorldCreateScreen extends Screen {
     private String worldName = "New Adventure";
-    private final String gameMode = "Hardcore"; // Hardcore Permadeath
+    private final String gameMode = "Hardcore";
     private long seed = System.currentTimeMillis() % 1000000L;
     private float cursorTimer = 0.0f;
 
@@ -16,20 +16,20 @@ public class WorldCreateScreen extends Screen {
     public void init(int width, int height) {
         super.init(width, height);
 
-        int totalBtnW = 400;
+        int totalBtnW = 420;
         int centerX = (width - totalBtnW) / 2;
-        int btnW = (totalBtnW - 8) / 2; // 196px each
-        int btnH = 38;
-        int bottomY = height - 56;
+        int btnW = (totalBtnW - 12) / 2; // 204px each
+        int btnH = 40;
+        int bottomY = height - 58;
 
-        // 1. Create Hardcore World Button (Left)
+        // 1. Create World Button (Left)
         buttons.add(new Button(1, "Create New World", centerX, bottomY, btnW, btnH, () -> {
             String finalName = worldName.trim().isEmpty() ? "New Adventure" : worldName.trim();
             app.enterWorld(seed, finalName, "Multi-Biome", null);
         }));
 
         // 2. Cancel Button (Right)
-        buttons.add(new Button(2, "Cancel", centerX + btnW + 8, bottomY, btnW, btnH, () -> {
+        buttons.add(new Button(2, "Cancel", centerX + btnW + 12, bottomY, btnW, btnH, () -> {
             app.setScreen(new WorldSelectScreen(app));
         }));
     }
@@ -38,59 +38,74 @@ public class WorldCreateScreen extends Screen {
     public void render(GuiRenderer gui, FontRenderer font, double mouseX, double mouseY, float deltaTime) {
         cursorTimer += deltaTime * 2.0f;
 
-        // 1. Dark translucent slate background with header/footer strips
-        gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.40f);
-        gui.drawMenuHeaderFooterStrips(width, height, 64, 82);
+        // 1. Dark translucent backdrop with header and footer strips
+        gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.45f);
+        gui.drawMenuHeaderFooterStrips(width, height, 64, 76);
 
-        // 2. Header Title (Centered with comfortable top margin)
+        // 2. Header Title (Centered in top header strip)
         String title = "Create New World";
-        float titleW = font.getStringWidth(title, 1.20f);
-        font.drawString(gui, title, (width - titleW) / 2.0f, 16, 1.20f, 0xffffff, true);
+        float titleScale = 1.20f;
+        float titleW = font.getStringWidth(title, titleScale);
+        float titleH = font.getFontHeight(titleScale);
+        font.drawString(gui, title, (width - titleW) / 2.0f, (64 - titleH) / 2.0f, titleScale, 0xffffff, true);
 
-        // 3. Form Cards Container (Centered horizontally, 500px wide for spacious breathing room)
-        int boxW = Math.min(500, width - 48);
+        // 3. Form Layout & Meaningful Vertical Justification
+        int boxW = Math.min(520, width - 48);
         int centerX = (width - boxW) / 2;
-        int startY = 82;
 
-        // --- SECTION 1: World Name Input Box ---
-        font.drawString(gui, "World Name", centerX, startY, 0.80f, 0xaaaaaa, true);
-        int nameInputY = startY + 18;
-        int nameInputH = 32;
+        int headerH = 64;
+        int footerH = 76;
+        int availableH = height - headerH - footerH;
 
-        gui.drawRect(centerX - 1, nameInputY - 1, boxW + 2, nameInputH + 2, 0.65f, 0.65f, 0.65f, 1.0f);
-        gui.drawRect(centerX, nameInputY, boxW, nameInputH, 0.0f, 0.0f, 0.0f, 1.0f);
+        // Section Dimensions
+        int labelH = 16;
+        int labelGap = 6;
+        int cardH = 38;
+        int sectionH = labelH + labelGap + cardH; // 60px per section
+        int sectionGap = 24; // Generous breathing room between sections
+        int totalFormH = sectionH * 4 + sectionGap * 3; // 4 sections = ~312px
+
+        // Centered start position within the available middle region
+        int startY = Math.max(headerH + 20, headerH + (availableH - totalFormH) / 2);
+
+        // --- SECTION 1: World Name ---
+        int s1Y = startY;
+        font.drawString(gui, "World Name", centerX, s1Y, 0.82f, 0xaaaaaa, true);
+        int nameBoxY = s1Y + labelH + labelGap;
+        gui.drawRect(centerX - 1, nameBoxY - 1, boxW + 2, cardH + 2, 0.65f, 0.65f, 0.65f, 1.0f);
+        gui.drawRect(centerX, nameBoxY, boxW, cardH, 0.0f, 0.0f, 0.0f, 1.0f);
 
         String displayName = worldName + ((int) cursorTimer % 2 == 0 ? "_" : "");
-        float nameScale = 0.85f;
-        float nameFontH = font.getFontHeight(nameScale);
-        float nameTextY = nameInputY + (nameInputH - nameFontH) / 2.0f;
-        font.drawString(gui, displayName, centerX + 10, nameTextY, nameScale, 0xffffff, false);
+        float nameScale = 0.88f;
+        float nameTextH = font.getFontHeight(nameScale);
+        font.drawString(gui, displayName, centerX + 12, nameBoxY + (cardH - nameTextH) / 2.0f, nameScale, 0xffffff, false);
 
-        // --- SECTION 2: Game Mode Display Card (Matching dark stone styling) ---
-        int modeY = nameInputY + nameInputH + 12;
-        font.drawString(gui, "Game Mode", centerX, modeY, 0.80f, 0xaaaaaa, true);
-        int modeCardY = modeY + 18;
-        int modeCardH = 52;
+        // --- SECTION 2: Game Mode (Locked at Hardcore, no extra subtext) ---
+        int s2Y = nameBoxY + cardH + sectionGap;
+        font.drawString(gui, "Game Mode", centerX, s2Y, 0.82f, 0xaaaaaa, true);
+        int modeBoxY = s2Y + labelH + labelGap;
+        gui.drawBevelBox(centerX, modeBoxY, boxW, cardH, 0x18181c, 0x585860, 0x222226);
+        float modeScale = 0.88f;
+        float modeTextH = font.getFontHeight(modeScale);
+        font.drawString(gui, "Game Mode: Hardcore", centerX + 14, modeBoxY + (cardH - modeTextH) / 2.0f, modeScale, 0xffffff, true);
 
-        gui.drawBevelBox(centerX, modeCardY, boxW, modeCardH, 0x18181c, 0x585860, 0x222226);
-        font.drawString(gui, "Game Mode: Hardcore", centerX + 14, modeCardY + 10, 0.88f, 0xffffff, true);
-        font.drawString(gui, "Locked at hardest difficulty. Permadeath (1 Life).", centerX + 14, modeCardY + 28, 0.70f, 0xaaaaaa, false);
+        // --- SECTION 3: World Type ---
+        int s3Y = modeBoxY + cardH + sectionGap;
+        font.drawString(gui, "World Type", centerX, s3Y, 0.82f, 0xaaaaaa, true);
+        int typeBoxY = s3Y + labelH + labelGap;
+        gui.drawBevelBox(centerX, typeBoxY, boxW, cardH, 0x18181c, 0x585860, 0x222226);
+        float typeScale = 0.88f;
+        float typeTextH = font.getFontHeight(typeScale);
+        font.drawString(gui, "World Type: Multi-Biome", centerX + 14, typeBoxY + (cardH - typeTextH) / 2.0f, typeScale, 0xdddddd, true);
 
-        // --- SECTION 3: World Type Info Card ---
-        int typeY = modeCardY + modeCardH + 12;
-        font.drawString(gui, "World Type", centerX, typeY, 0.80f, 0xaaaaaa, true);
-        int typeCardY = typeY + 18;
-        int typeCardH = 40;
-
-        gui.drawBevelBox(centerX, typeCardY, boxW, typeCardH, 0x18181c, 0x585860, 0x222226);
-        font.drawString(gui, "World Type: Multi-Biome (1.17 Extended)", centerX + 14, typeCardY + 11, 0.80f, 0xdddddd, true);
-
-        // --- SECTION 4: Seed Info Card ---
-        int seedY = typeCardY + typeCardH + 10;
-        int seedCardH = 38;
-
-        gui.drawBevelBox(centerX, seedY, boxW, seedCardH, 0x141418, 0x484850, 0x1c1c20);
-        font.drawString(gui, "Seed: " + seed + " (Height: 256, 500+ Chunks)", centerX + 14, seedY + 10, 0.76f, 0x999999, false);
+        // --- SECTION 4: Seed (Seed number only) ---
+        int s4Y = typeBoxY + cardH + sectionGap;
+        font.drawString(gui, "Seed", centerX, s4Y, 0.82f, 0xaaaaaa, true);
+        int seedBoxY = s4Y + labelH + labelGap;
+        gui.drawBevelBox(centerX, seedBoxY, boxW, cardH, 0x141418, 0x484850, 0x1c1c20);
+        float seedScale = 0.88f;
+        float seedTextH = font.getFontHeight(seedScale);
+        font.drawString(gui, "Seed: " + seed, centerX + 14, seedBoxY + (cardH - seedTextH) / 2.0f, seedScale, 0xcccccc, false);
 
         // 4. Render Action Buttons
         super.render(gui, font, mouseX, mouseY, deltaTime);

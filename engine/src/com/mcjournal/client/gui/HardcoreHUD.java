@@ -366,6 +366,10 @@ public class HardcoreHUD {
     }
 
     public void render(GuiRenderer gui, FontRenderer font, Player player, int screenWidth, int screenHeight, String biomeName, int atlasTextureId) {
+        render(gui, font, player, screenWidth, screenHeight, biomeName, atlasTextureId, 60, true, 0, 0);
+    }
+
+    public void render(GuiRenderer gui, FontRenderer font, Player player, int screenWidth, int screenHeight, String biomeName, int atlasTextureId, int fps, boolean showFps, int renderedChunks, int loadedChunks) {
         int centerX = screenWidth / 2;
 
         // 1. Crosshair in Screen Center
@@ -425,9 +429,9 @@ public class HardcoreHUD {
             int heartX = hotbarX + h * iconSpacing;
             int heartY = statsY;
 
-            // Low-health heartbeat jitter (Authentic Minecraft feel)
-            if (player.health <= 4 && (h % 2 == 0)) {
-                heartY += ((System.currentTimeMillis() / 80 + h) % 2 == 0) ? -2 : 0;
+            // Low-health heartbeat jitter OR damage jitter (Authentic Minecraft feel)
+            if ((player.health <= 4 && (h % 2 == 0)) || (player.hurtTime > 0)) {
+                heartY += ((System.currentTimeMillis() / 70 + h) % 2 == 0) ? -2 : 2;
             }
 
             // Always draw dark hardcore container backing
@@ -470,8 +474,21 @@ public class HardcoreHUD {
         String posStr = String.format("XYZ: %.1f / %.1f / %.1f", player.pos.x, player.pos.y, player.pos.z);
         font.drawString(gui, posStr, 12, 12, 0.85f, 0xffffff, true);
 
+        int cx = Math.floorDiv((int) Math.floor(player.pos.x), 16);
+        int cz = Math.floorDiv((int) Math.floor(player.pos.z), 16);
+        String chunkStr = (loadedChunks > 0)
+            ? String.format("Chunk: %d, %d (C: %d/%d)", cx, cz, renderedChunks, loadedChunks)
+            : String.format("Chunk: %d, %d", cx, cz);
+        font.drawString(gui, chunkStr, 12, 30, 0.70f, 0xaaaaaa, true);
+
         String modeStr = "Mode: HARDCORE | Biome: " + biomeName;
-        font.drawString(gui, modeStr, 12, 32, 0.75f, 0xff5555, true);
+        font.drawString(gui, modeStr, 12, 48, 0.75f, 0xff5555, true);
+
+        if (showFps) {
+            String fpsStr = fps + " FPS";
+            int fpsCol = (fps >= 50) ? 0x55ff55 : (fps >= 30 ? 0xffff55 : 0xff5555);
+            font.drawString(gui, fpsStr, 12, 66, 0.75f, fpsCol, true);
+        }
     }
 
     private void drawBlockItemInSlot(GuiRenderer gui, int atlasTextureId, byte blockType, float slotX, float hotbarY, float slotSize) {
