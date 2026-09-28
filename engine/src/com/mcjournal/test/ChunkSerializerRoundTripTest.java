@@ -161,14 +161,19 @@ public class ChunkSerializerRoundTripTest {
             assert deserialized.getBlockState(4, 64, 4).is(Blocks.WATER) : "Expected WATER";
             assert deserialized.getBlockState(5, 64, 5).get(BlockProperties.AXIS) == Axis.Z : "Expected axis=Z";
 
-            // Verify Version 2 is default and smaller/equal
-            byte[] v2Bytes = ChunkSerializer.serialize(chunk);
+            // Verify Version 2 and Version 3 (current) paletted serialization
+            byte[] v2Bytes = ChunkSerializer.serialize(chunk, ChunkSerializer.FORMAT_VERSION_V2);
             assert v2Bytes[0] == 2 : "Expected format version 2 in header";
             Chunk v2Deserialized = ChunkSerializer.deserialize(v2Bytes);
             assert v2Deserialized.getBlockState(3, 64, 3).is(Blocks.DIAMOND_ORE);
             assert v2Deserialized.getBlockState(5, 64, 5).get(BlockProperties.AXIS) == Axis.Z;
 
-            System.out.println(" PASSED (V1: " + v1Bytes.length + " bytes, V2 Paletted: " + v2Bytes.length + " bytes)");
+            byte[] currentBytes = ChunkSerializer.serialize(chunk);
+            assert currentBytes[0] == ChunkSerializer.CURRENT_FORMAT_VERSION : "Expected current format version in header";
+            Chunk currentDeserialized = ChunkSerializer.deserialize(currentBytes);
+            assert currentDeserialized.getBlockState(3, 64, 3).is(Blocks.DIAMOND_ORE);
+
+            System.out.println(" PASSED (V1: " + v1Bytes.length + " bytes, V2/V3 Paletted: " + currentBytes.length + " bytes)");
         } catch (IOException e) {
             throw new RuntimeException("V1 backward compatibility test failed", e);
         }

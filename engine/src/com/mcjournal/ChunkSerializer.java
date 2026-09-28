@@ -15,7 +15,9 @@ import java.util.zip.InflaterInputStream;
  */
 public class ChunkSerializer {
     public static final byte FORMAT_VERSION_V1 = 1;
-    public static final byte CURRENT_FORMAT_VERSION = 2;
+    public static final byte FORMAT_VERSION_V2 = 2;
+    public static final byte FORMAT_VERSION_V3 = 3;
+    public static final byte CURRENT_FORMAT_VERSION = FORMAT_VERSION_V3;
 
     public static byte[] serialize(Chunk chunk) throws IOException {
         return serialize(chunk, CURRENT_FORMAT_VERSION);
@@ -24,8 +26,8 @@ public class ChunkSerializer {
     public static byte[] serialize(Chunk chunk, byte version) throws IOException {
         if (version == FORMAT_VERSION_V1) {
             return serializeV1(chunk);
-        } else if (version == CURRENT_FORMAT_VERSION) {
-            return serializeV2(chunk);
+        } else if (version == FORMAT_VERSION_V2 || version == FORMAT_VERSION_V3) {
+            return serializePaletted(chunk, version);
         } else {
             throw new IllegalArgumentException("Unsupported chunk serialization version: " + version);
         }
@@ -59,11 +61,11 @@ public class ChunkSerializer {
         return baos.toByteArray();
     }
 
-    private static byte[] serializeV2(Chunk chunk) throws IOException {
+    private static byte[] serializePaletted(Chunk chunk, byte version) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
         DataOutputStream dos = new DataOutputStream(baos);
 
-        dos.writeByte(CURRENT_FORMAT_VERSION);
+        dos.writeByte(version);
         dos.writeInt(chunk.getCx());
         dos.writeInt(chunk.getCz());
 
@@ -130,7 +132,7 @@ public class ChunkSerializer {
 
         if (version == FORMAT_VERSION_V1) {
             return deserializeV1(dis);
-        } else if (version == CURRENT_FORMAT_VERSION) {
+        } else if (version == FORMAT_VERSION_V2 || version == FORMAT_VERSION_V3) {
             return deserializeV2(dis);
         } else {
             throw new IOException("Unsupported chunk format version: " + version);

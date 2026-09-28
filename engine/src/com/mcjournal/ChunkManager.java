@@ -579,6 +579,10 @@ public class ChunkManager {
         persistence.saveAllDirty(chunks.values());
     }
 
+    public java.util.concurrent.CompletableFuture<Void> saveAllModifiedChunksAsync() {
+        return persistence.saveAllDirtyAsync(chunks.values());
+    }
+
     public void shutdown() {
         saveAllModifiedChunks();
         chunkWorkers.shutdownNow();

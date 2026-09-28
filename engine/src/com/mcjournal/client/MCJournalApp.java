@@ -197,7 +197,7 @@ public class MCJournalApp {
                 currentSeed,
                 player,
                 this.worldTimeTicks,
-                chunkManager != null ? chunkManager.getModifiedBlockStatesAsStringMap() : null
+                chunkManager
             );
             this.isInWorld = false;
         }
@@ -314,7 +314,7 @@ public class MCJournalApp {
             camera.setPitch(0);
 
             // Immediately save initial state
-            WorldSaveManager.saveWorld(worldName, biome, seed, player, this.worldTimeTicks, null);
+            WorldSaveManager.saveWorld(worldName, biome, seed, player, this.worldTimeTicks, chunkManager);
             System.out.println("[MCJournalApp] 🚀 Spawned into fresh Hardcore World at Y=" + spawnY + "!");
         }
 
@@ -797,7 +797,7 @@ public class MCJournalApp {
                 currentSeed,
                 player,
                 this.worldTimeTicks,
-                chunkManager != null ? chunkManager.getModifiedBlockStatesAsStringMap() : null
+                chunkManager
             );
         }
         if (chunkShader != null) chunkShader.cleanup();
