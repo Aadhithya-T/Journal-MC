@@ -2,6 +2,7 @@
 
 in vec3 vWorldPos;
 in vec2 vUV;
+in vec2 vTileBase;
 in vec3 vColor;
 in vec3 vNormal;
 in float vFogDist;
@@ -17,6 +18,7 @@ uniform float uFogEnd;
 uniform vec3 uCameraPos;
 uniform float uTime;
 uniform int uIsWater;
+uniform int uIsCutout;
 uniform int uIsUnderwater;
 uniform float uExposure;
 uniform int uDebugMode;
@@ -34,11 +36,26 @@ uniform float uAoMinClamp;
 out vec4 fragColor;
 
 void main() {
-    // 1. Texture Sample (Hardware decodes sRGB -> Linear RGB via GL_SRGB8_ALPHA8)
-    vec4 texColor = texture(uAtlas, vUV);
+    // 1. Texture Sample with Greedy Sub-Tile Atlas Wrapping & Seam-free Mipmapping
+    vec4 texColor;
+    if (vTileBase.x <= 0.00001 && vTileBase.y <= 0.00001) {
+        texColor = texture(uAtlas, vUV);
+    } else {
+        vec2 localUV = fract(vUV);
+        // Top-face de-tiling rotation on upward-facing surfaces (Stone, Dirt, Sand, Cobble)
+        if (vNormal.y > 0.8) {
+            int rot = abs(int(floor(vWorldPos.x)) * 374761393 + int(floor(vWorldPos.z)) * 668265263) & 3;
+            if (rot == 1) localUV = vec2(localUV.y, 1.0 - localUV.x);
+            else if (rot == 2) localUV = vec2(1.0 - localUV.x, 1.0 - localUV.y);
+            else if (rot == 3) localUV = vec2(1.0 - localUV.y, localUV.x);
+        }
+        vec2 atlasUV = vTileBase + localUV * (1.0 / 8.0);
+        texColor = textureGrad(uAtlas, atlasUV, dFdx(vUV) * (1.0 / 8.0), dFdy(vUV) * (1.0 / 8.0));
+    }
     
     // Strict Alpha Cutout for Foliage / Leaves (Binary 0 or 255 alpha)
-    if (uIsWater == 0 && texColor.a < 0.5) {
+    // Opaque Solid pass (uIsCutout == 0) disables discard to enable Hardware Early-Z
+    if (uIsCutout == 1 && texColor.a < 0.5) {
         discard;
     }
 

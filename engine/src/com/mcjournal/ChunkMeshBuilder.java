@@ -1,385 +1,373 @@
 package com.mcjournal;
 
 import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
 import com.mcjournal.block.Blocks;
 
+/**
+ * Builds chunk meshes separated into distinct channels with indexed interleaved geometry:
+ * - SolidMesh: Opaque voxels with 2D greedy meshing and ambient occlusion
+ * - CutoutMesh: Alpha-tested cross foliage and leaves
+ * - WaterMesh: Translucent fluids with Beer-Lambert depth and shoreline optics
+ *
+ * Each channel produces an interleaved float array (13 floats per vertex) and an index array (int[]).
+ */
 public class ChunkMeshBuilder {
 
-    public static class MeshData {
-        public float[] solidPositions;
-        public float[] solidNormals;
-        public float[] solidUvs;
-        public float[] solidColors;
+    private static final ThreadLocal<GreedySliceMesher> SLICE_MESHER =
+        ThreadLocal.withInitial(GreedySliceMesher::new);
 
-        public float[] waterPositions;
-        public float[] waterNormals;
-        public float[] waterUvs;
-        public float[] waterColors;
+    public static class MeshData {
+        // Interleaved indexed geometry (P4.1 & P4.2)
+        public final float[] solidVertices;
+        public final int[] solidIndices;
+
+        public final float[] cutoutVertices;
+        public final int[] cutoutIndices;
+
+        public final float[] waterVertices;
+        public final int[] waterIndices;
+
+        // Legacy unindexed arrays (100% backward compatibility)
+        public final float[] solidPositions;
+        public final float[] solidNormals;
+        public final float[] solidUvs;
+        public final float[] solidColors;
+
+        public final float[] cutoutPositions;
+        public final float[] cutoutNormals;
+        public final float[] cutoutUvs;
+        public final float[] cutoutColors;
+
+        public final float[] waterPositions;
+        public final float[] waterNormals;
+        public final float[] waterUvs;
+        public final float[] waterColors;
 
         public MeshData(
+            float[] solidVertices, int[] solidIndices,
+            float[] cutoutVertices, int[] cutoutIndices,
+            float[] waterVertices, int[] waterIndices,
             float[] solidPositions, float[] solidNormals, float[] solidUvs, float[] solidColors,
+            float[] cutoutPositions, float[] cutoutNormals, float[] cutoutUvs, float[] cutoutColors,
             float[] waterPositions, float[] waterNormals, float[] waterUvs, float[] waterColors
         ) {
-            this.solidPositions = solidPositions;
-            this.solidNormals = solidNormals;
-            this.solidUvs = solidUvs;
-            this.solidColors = solidColors;
-            this.waterPositions = waterPositions;
-            this.waterNormals = waterNormals;
-            this.waterUvs = waterUvs;
-            this.waterColors = waterColors;
+            this.solidVertices = solidVertices != null ? solidVertices : new float[0];
+            this.solidIndices = solidIndices != null ? solidIndices : new int[0];
+            this.cutoutVertices = cutoutVertices != null ? cutoutVertices : new float[0];
+            this.cutoutIndices = cutoutIndices != null ? cutoutIndices : new int[0];
+            this.waterVertices = waterVertices != null ? waterVertices : new float[0];
+            this.waterIndices = waterIndices != null ? waterIndices : new int[0];
+
+            this.solidPositions = solidPositions != null ? solidPositions : new float[0];
+            this.solidNormals = solidNormals != null ? solidNormals : new float[0];
+            this.solidUvs = solidUvs != null ? solidUvs : new float[0];
+            this.solidColors = solidColors != null ? solidColors : new float[0];
+
+            this.cutoutPositions = cutoutPositions != null ? cutoutPositions : new float[0];
+            this.cutoutNormals = cutoutNormals != null ? cutoutNormals : new float[0];
+            this.cutoutUvs = cutoutUvs != null ? cutoutUvs : new float[0];
+            this.cutoutColors = cutoutColors != null ? cutoutColors : new float[0];
+
+            this.waterPositions = waterPositions != null ? waterPositions : new float[0];
+            this.waterNormals = waterNormals != null ? waterNormals : new float[0];
+            this.waterUvs = waterUvs != null ? waterUvs : new float[0];
+            this.waterColors = waterColors != null ? waterColors : new float[0];
+        }
+
+        public int getTotalBytes() {
+            int vertexBytes = (solidVertices.length + cutoutVertices.length + waterVertices.length) * Float.BYTES;
+            int indexBytes = (solidIndices.length + cutoutIndices.length + waterIndices.length) * Integer.BYTES;
+            return vertexBytes + indexBytes;
+        }
+
+        public boolean isEmpty() {
+            return solidIndices.length == 0 && cutoutIndices.length == 0 && waterIndices.length == 0;
         }
     }
 
-    private static class FaceDef {
-        int[] dir;
-        float[] norm;
-        float baseShade;
-        int[] uAxis;
-        int[] vAxis;
-        int[][] corners;
-        int[][] cornerOffsets;
-
-        FaceDef(int[] dir, float[] norm, float baseShade, int[] uAxis, int[] vAxis, int[][] corners, int[][] cornerOffsets) {
-            this.dir = dir;
-            this.norm = norm;
-            this.baseShade = baseShade;
-            this.uAxis = uAxis;
-            this.vAxis = vAxis;
-            this.corners = corners;
-            this.cornerOffsets = cornerOffsets;
-        }
-    }
-
-    private static final FaceDef[] FACES = new FaceDef[] {
+    private static final int[][][] CUBE_CORNERS = new int[][][] {
         // 0: Right (+X)
-        new FaceDef(
-            new int[]{1, 0, 0}, new float[]{1, 0, 0}, 0.75f,
-            new int[]{0, 0, 1}, new int[]{0, 1, 0},
-            new int[][]{{1, 0, 1}, {1, 0, 0}, {1, 1, 0}, {1, 1, 1}},
-            new int[][]{{1, -1}, {-1, -1}, {-1, 1}, {1, 1}}
-        ),
+        {{1, 0, 1}, {1, 0, 0}, {1, 1, 0}, {1, 1, 1}},
         // 1: Left (-X)
-        new FaceDef(
-            new int[]{-1, 0, 0}, new float[]{-1, 0, 0}, 0.75f,
-            new int[]{0, 0, -1}, new int[]{0, 1, 0},
-            new int[][]{{0, 0, 0}, {0, 0, 1}, {0, 1, 1}, {0, 1, 0}},
-            new int[][]{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}
-        ),
+        {{0, 0, 0}, {0, 0, 1}, {0, 1, 1}, {0, 1, 0}},
         // 2: Top (+Y)
-        new FaceDef(
-            new int[]{0, 1, 0}, new float[]{0, 1, 0}, 1.0f,
-            new int[]{1, 0, 0}, new int[]{0, 0, 1},
-            new int[][]{{0, 1, 1}, {1, 1, 1}, {1, 1, 0}, {0, 1, 0}},
-            new int[][]{{-1, 1}, {1, 1}, {1, -1}, {-1, -1}}
-        ),
+        {{0, 1, 1}, {1, 1, 1}, {1, 1, 0}, {0, 1, 0}},
         // 3: Bottom (-Y)
-        new FaceDef(
-            new int[]{0, -1, 0}, new float[]{0, -1, 0}, 0.55f,
-            new int[]{1, 0, 0}, new int[]{0, 0, -1},
-            new int[][]{{0, 0, 0}, {1, 0, 0}, {1, 0, 1}, {0, 0, 1}},
-            new int[][]{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}
-        ),
+        {{0, 0, 0}, {1, 0, 0}, {1, 0, 1}, {0, 0, 1}},
         // 4: Front (+Z)
-        new FaceDef(
-            new int[]{0, 0, 1}, new float[]{0, 0, 1}, 0.85f,
-            new int[]{-1, 0, 0}, new int[]{0, 1, 0},
-            new int[][]{{0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1}},
-            new int[][]{{1, -1}, {-1, -1}, {-1, 1}, {1, 1}}
-        ),
+        {{0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1}},
         // 5: Back (-Z)
-        new FaceDef(
-            new int[]{0, 0, -1}, new float[]{0, 0, -1}, 0.85f,
-            new int[]{1, 0, 0}, new int[]{0, 1, 0},
-            new int[][]{{1, 0, 0}, {0, 0, 0}, {0, 1, 0}, {1, 1, 0}},
-            new int[][]{{1, -1}, {-1, -1}, {-1, 1}, {1, 1}}
-        )
+        {{1, 0, 0}, {0, 0, 0}, {0, 1, 0}, {1, 1, 0}}
     };
 
-    private static final float[] AO_CURVE = new float[]{1.0f, 0.78f, 0.58f, 0.42f};
-    private static final int GRID_SIZE = 8; // 8x8 Atlas Grid
-
-    private static float[] getUVBounds(int slotIndex) {
-        int col = slotIndex % GRID_SIZE;
-        int row = slotIndex / GRID_SIZE;
-
-        float totalWidth = GRID_SIZE * 64.0f;
-        float eps = 0.5f / totalWidth;
-
-        float uMin = (float) col / GRID_SIZE + eps;
-        float uMax = (float) (col + 1) / GRID_SIZE - eps;
-        float vMin = 1.0f - (float) (row + 1) / GRID_SIZE + eps;
-        float vMax = 1.0f - (float) row / GRID_SIZE - eps;
-
-        return new float[]{uMin, uMax, vMin, vMax};
-    }
-
-    private static int getBlockFaceSlot(BlockState state, int faceIndex) {
-        return state.getFaceTextureSlot(faceIndex);
-    }
-
-    private static boolean isTransparent(BlockState state) {
-        return state.isTransparent();
-    }
-
-    private static float computeVertexAO(ChunkManager manager, int x, int y, int z, FaceDef face, int uSign, int vSign) {
-        int fx = x + face.dir[0];
-        int fy = y + face.dir[1];
-        int fz = z + face.dir[2];
-
-        int u1 = face.uAxis[0] * uSign;
-        int u2 = face.uAxis[1] * uSign;
-        int u3 = face.uAxis[2] * uSign;
-
-        int v1 = face.vAxis[0] * vSign;
-        int v2 = face.vAxis[1] * vSign;
-        int v3 = face.vAxis[2] * vSign;
-
-        boolean s1 = isAOSolid(manager, fx + u1, fy + u2, fz + u3);
-        boolean s2 = isAOSolid(manager, fx + v1, fy + v2, fz + v3);
-        boolean corner = isAOSolid(manager, fx + u1 + v1, fy + u2 + v2, fz + u3 + v3);
-
-        int occlusion = 0;
-        if (s1) occlusion++;
-        if (s2) occlusion++;
-        if (s1 && s2) {
-            occlusion++;
-        } else if (corner) {
-            occlusion++;
-        }
-
-        return AO_CURVE[Math.min(3, occlusion)];
-    }
-
-    private static boolean isAOSolid(ChunkManager manager, int wx, int wy, int wz) {
-        BlockState state = manager.getBlockStateAt(wx, wy, wz);
-        return state.isSolid() && !state.is(com.mcjournal.block.Blocks.OAK_LEAVES) && !state.is(com.mcjournal.block.Blocks.BIRCH_LEAVES);
-    }
-
-    private static float computeWaterColumnDepth(ChunkManager manager, int wx, int y, int wz) {
-        int depth = 1;
-        for (int dy = 1; dy <= 16; dy++) {
-            int checkY = y - dy;
-            if (checkY < 0) break;
-            BlockState state = manager.getBlockStateAt(wx, checkY, wz);
-            if (state.is(com.mcjournal.block.Blocks.WATER)) {
-                depth++;
-            } else {
-                break;
-            }
-        }
-        return (float) depth;
-    }
-
-    private static float computeWaterShoreline(ChunkManager manager, int wx, int y, int wz) {
-        if (manager.getBlockStateAt(wx + 1, y, wz).isSolid() ||
-            manager.getBlockStateAt(wx - 1, y, wz).isSolid() ||
-            manager.getBlockStateAt(wx, y, wz + 1).isSolid() ||
-            manager.getBlockStateAt(wx, y, wz - 1).isSolid()) {
-            return 1.0f;
-        }
-        return 0.0f;
-    }
-
     public static MeshData buildMesh(Chunk chunk, ChunkManager manager) {
+        return buildMesh(ChunkNeighborhood.of(chunk, manager));
+    }
+
+    public static MeshData buildMesh(ChunkNeighborhood neighborhood) {
+        // Interleaved lists (stride 13: pos(3), uv(4), col(3), norm(3))
+        FloatArrayList solidVerts = new FloatArrayList(16384);
+        IntArrayList solidIndices = new IntArrayList(8192);
+
+        FloatArrayList cutoutVerts = new FloatArrayList(4096);
+        IntArrayList cutoutIndices = new IntArrayList(2048);
+
+        FloatArrayList waterVerts = new FloatArrayList(4096);
+        IntArrayList waterIndices = new IntArrayList(2048);
+
+        // Legacy compatibility lists
         FloatArrayList solidPos = new FloatArrayList(16384);
         FloatArrayList solidNorm = new FloatArrayList(16384);
-        FloatArrayList solidUv = new FloatArrayList(16384);
+        FloatArrayList solidUv = new FloatArrayList(21845);
         FloatArrayList solidCol = new FloatArrayList(16384);
+
+        FloatArrayList cutoutPos = new FloatArrayList(4096);
+        FloatArrayList cutoutNorm = new FloatArrayList(4096);
+        FloatArrayList cutoutUv = new FloatArrayList(5461);
+        FloatArrayList cutoutCol = new FloatArrayList(4096);
 
         FloatArrayList waterPos = new FloatArrayList(4096);
         FloatArrayList waterNorm = new FloatArrayList(4096);
-        FloatArrayList waterUv = new FloatArrayList(4096);
+        FloatArrayList waterUv = new FloatArrayList(5461);
         FloatArrayList waterCol = new FloatArrayList(4096);
 
-        int worldOriginX = chunk.getCx() * Chunk.SIZE;
-        int worldOriginZ = chunk.getCz() * Chunk.SIZE;
+        // 1. OPAQUE SOLID PASS — Full 2D Greedy Meshing with Ambient Occlusion & Indexed Geometry
+        GreedySliceMesher mesher = SLICE_MESHER.get();
+        mesher.meshSolid(neighborhood, solidVerts, solidIndices, solidPos, solidUv, solidNorm, solidCol);
+
+        // 2. CUTOUT & FLUID PASS — Foliage Cross-Quads, Leaves & Water Surfaces
+        int cx = neighborhood.getCenterCx();
+        int cz = neighborhood.getCenterCz();
+        int worldOriginX = cx * Chunk.SIZE;
+        int worldOriginZ = cz * Chunk.SIZE;
 
         for (int y = 0; y < Chunk.HEIGHT; y++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 for (int x = 0; x < Chunk.SIZE; x++) {
-                    BlockState block = chunk.getBlockState(x, y, z);
-                    if (block.isAir()) continue;
+                    int stateId = neighborhood.getStateId(x, y, z);
+                    if (stateId == 0) continue;
 
+                    BlockState block = BlockStateRegistry.getStateById(stateId);
                     int wx = worldOriginX + x;
                     int wz = worldOriginZ + z;
 
-                    // 1. Cross-Foliage (Tall Grass, Poppy, Dandelion)
+                    // A. Cross-Foliage (Tall Grass, Poppy, Dandelion)
                     if (block.isPlant()) {
-                        buildCrossFoliage(chunk, x, y, z, wx, wz, block.getLegacyId(), solidPos, solidNorm, solidUv, solidCol);
+                        buildCrossFoliage(neighborhood, x, y, z, wx, wz, block,
+                            cutoutVerts, cutoutIndices, cutoutPos, cutoutNorm, cutoutUv, cutoutCol);
                         continue;
                     }
 
-                    // 2. Voxel Cube Faces
-                    for (int f = 0; f < 6; f++) {
-                        FaceDef face = FACES[f];
-                        int nx = wx + face.dir[0];
-                        int ny = y + face.dir[1];
-                        int nz = wz + face.dir[2];
+                    // B. Cutout Leaves (Oak Leaves, Birch Leaves)
+                    if (block.is(Blocks.OAK_LEAVES) || block.is(Blocks.BIRCH_LEAVES)) {
+                        buildLeafBlock(neighborhood, x, y, z, wx, wz, block,
+                            cutoutVerts, cutoutIndices, cutoutPos, cutoutNorm, cutoutUv, cutoutCol);
+                        continue;
+                    }
 
-                        BlockState neighbor = manager.getBlockStateAt(nx, ny, nz);
-
-                        boolean isWater = block.is(com.mcjournal.block.Blocks.WATER);
-                        boolean shouldDrawFace;
-
-                        if (isWater) {
-                            shouldDrawFace = (!neighbor.is(com.mcjournal.block.Blocks.WATER) && isTransparent(neighbor));
-                        } else if (block.is(com.mcjournal.block.Blocks.OAK_LEAVES) || block.is(com.mcjournal.block.Blocks.BIRCH_LEAVES)) {
-                            shouldDrawFace = (!neighbor.is(block.getBlock()) && isTransparent(neighbor));
-                        } else {
-                            shouldDrawFace = isTransparent(neighbor);
-                        }
-
-                        if (shouldDrawFace) {
-                            int slot = getBlockFaceSlot(block, f);
-                            float[] uvBounds = getUVBounds(slot);
-                            float uMin = uvBounds[0], uMax = uvBounds[1], vMin = uvBounds[2], vMax = uvBounds[3];
-
-                            // Texture De-Tiling Rotation on Top Faces
-                            float[] uv0 = {uMin, vMin}, uv1 = {uMax, vMin}, uv2 = {uMax, vMax}, uv3 = {uMin, vMax};
-                            if (f == 2 && (block.is(com.mcjournal.block.Blocks.STONE) || block.is(com.mcjournal.block.Blocks.DIRT) || block.is(com.mcjournal.block.Blocks.SAND) || block.is(com.mcjournal.block.Blocks.BEDROCK) || block.is(com.mcjournal.block.Blocks.COBBLESTONE))) {
-                                int rot = Math.abs((wx * 374761393 + wz * 668265263) ^ (chunk.getCx() * 31 + chunk.getCz())) % 4;
-                                if (rot == 1) {
-                                    uv0 = new float[]{uMax, vMin}; uv1 = new float[]{uMax, vMax}; uv2 = new float[]{uMin, vMax}; uv3 = new float[]{uMin, vMin};
-                                } else if (rot == 2) {
-                                    uv0 = new float[]{uMax, vMax}; uv1 = new float[]{uMin, vMax}; uv2 = new float[]{uMin, vMin}; uv3 = new float[]{uMax, vMin};
-                                } else if (rot == 3) {
-                                    uv0 = new float[]{uMin, vMax}; uv1 = new float[]{uMin, vMin}; uv2 = new float[]{uMax, vMin}; uv3 = new float[]{uMax, vMax};
-                                }
-                            }
-
-                            // 4 Corners
-                            int[][] c = face.corners;
-                            float yOffset = isWater ? -0.1f : 0.0f;
-
-                            float[] v0 = {wx + c[0][0], y + c[0][1] + yOffset, wz + c[0][2]};
-                            float[] v1 = {wx + c[1][0], y + c[1][1] + yOffset, wz + c[1][2]};
-                            float[] v2 = {wx + c[2][0], y + c[2][1] + yOffset, wz + c[2][2]};
-                            float[] v3 = {wx + c[3][0], y + c[3][1] + yOffset, wz + c[3][2]};
-
-                            // Ambient Occlusion / Water Optical Parameters
-                            float s0, s1, s2, s3;
-                            float g0 = 0, g1 = 0, g2 = 0, g3 = 0;
-                            float b0 = 0, b1 = 0, b2 = 0, b3 = 0;
-
-                            if (isWater) {
-                                s0 = computeWaterColumnDepth(manager, wx + c[0][0], y, wz + c[0][2]) / 8.0f;
-                                s1 = computeWaterColumnDepth(manager, wx + c[1][0], y, wz + c[1][2]) / 8.0f;
-                                s2 = computeWaterColumnDepth(manager, wx + c[2][0], y, wz + c[2][2]) / 8.0f;
-                                s3 = computeWaterColumnDepth(manager, wx + c[3][0], y, wz + c[3][2]) / 8.0f;
-
-                                g0 = computeWaterShoreline(manager, wx + c[0][0], y, wz + c[0][2]);
-                                g1 = computeWaterShoreline(manager, wx + c[1][0], y, wz + c[1][2]);
-                                g2 = computeWaterShoreline(manager, wx + c[2][0], y, wz + c[2][2]);
-                                g3 = computeWaterShoreline(manager, wx + c[3][0], y, wz + c[3][2]);
-                            } else {
-                                float ao0 = computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[0][0], face.cornerOffsets[0][1]);
-                                float ao1 = computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[1][0], face.cornerOffsets[1][1]);
-                                float ao2 = computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[2][0], face.cornerOffsets[2][1]);
-                                float ao3 = computeVertexAO(manager, wx, y, wz, face, face.cornerOffsets[3][0], face.cornerOffsets[3][1]);
-
-                                s0 = g0 = b0 = ao0;
-                                s1 = g1 = b1 = ao1;
-                                s2 = g2 = b2 = ao2;
-                                s3 = g3 = b3 = ao3;
-                            }
-
-                            FloatArrayList targetPos = isWater ? waterPos : solidPos;
-                            FloatArrayList targetNorm = isWater ? waterNorm : solidNorm;
-                            FloatArrayList targetUv = isWater ? waterUv : solidUv;
-                            FloatArrayList targetCol = isWater ? waterCol : solidCol;
-
-                            // Triangulation
-                            if (s0 + s2 > s1 + s3) {
-                                // Triangle 1 (v0, v1, v2)
-                                targetPos.add9(v0[0], v0[1], v0[2], v1[0], v1[1], v1[2], v2[0], v2[1], v2[2]);
-                                targetNorm.add9(face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2]);
-                                targetUv.add6(uv0[0], uv0[1], uv1[0], uv1[1], uv2[0], uv2[1]);
-                                targetCol.add9(s0, g0, b0, s1, g1, b1, s2, g2, b2);
-
-                                // Triangle 2 (v0, v2, v3)
-                                targetPos.add9(v0[0], v0[1], v0[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]);
-                                targetNorm.add9(face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2]);
-                                targetUv.add6(uv0[0], uv0[1], uv2[0], uv2[1], uv3[0], uv3[1]);
-                                targetCol.add9(s0, g0, b0, s2, g2, b2, s3, g3, b3);
-                            } else {
-                                // Triangle 1 (v1, v2, v3)
-                                targetPos.add9(v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2]);
-                                targetNorm.add9(face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2]);
-                                targetUv.add6(uv1[0], uv1[1], uv2[0], uv2[1], uv3[0], uv3[1]);
-                                targetCol.add9(s1, g1, b1, s2, g2, b2, s3, g3, b3);
-
-                                // Triangle 2 (v1, v3, v0)
-                                targetPos.add9(v1[0], v1[1], v1[2], v3[0], v3[1], v3[2], v0[0], v0[1], v0[2]);
-                                targetNorm.add9(face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2], face.norm[0], face.norm[1], face.norm[2]);
-                                targetUv.add6(uv1[0], uv1[1], uv3[0], uv3[1], uv0[0], uv0[1]);
-                                targetCol.add9(s1, g1, b1, s3, g3, b3, s0, g0, b0);
-                            }
-                        }
+                    // C. Water Surface
+                    if (block.is(Blocks.WATER)) {
+                        buildWaterBlock(neighborhood, x, y, z, wx, wz, block,
+                            waterVerts, waterIndices, waterPos, waterNorm, waterUv, waterCol);
                     }
                 }
             }
         }
 
         return new MeshData(
+            solidVerts.toArray(), solidIndices.toArray(),
+            cutoutVerts.toArray(), cutoutIndices.toArray(),
+            waterVerts.toArray(), waterIndices.toArray(),
             solidPos.toArray(), solidNorm.toArray(), solidUv.toArray(), solidCol.toArray(),
+            cutoutPos.toArray(), cutoutNorm.toArray(), cutoutUv.toArray(), cutoutCol.toArray(),
             waterPos.toArray(), waterNorm.toArray(), waterUv.toArray(), waterCol.toArray()
         );
     }
 
-    private static void buildCrossFoliage(
-        Chunk chunk, int x, int y, int z, int wx, int wz, byte block,
+    private static void buildLeafBlock(
+        ChunkNeighborhood neighborhood, int x, int y, int z, int wx, int wz, BlockState block,
+        FloatArrayList verts, IntArrayList indices,
         FloatArrayList pos, FloatArrayList norm, FloatArrayList uv, FloatArrayList col
     ) {
-        int slot = Block.getBlockFaceSlot(block, 0);
-        float[] uvBounds = getUVBounds(slot);
-        float uMin = uvBounds[0], uMax = uvBounds[1], vMin = uvBounds[2], vMax = uvBounds[3];
+        int slot = block.getFaceTextureSlot(0);
+        float[] tileBounds = GreedySliceMesher.getTileBounds(slot);
+        float uTileMin = tileBounds[0];
+        float vTileMin = tileBounds[2];
 
-        int hash = Math.abs((wx * 127 + wz * 311) ^ (chunk.getCx() * 53 + chunk.getCz() * 17));
+        for (int f = 0; f < 6; f++) {
+            GreedySliceMesher.FaceDef face = GreedySliceMesher.FACES[f];
+            int nx = x + face.dir[0];
+            int ny = y + face.dir[1];
+            int nz = z + face.dir[2];
+
+            int neighborId = neighborhood.getStateId(nx, ny, nz);
+            BlockState neighbor = BlockStateRegistry.getStateById(neighborId);
+
+            if (!neighbor.is(block.getBlock()) && neighborhood.isTransparent(nx, ny, nz)) {
+                int[][] c = CUBE_CORNERS[f];
+                float x0 = wx + c[0][0], y0 = y + c[0][1], z0 = wz + c[0][2];
+                float x1 = wx + c[1][0], y1 = y + c[1][1], z1 = wz + c[1][2];
+                float x2 = wx + c[2][0], y2 = y + c[2][1], z2 = wz + c[2][2];
+                float x3 = wx + c[3][0], y3 = y + c[3][1], z3 = wz + c[3][2];
+
+                float fnx = face.norm[0], fny = face.norm[1], fnz = face.norm[2];
+
+                // 1. Indexed interleaved vertices (4 vertices, 6 indices)
+                int base = verts.size() / 13;
+                verts.add13(x0, y0, z0, 0, 0, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, fnx, fny, fnz);
+                verts.add13(x1, y1, z1, 1, 0, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, fnx, fny, fnz);
+                verts.add13(x2, y2, z2, 1, 1, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, fnx, fny, fnz);
+                verts.add13(x3, y3, z3, 0, 1, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, fnx, fny, fnz);
+
+                indices.add6(base, base + 1, base + 2, base, base + 2, base + 3);
+
+                // 2. Legacy arrays
+                if (pos != null) {
+                    pos.add9(x0, y0, z0, x1, y1, z1, x2, y2, z2);
+                    norm.add9(fnx, fny, fnz, fnx, fny, fnz, fnx, fny, fnz);
+                    uv.add12(0, 0, uTileMin, vTileMin, 1, 0, uTileMin, vTileMin, 1, 1, uTileMin, vTileMin);
+                    col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+
+                    pos.add9(x0, y0, z0, x2, y2, z2, x3, y3, z3);
+                    norm.add9(fnx, fny, fnz, fnx, fny, fnz, fnx, fny, fnz);
+                    uv.add12(0, 0, uTileMin, vTileMin, 1, 1, uTileMin, vTileMin, 0, 1, uTileMin, vTileMin);
+                    col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+                }
+            }
+        }
+    }
+
+    private static void buildWaterBlock(
+        ChunkNeighborhood neighborhood, int x, int y, int z, int wx, int wz, BlockState block,
+        FloatArrayList verts, IntArrayList indices,
+        FloatArrayList pos, FloatArrayList norm, FloatArrayList uv, FloatArrayList col
+    ) {
+        for (int f = 0; f < 6; f++) {
+            GreedySliceMesher.FaceDef face = GreedySliceMesher.FACES[f];
+            int nx = x + face.dir[0];
+            int ny = y + face.dir[1];
+            int nz = z + face.dir[2];
+
+            int neighborId = neighborhood.getStateId(nx, ny, nz);
+            BlockState neighbor = BlockStateRegistry.getStateById(neighborId);
+
+            if (!neighbor.is(Blocks.WATER) && neighborhood.isTransparent(nx, ny, nz)) {
+                int[][] c = CUBE_CORNERS[f];
+                float yOffset = -0.1f; // Slight Y offset for water surface
+
+                float x0 = wx + c[0][0], y0 = y + c[0][1] + yOffset, z0 = wz + c[0][2];
+                float x1 = wx + c[1][0], y1 = y + c[1][1] + yOffset, z1 = wz + c[1][2];
+                float x2 = wx + c[2][0], y2 = y + c[2][1] + yOffset, z2 = wz + c[2][2];
+                float x3 = wx + c[3][0], y3 = y + c[3][1] + yOffset, z3 = wz + c[3][2];
+
+                float s0 = neighborhood.computeWaterColumnDepth(x + c[0][0], y, z + c[0][2]) / 8.0f;
+                float s1 = neighborhood.computeWaterColumnDepth(x + c[1][0], y, z + c[1][2]) / 8.0f;
+                float s2 = neighborhood.computeWaterColumnDepth(x + c[2][0], y, z + c[2][2]) / 8.0f;
+                float s3 = neighborhood.computeWaterColumnDepth(x + c[3][0], y, z + c[3][2]) / 8.0f;
+
+                float g0 = neighborhood.computeWaterShoreline(x + c[0][0], y, z + c[0][2]);
+                float g1 = neighborhood.computeWaterShoreline(x + c[1][0], y, z + c[1][2]);
+                float g2 = neighborhood.computeWaterShoreline(x + c[2][0], y, z + c[2][2]);
+                float g3 = neighborhood.computeWaterShoreline(x + c[3][0], y, z + c[3][2]);
+
+                float fnx = face.norm[0], fny = face.norm[1], fnz = face.norm[2];
+
+                // 1. Indexed interleaved vertices (4 vertices, 6 indices)
+                int base = verts.size() / 13;
+                verts.add13(x0, y0, z0, 0, 0, 0, 0, s0, g0, 0, fnx, fny, fnz);
+                verts.add13(x1, y1, z1, 1, 0, 0, 0, s1, g1, 0, fnx, fny, fnz);
+                verts.add13(x2, y2, z2, 1, 1, 0, 0, s2, g2, 0, fnx, fny, fnz);
+                verts.add13(x3, y3, z3, 0, 1, 0, 0, s3, g3, 0, fnx, fny, fnz);
+
+                indices.add6(base, base + 1, base + 2, base, base + 2, base + 3);
+
+                // 2. Legacy arrays
+                if (pos != null) {
+                    pos.add9(x0, y0, z0, x1, y1, z1, x2, y2, z2);
+                    norm.add9(fnx, fny, fnz, fnx, fny, fnz, fnx, fny, fnz);
+                    uv.add12(0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0);
+                    col.add9(s0, g0, 0, s1, g1, 0, s2, g2, 0);
+
+                    pos.add9(x0, y0, z0, x2, y2, z2, x3, y3, z3);
+                    norm.add9(fnx, fny, fnz, fnx, fny, fnz, fnx, fny, fnz);
+                    uv.add12(0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0);
+                    col.add9(s0, g0, 0, s2, g2, 0, s3, g3, 0);
+                }
+            }
+        }
+    }
+
+    private static void buildCrossFoliage(
+        ChunkNeighborhood neighborhood, int x, int y, int z, int wx, int wz, BlockState block,
+        FloatArrayList verts, IntArrayList indices,
+        FloatArrayList pos, FloatArrayList norm, FloatArrayList uv, FloatArrayList col
+    ) {
+        int slot = block.getFaceTextureSlot(0);
+        float[] tileBounds = GreedySliceMesher.getTileBounds(slot);
+        float uTileMin = tileBounds[0];
+        float vTileMin = tileBounds[2];
+
+        int cx = neighborhood.getCenterCx();
+        int cz = neighborhood.getCenterCz();
+        int hash = Math.abs((wx * 127 + wz * 311) ^ (cx * 53 + cz * 17));
         float jitterX = (((hash % 100) / 100.0f) - 0.5f) * 0.38f;
         float jitterZ = ((((hash >> 3) % 100) / 100.0f) - 0.5f) * 0.38f;
 
         float w = 0.5f;
         float h = 0.92f;
-        float cx = wx + 0.5f + jitterX;
-        float cz = wz + 0.5f + jitterZ;
+        float fx = wx + 0.5f + jitterX;
+        float fz = wz + 0.5f + jitterZ;
 
         // Diagonal 1
-        addFoliageQuad(cx - w, y, cz - w, cx + w, y, cz + w, cx + w, y + h, cz + w, cx - w, y + h, cz - w, uMin, uMax, vMin, vMax, pos, norm, uv, col);
+        addFoliageQuad(fx - w, y, fz - w, fx + w, y, fz + w, fx + w, y + h, fz + w, fx - w, y + h, fz - w,
+            uTileMin, vTileMin, verts, indices, pos, norm, uv, col);
         // Diagonal 2
-        addFoliageQuad(cx - w, y, cz + w, cx + w, y, cz - w, cx + w, y + h, cz - w, cx - w, y + h, cz + w, uMin, uMax, vMin, vMax, pos, norm, uv, col);
+        addFoliageQuad(fx - w, y, fz + w, fx + w, y, fz - w, fx + w, y + h, fz - w, fx - w, y + h, fz + w,
+            uTileMin, vTileMin, verts, indices, pos, norm, uv, col);
     }
 
     private static void addFoliageQuad(
         float x0, float y0, float z0, float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3,
-        float uMin, float uMax, float vMin, float vMax,
+        float uTileMin, float vTileMin,
+        FloatArrayList verts, IntArrayList indices,
         FloatArrayList pos, FloatArrayList norm, FloatArrayList uv, FloatArrayList col
     ) {
         // Front Face
-        pos.add9(x0, y0, z0, x1, y1, z1, x2, y2, z2);
-        pos.add9(x0, y0, z0, x2, y2, z2, x3, y3, z3);
+        int base1 = verts.size() / 13;
+        verts.add13(x0, y0, z0, 0, 0, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, 0, 1, 0);
+        verts.add13(x1, y1, z1, 1, 0, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, 0, 1, 0);
+        verts.add13(x2, y2, z2, 1, 1, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, 0, 1, 0);
+        verts.add13(x3, y3, z3, 0, 1, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, 0, 1, 0);
+        indices.add6(base1, base1 + 1, base1 + 2, base1, base1 + 2, base1 + 3);
 
-        norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
-        norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
+        // Back Face
+        int base2 = verts.size() / 13;
+        verts.add13(x2, y2, z2, 1, 1, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, 0, 1, 0);
+        verts.add13(x1, y1, z1, 1, 0, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, 0, 1, 0);
+        verts.add13(x0, y0, z0, 0, 0, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, 0, 1, 0);
+        verts.add13(x3, y3, z3, 0, 1, uTileMin, vTileMin, 1.0f, 1.0f, 1.0f, 0, 1, 0);
+        indices.add6(base2, base2 + 1, base2 + 2, base2, base2 + 2, base2 + 3);
 
-        uv.add6(uMin, vMin, uMax, vMin, uMax, vMax);
-        uv.add6(uMin, vMin, uMax, vMax, uMin, vMax);
+        if (pos != null) {
+            pos.add9(x0, y0, z0, x1, y1, z1, x2, y2, z2);
+            pos.add9(x0, y0, z0, x2, y2, z2, x3, y3, z3);
+            norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
+            norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
+            uv.add12(0, 0, uTileMin, vTileMin, 1, 0, uTileMin, vTileMin, 1, 1, uTileMin, vTileMin);
+            uv.add12(0, 0, uTileMin, vTileMin, 1, 1, uTileMin, vTileMin, 0, 1, uTileMin, vTileMin);
+            col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+            col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
 
-        col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
-        col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
-
-        // Back Face (Double-sided cross-foliage for 360-degree visibility)
-        pos.add9(x2, y2, z2, x1, y1, z1, x0, y0, z0);
-        pos.add9(x3, y3, z3, x2, y2, z2, x0, y0, z0);
-
-        norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
-        norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
-
-        uv.add6(uMax, vMax, uMax, vMin, uMin, vMin);
-        uv.add6(uMin, vMax, uMax, vMax, uMin, vMin);
-
-        col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
-        col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+            pos.add9(x2, y2, z2, x1, y1, z1, x0, y0, z0);
+            pos.add9(x3, y3, z3, x2, y2, z2, x0, y0, z0);
+            norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
+            norm.add9(0, 1, 0, 0, 1, 0, 0, 1, 0);
+            uv.add12(1, 1, uTileMin, vTileMin, 1, 0, uTileMin, vTileMin, 0, 0, uTileMin, vTileMin);
+            uv.add12(0, 1, uTileMin, vTileMin, 1, 1, uTileMin, vTileMin, 0, 0, uTileMin, vTileMin);
+            col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+            col.add9(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+        }
     }
 
     public static class FloatArrayList {
@@ -421,8 +409,72 @@ public class ChunkMeshBuilder {
             data[size++] = f7; data[size++] = f8; data[size++] = f9;
         }
 
+        public void add12(float f1, float f2, float f3, float f4, float f5, float f6,
+                          float f7, float f8, float f9, float f10, float f11, float f12) {
+            if (size + 12 >= data.length) {
+                float[] next = new float[Math.max(data.length * 2, size + 12)];
+                System.arraycopy(data, 0, next, 0, data.length);
+                data = next;
+            }
+            data[size++] = f1;  data[size++] = f2;  data[size++] = f3;  data[size++] = f4;
+            data[size++] = f5;  data[size++] = f6;  data[size++] = f7;  data[size++] = f8;
+            data[size++] = f9;  data[size++] = f10; data[size++] = f11; data[size++] = f12;
+        }
+
+        public void add13(float f1, float f2, float f3, float f4, float f5, float f6,
+                          float f7, float f8, float f9, float f10, float f11, float f12, float f13) {
+            if (size + 13 >= data.length) {
+                float[] next = new float[Math.max(data.length * 2, size + 13)];
+                System.arraycopy(data, 0, next, 0, data.length);
+                data = next;
+            }
+            data[size++] = f1;  data[size++] = f2;  data[size++] = f3;  data[size++] = f4;
+            data[size++] = f5;  data[size++] = f6;  data[size++] = f7;  data[size++] = f8;
+            data[size++] = f9;  data[size++] = f10; data[size++] = f11; data[size++] = f12;
+            data[size++] = f13;
+        }
+
         public float[] toArray() {
             float[] result = new float[size];
+            System.arraycopy(data, 0, result, 0, size);
+            return result;
+        }
+
+        public int size() {
+            return size;
+        }
+    }
+
+    public static class IntArrayList {
+        private int[] data;
+        private int size;
+
+        public IntArrayList(int capacity) {
+            this.data = new int[capacity];
+            this.size = 0;
+        }
+
+        public void add(int val) {
+            if (size == data.length) {
+                int[] next = new int[data.length * 2];
+                System.arraycopy(data, 0, next, 0, data.length);
+                data = next;
+            }
+            data[size++] = val;
+        }
+
+        public void add6(int i1, int i2, int i3, int i4, int i5, int i6) {
+            if (size + 6 >= data.length) {
+                int[] next = new int[Math.max(data.length * 2, size + 6)];
+                System.arraycopy(data, 0, next, 0, data.length);
+                data = next;
+            }
+            data[size++] = i1; data[size++] = i2; data[size++] = i3;
+            data[size++] = i4; data[size++] = i5; data[size++] = i6;
+        }
+
+        public int[] toArray() {
+            int[] result = new int[size];
             System.arraycopy(data, 0, result, 0, size);
             return result;
         }

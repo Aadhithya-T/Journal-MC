@@ -5,6 +5,9 @@ import com.mcjournal.ChunkMeshBuilder;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -16,40 +19,47 @@ import static org.lwjgl.opengl.GL30.*;
 public class ChunkRenderer {
     public static class GPUChunkMesh {
         public int solidVao = 0;
-        public int solidVboPos = 0;
-        public int solidVboUv = 0;
-        public int solidVboCol = 0;
-        public int solidVboNorm = 0;
-        public int solidVertexCount = 0;
+        public int solidVbo = 0;
+        public int solidEbo = 0;
+        public int solidIndexCount = 0;
+
+        public int cutoutVao = 0;
+        public int cutoutVbo = 0;
+        public int cutoutEbo = 0;
+        public int cutoutIndexCount = 0;
 
         public int waterVao = 0;
-        public int waterVboPos = 0;
-        public int waterVboUv = 0;
-        public int waterVboCol = 0;
-        public int waterVboNorm = 0;
-        public int waterVertexCount = 0;
+        public int waterVbo = 0;
+        public int waterEbo = 0;
+        public int waterIndexCount = 0;
+
+        public boolean isEmpty() {
+            return solidIndexCount == 0 && cutoutIndexCount == 0 && waterIndexCount == 0;
+        }
 
         public void cleanup() {
             if (solidVao != 0) glDeleteVertexArrays(solidVao);
-            if (solidVboPos != 0) glDeleteBuffers(solidVboPos);
-            if (solidVboUv != 0) glDeleteBuffers(solidVboUv);
-            if (solidVboCol != 0) glDeleteBuffers(solidVboCol);
-            if (solidVboNorm != 0) glDeleteBuffers(solidVboNorm);
+            if (solidVbo != 0) glDeleteBuffers(solidVbo);
+            if (solidEbo != 0) glDeleteBuffers(solidEbo);
+
+            if (cutoutVao != 0) glDeleteVertexArrays(cutoutVao);
+            if (cutoutVbo != 0) glDeleteBuffers(cutoutVbo);
+            if (cutoutEbo != 0) glDeleteBuffers(cutoutEbo);
 
             if (waterVao != 0) glDeleteVertexArrays(waterVao);
-            if (waterVboPos != 0) glDeleteBuffers(waterVboPos);
-            if (waterVboUv != 0) glDeleteBuffers(waterVboUv);
-            if (waterVboCol != 0) glDeleteBuffers(waterVboCol);
-            if (waterVboNorm != 0) glDeleteBuffers(waterVboNorm);
+            if (waterVbo != 0) glDeleteBuffers(waterVbo);
+            if (waterEbo != 0) glDeleteBuffers(waterEbo);
 
-            solidVao = waterVao = 0;
-            solidVboPos = solidVboUv = solidVboCol = solidVboNorm = 0;
-            waterVboPos = waterVboUv = waterVboCol = waterVboNorm = 0;
-            solidVertexCount = waterVertexCount = 0;
+            solidVao = cutoutVao = waterVao = 0;
+            solidVbo = cutoutVbo = waterVbo = 0;
+            solidEbo = cutoutEbo = waterEbo = 0;
+            solidIndexCount = cutoutIndexCount = waterIndexCount = 0;
         }
     }
 
     private final Map<ChunkPos, GPUChunkMesh> meshes = new ConcurrentHashMap<>();
+    private final List<ChunkPos> visibleChunks = new ArrayList<>(256);
+    private int lastRenderedChunks = 0;
 
     public void uploadChunkMesh(int cx, int cz, ChunkMeshBuilder.MeshData meshData) {
         uploadChunkMesh(new ChunkPos(cx, cz), meshData);
@@ -59,140 +69,179 @@ public class ChunkRenderer {
         if (meshData == null) return;
         GPUChunkMesh mesh = meshes.computeIfAbsent(pos, k -> new GPUChunkMesh());
 
-        // Upload Solid Mesh
-        if (meshData.solidPositions != null && meshData.solidPositions.length > 0) {
+        int stride = 13 * Float.BYTES; // 52 bytes per interleaved vertex
+
+        // 1. Upload Solid Mesh (Interleaved VBO + EBO)
+        if (meshData.solidVertices != null && meshData.solidVertices.length > 0
+            && meshData.solidIndices != null && meshData.solidIndices.length > 0) {
             if (mesh.solidVao == 0) mesh.solidVao = glGenVertexArrays();
             glBindVertexArray(mesh.solidVao);
 
-            mesh.solidVertexCount = meshData.solidPositions.length / 3;
+            if (mesh.solidVbo == 0) mesh.solidVbo = glGenBuffers();
+            glBindBuffer(GL_ARRAY_BUFFER, mesh.solidVbo);
+            FloatBuffer vBuf = MemoryUtil.memAllocFloat(meshData.solidVertices.length);
+            vBuf.put(meshData.solidVertices).flip();
+            glBufferData(GL_ARRAY_BUFFER, vBuf, GL_STATIC_DRAW);
+            MemoryUtil.memFree(vBuf);
 
-            // 1. Positions (Location 0)
-            if (mesh.solidVboPos == 0) mesh.solidVboPos = glGenBuffers();
-            glBindBuffer(GL_ARRAY_BUFFER, mesh.solidVboPos);
-            FloatBuffer posBuf = MemoryUtil.memAllocFloat(meshData.solidPositions.length);
-            posBuf.put(meshData.solidPositions).flip();
-            glBufferData(GL_ARRAY_BUFFER, posBuf, GL_STATIC_DRAW);
-            glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+            // 0: Pos (vec3) -> offset 0
+            glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
             glEnableVertexAttribArray(0);
-            MemoryUtil.memFree(posBuf);
 
-            // 2. UVs (Location 1)
-            if (mesh.solidVboUv == 0) mesh.solidVboUv = glGenBuffers();
-            glBindBuffer(GL_ARRAY_BUFFER, mesh.solidVboUv);
-            FloatBuffer uvBuf = MemoryUtil.memAllocFloat(meshData.solidUvs.length);
-            uvBuf.put(meshData.solidUvs).flip();
-            glBufferData(GL_ARRAY_BUFFER, uvBuf, GL_STATIC_DRAW);
-            glVertexAttribPointer(1, 2, GL_FLOAT, false, 0, 0);
+            // 1: UV (vec4) -> offset 12 bytes
+            glVertexAttribPointer(1, 4, GL_FLOAT, false, stride, 3 * Float.BYTES);
             glEnableVertexAttribArray(1);
-            MemoryUtil.memFree(uvBuf);
 
-            // 3. Colors / AO (Location 2)
-            if (mesh.solidVboCol == 0) mesh.solidVboCol = glGenBuffers();
-            glBindBuffer(GL_ARRAY_BUFFER, mesh.solidVboCol);
-            FloatBuffer colBuf = MemoryUtil.memAllocFloat(meshData.solidColors.length);
-            colBuf.put(meshData.solidColors).flip();
-            glBufferData(GL_ARRAY_BUFFER, colBuf, GL_STATIC_DRAW);
-            glVertexAttribPointer(2, 3, GL_FLOAT, false, 0, 0);
+            // 2: Color / AO (vec3) -> offset 28 bytes
+            glVertexAttribPointer(2, 3, GL_FLOAT, false, stride, 7 * Float.BYTES);
             glEnableVertexAttribArray(2);
-            MemoryUtil.memFree(colBuf);
 
-            // 4. Normals (Location 3)
-            if (meshData.solidNormals != null && meshData.solidNormals.length > 0) {
-                if (mesh.solidVboNorm == 0) mesh.solidVboNorm = glGenBuffers();
-                glBindBuffer(GL_ARRAY_BUFFER, mesh.solidVboNorm);
-                FloatBuffer normBuf = MemoryUtil.memAllocFloat(meshData.solidNormals.length);
-                normBuf.put(meshData.solidNormals).flip();
-                glBufferData(GL_ARRAY_BUFFER, normBuf, GL_STATIC_DRAW);
-                glVertexAttribPointer(3, 3, GL_FLOAT, false, 0, 0);
-                glEnableVertexAttribArray(3);
-                MemoryUtil.memFree(normBuf);
-            }
+            // 3: Normal (vec3) -> offset 40 bytes
+            glVertexAttribPointer(3, 3, GL_FLOAT, false, stride, 10 * Float.BYTES);
+            glEnableVertexAttribArray(3);
 
+            // EBO (Index Buffer)
+            if (mesh.solidEbo == 0) mesh.solidEbo = glGenBuffers();
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.solidEbo);
+            IntBuffer iBuf = MemoryUtil.memAllocInt(meshData.solidIndices.length);
+            iBuf.put(meshData.solidIndices).flip();
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, iBuf, GL_STATIC_DRAW);
+            MemoryUtil.memFree(iBuf);
+
+            mesh.solidIndexCount = meshData.solidIndices.length;
             glBindVertexArray(0);
         } else {
-            mesh.solidVertexCount = 0;
+            mesh.solidIndexCount = 0;
         }
 
-        // Upload Water Mesh
-        if (meshData.waterPositions != null && meshData.waterPositions.length > 0) {
+        // 2. Upload Cutout Mesh (Cross Foliage & Leaves)
+        if (meshData.cutoutVertices != null && meshData.cutoutVertices.length > 0
+            && meshData.cutoutIndices != null && meshData.cutoutIndices.length > 0) {
+            if (mesh.cutoutVao == 0) mesh.cutoutVao = glGenVertexArrays();
+            glBindVertexArray(mesh.cutoutVao);
+
+            if (mesh.cutoutVbo == 0) mesh.cutoutVbo = glGenBuffers();
+            glBindBuffer(GL_ARRAY_BUFFER, mesh.cutoutVbo);
+            FloatBuffer vBuf = MemoryUtil.memAllocFloat(meshData.cutoutVertices.length);
+            vBuf.put(meshData.cutoutVertices).flip();
+            glBufferData(GL_ARRAY_BUFFER, vBuf, GL_STATIC_DRAW);
+            MemoryUtil.memFree(vBuf);
+
+            glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
+            glEnableVertexAttribArray(0);
+
+            glVertexAttribPointer(1, 4, GL_FLOAT, false, stride, 3 * Float.BYTES);
+            glEnableVertexAttribArray(1);
+
+            glVertexAttribPointer(2, 3, GL_FLOAT, false, stride, 7 * Float.BYTES);
+            glEnableVertexAttribArray(2);
+
+            glVertexAttribPointer(3, 3, GL_FLOAT, false, stride, 10 * Float.BYTES);
+            glEnableVertexAttribArray(3);
+
+            if (mesh.cutoutEbo == 0) mesh.cutoutEbo = glGenBuffers();
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.cutoutEbo);
+            IntBuffer iBuf = MemoryUtil.memAllocInt(meshData.cutoutIndices.length);
+            iBuf.put(meshData.cutoutIndices).flip();
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, iBuf, GL_STATIC_DRAW);
+            MemoryUtil.memFree(iBuf);
+
+            mesh.cutoutIndexCount = meshData.cutoutIndices.length;
+            glBindVertexArray(0);
+        } else {
+            mesh.cutoutIndexCount = 0;
+        }
+
+        // 3. Upload Water Mesh (Translucent Fluids)
+        if (meshData.waterVertices != null && meshData.waterVertices.length > 0
+            && meshData.waterIndices != null && meshData.waterIndices.length > 0) {
             if (mesh.waterVao == 0) mesh.waterVao = glGenVertexArrays();
             glBindVertexArray(mesh.waterVao);
 
-            mesh.waterVertexCount = meshData.waterPositions.length / 3;
+            if (mesh.waterVbo == 0) mesh.waterVbo = glGenBuffers();
+            glBindBuffer(GL_ARRAY_BUFFER, mesh.waterVbo);
+            FloatBuffer vBuf = MemoryUtil.memAllocFloat(meshData.waterVertices.length);
+            vBuf.put(meshData.waterVertices).flip();
+            glBufferData(GL_ARRAY_BUFFER, vBuf, GL_STATIC_DRAW);
+            MemoryUtil.memFree(vBuf);
 
-            // 1. Positions (Location 0)
-            if (mesh.waterVboPos == 0) mesh.waterVboPos = glGenBuffers();
-            glBindBuffer(GL_ARRAY_BUFFER, mesh.waterVboPos);
-            FloatBuffer posBuf = MemoryUtil.memAllocFloat(meshData.waterPositions.length);
-            posBuf.put(meshData.waterPositions).flip();
-            glBufferData(GL_ARRAY_BUFFER, posBuf, GL_STATIC_DRAW);
-            glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
             glEnableVertexAttribArray(0);
-            MemoryUtil.memFree(posBuf);
 
-            // 2. UVs (Location 1)
-            if (mesh.waterVboUv == 0) mesh.waterVboUv = glGenBuffers();
-            glBindBuffer(GL_ARRAY_BUFFER, mesh.waterVboUv);
-            FloatBuffer uvBuf = MemoryUtil.memAllocFloat(meshData.waterUvs.length);
-            uvBuf.put(meshData.waterUvs).flip();
-            glBufferData(GL_ARRAY_BUFFER, uvBuf, GL_STATIC_DRAW);
-            glVertexAttribPointer(1, 2, GL_FLOAT, false, 0, 0);
+            glVertexAttribPointer(1, 4, GL_FLOAT, false, stride, 3 * Float.BYTES);
             glEnableVertexAttribArray(1);
-            MemoryUtil.memFree(uvBuf);
 
-            // 3. Colors / AO (Location 2)
-            if (mesh.waterVboCol == 0) mesh.waterVboCol = glGenBuffers();
-            glBindBuffer(GL_ARRAY_BUFFER, mesh.waterVboCol);
-            FloatBuffer colBuf = MemoryUtil.memAllocFloat(meshData.waterColors.length);
-            colBuf.put(meshData.waterColors).flip();
-            glBufferData(GL_ARRAY_BUFFER, colBuf, GL_STATIC_DRAW);
-            glVertexAttribPointer(2, 3, GL_FLOAT, false, 0, 0);
+            glVertexAttribPointer(2, 3, GL_FLOAT, false, stride, 7 * Float.BYTES);
             glEnableVertexAttribArray(2);
-            MemoryUtil.memFree(colBuf);
 
-            // 4. Normals (Location 3)
-            if (meshData.waterNormals != null && meshData.waterNormals.length > 0) {
-                if (mesh.waterVboNorm == 0) mesh.waterVboNorm = glGenBuffers();
-                glBindBuffer(GL_ARRAY_BUFFER, mesh.waterVboNorm);
-                FloatBuffer normBuf = MemoryUtil.memAllocFloat(meshData.waterNormals.length);
-                normBuf.put(meshData.waterNormals).flip();
-                glBufferData(GL_ARRAY_BUFFER, normBuf, GL_STATIC_DRAW);
-                glVertexAttribPointer(3, 3, GL_FLOAT, false, 0, 0);
-                glEnableVertexAttribArray(3);
-                MemoryUtil.memFree(normBuf);
-            }
+            glVertexAttribPointer(3, 3, GL_FLOAT, false, stride, 10 * Float.BYTES);
+            glEnableVertexAttribArray(3);
 
+            if (mesh.waterEbo == 0) mesh.waterEbo = glGenBuffers();
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.waterEbo);
+            IntBuffer iBuf = MemoryUtil.memAllocInt(meshData.waterIndices.length);
+            iBuf.put(meshData.waterIndices).flip();
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, iBuf, GL_STATIC_DRAW);
+            MemoryUtil.memFree(iBuf);
+
+            mesh.waterIndexCount = meshData.waterIndices.length;
             glBindVertexArray(0);
         } else {
-            mesh.waterVertexCount = 0;
+            mesh.waterIndexCount = 0;
         }
     }
 
-    private int lastRenderedChunks = 0;
+    /**
+     * Updates visibility once per frame using combined radial distance culling and view-frustum testing.
+     * Caches visible chunk positions so subsequent render passes (Solid, Cutout, Water) execute in O(V)
+     * without re-iterating hash maps or re-evaluating frustum planes.
+     */
+    public void updateVisibility(FrustumCuller culler, float camX, float camZ, int renderDistance) {
+        visibleChunks.clear();
+        int camChunkX = Math.floorDiv((int) Math.floor(camX), 16);
+        int camChunkZ = Math.floorDiv((int) Math.floor(camZ), 16);
+        int maxDistSq = (renderDistance + 1) * (renderDistance + 1);
+
+        for (Map.Entry<ChunkPos, GPUChunkMesh> entry : meshes.entrySet()) {
+            ChunkPos pos = entry.getKey();
+            GPUChunkMesh mesh = entry.getValue();
+            if (mesh == null || mesh.isEmpty()) continue;
+
+            // 1. Fast O(1) Radial Distance Culling
+            int dx = pos.x() - camChunkX;
+            int dz = pos.z() - camChunkZ;
+            if (dx * dx + dz * dz > maxDistSq) {
+                continue;
+            }
+
+            // 2. View-Frustum Plane Culling
+            if (culler != null && !culler.isChunkInFrustum(pos.x(), pos.z())) {
+                continue;
+            }
+
+            visibleChunks.add(pos);
+        }
+    }
 
     public int getLastRenderedChunks() {
         return lastRenderedChunks;
     }
 
-    public void renderSolid() {
-        renderSolid(null);
+    public List<ChunkPos> getVisibleChunks() {
+        return visibleChunks;
     }
 
-    public void renderSolid(FrustumCuller culler) {
+    public void renderSolid() {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
 
         int count = 0;
-        for (Map.Entry<ChunkPos, GPUChunkMesh> entry : meshes.entrySet()) {
-            ChunkPos pos = entry.getKey();
-            if (culler != null && !culler.isChunkInFrustum(pos.x(), pos.z())) {
-                continue;
-            }
-
-            GPUChunkMesh mesh = entry.getValue();
-            if (mesh.solidVao != 0 && mesh.solidVertexCount > 0) {
+        for (int i = 0; i < visibleChunks.size(); i++) {
+            ChunkPos pos = visibleChunks.get(i);
+            GPUChunkMesh mesh = meshes.get(pos);
+            if (mesh != null && mesh.solidVao != 0 && mesh.solidIndexCount > 0) {
                 glBindVertexArray(mesh.solidVao);
-                glDrawArrays(GL_TRIANGLES, 0, mesh.solidVertexCount);
+                glDrawElements(GL_TRIANGLES, mesh.solidIndexCount, GL_UNSIGNED_INT, 0);
                 count++;
             }
         }
@@ -200,36 +249,58 @@ public class ChunkRenderer {
         this.lastRenderedChunks = count;
     }
 
-    public void renderWater(boolean isUnderwater) {
-        renderWater(null, isUnderwater);
+    public void renderSolid(FrustumCuller culler) {
+        if (visibleChunks.isEmpty() && culler != null && !meshes.isEmpty()) {
+            updateVisibility(culler, 0, 0, 16);
+        }
+        renderSolid();
     }
 
-    public void renderWater(FrustumCuller culler, boolean isUnderwater) {
+    public void renderCutout() {
+        glDisable(GL_CULL_FACE); // Double-sided visibility for cross foliage
+
+        for (int i = 0; i < visibleChunks.size(); i++) {
+            ChunkPos pos = visibleChunks.get(i);
+            GPUChunkMesh mesh = meshes.get(pos);
+            if (mesh != null && mesh.cutoutVao != 0 && mesh.cutoutIndexCount > 0) {
+                glBindVertexArray(mesh.cutoutVao);
+                glDrawElements(GL_TRIANGLES, mesh.cutoutIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
+        glBindVertexArray(0);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+    }
+
+    public void renderCutout(FrustumCuller culler) {
+        renderCutout();
+    }
+
+    public void renderWater(boolean isUnderwater) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(false);
         if (isUnderwater) {
-            glDisable(GL_CULL_FACE); // Render water ceiling when looking from below
+            glDisable(GL_CULL_FACE);
         } else {
             glEnable(GL_CULL_FACE);
             glCullFace(GL_BACK);
         }
 
-        for (Map.Entry<ChunkPos, GPUChunkMesh> entry : meshes.entrySet()) {
-            ChunkPos pos = entry.getKey();
-            if (culler != null && !culler.isChunkInFrustum(pos.x(), pos.z())) {
-                continue;
-            }
-
-            GPUChunkMesh mesh = entry.getValue();
-            if (mesh.waterVao != 0 && mesh.waterVertexCount > 0) {
+        for (int i = 0; i < visibleChunks.size(); i++) {
+            ChunkPos pos = visibleChunks.get(i);
+            GPUChunkMesh mesh = meshes.get(pos);
+            if (mesh != null && mesh.waterVao != 0 && mesh.waterIndexCount > 0) {
                 glBindVertexArray(mesh.waterVao);
-                glDrawArrays(GL_TRIANGLES, 0, mesh.waterVertexCount);
+                glDrawElements(GL_TRIANGLES, mesh.waterIndexCount, GL_UNSIGNED_INT, 0);
             }
         }
         glBindVertexArray(0);
-
         glDepthMask(true);
+    }
+
+    public void renderWater(FrustumCuller culler, boolean isUnderwater) {
+        renderWater(isUnderwater);
     }
 
     public void unloadChunkMesh(int cx, int cz) {
@@ -252,5 +323,6 @@ public class ChunkRenderer {
             mesh.cleanup();
         }
         meshes.clear();
+        visibleChunks.clear();
     }
 }
