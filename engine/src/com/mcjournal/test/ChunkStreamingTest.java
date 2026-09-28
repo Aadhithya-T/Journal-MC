@@ -31,6 +31,12 @@ public class ChunkStreamingTest {
         // 6. Block State Modification & Unloaded Chunk Delta Retention
         testDeltasOnUnloadedChunks();
 
+        // 7. Direction-Aware Prioritization Tests
+        testDirectionAwarePriority();
+
+        // 8. Primitive State ID Storage Tests
+        testPrimitiveStateIdStorage();
+
         System.out.println("\n🎉 ALL CHUNK STREAMING & PERSISTENCE TESTS PASSED SUCCESSFULLY!");
     }
 
@@ -151,12 +157,22 @@ public class ChunkStreamingTest {
             BlockState surfaceBlock = manager.getBlockStateAt(8, 64, 8);
             assert surfaceBlock != null : "Surface block should not be null";
 
-            // Drain uploads
+            // Drain uploads and verify ChunkStatus
             int uploads = 0;
-            while (manager.pollPendingMeshUpload() != null) {
+            ChunkPos up;
+            while ((up = manager.pollPendingMeshUpload()) != null) {
                 uploads++;
+                assert manager.getChunkStatus(up) == ChunkStatus.MESHED : "Expected MESHED status before GPU upload for " + up;
+                manager.markGpuLoaded(up);
+                assert manager.getChunkStatus(up) == ChunkStatus.GPU_LOADED : "Expected GPU_LOADED status after upload for " + up;
             }
             assert uploads == 25 : "Expected 25 mesh uploads, got " + uploads;
+
+            Map<ChunkStatus, Integer> statusCounts = manager.getChunkStatusCounts();
+            assert statusCounts.get(ChunkStatus.GPU_LOADED) == 25 : "Expected 25 GPU_LOADED chunks in metrics";
+            assert manager.getPendingUploadCount() == 0 : "Expected 0 pending uploads";
+
+            assert manager.getChunkStatus(new ChunkPos(100, 100)) == ChunkStatus.UNLOADED : "Expected UNLOADED for distant chunk";
 
             // Move player far away (e.g. chunk (30, 30))
             manager.updatePlayerPosition(30, 30);
@@ -167,8 +183,12 @@ public class ChunkStreamingTest {
             // Verify old chunks are queued for unload (beyond 4 + 3 = 7 distance)
             assert manager.hasPendingUnloads() : "Should have pending chunk unloads";
             int unloads = 0;
-            while (manager.pollPendingMeshUnload() != null) {
+            ChunkPos un;
+            while ((un = manager.pollPendingMeshUnload()) != null) {
                 unloads++;
+                assert manager.getChunkStatus(un) == ChunkStatus.UNLOAD_QUEUED : "Expected UNLOAD_QUEUED for " + un;
+                manager.confirmGpuUnloaded(un);
+                assert manager.getChunkStatus(un) == ChunkStatus.UNLOADED : "Expected UNLOADED after confirm for " + un;
             }
             assert unloads > 0 : "Expected unloads > 0, got " + unloads;
 
@@ -196,6 +216,8 @@ public class ChunkStreamingTest {
             deltas.put(wx + "," + wy + "," + wz, diamondState);
 
             manager.applyModifiedBlockStates(deltas);
+            assert manager.getModifiedBlockStates().containsKey(new com.mcjournal.WorldBlockPos(wx, wy, wz)) : "WorldBlockPos key missing";
+            assert manager.getModifiedBlockStatesAsStringMap().containsKey(wx + "," + wy + "," + wz) : "String key missing from bridge";
 
             // Verify chunk (50, 50) is not loaded yet
             assert !manager.isChunkLoaded(50, 50) : "Chunk (50,50) should not be loaded yet";
@@ -210,6 +232,62 @@ public class ChunkStreamingTest {
         } finally {
             manager.shutdown();
         }
+        System.out.println(" PASSED!");
+    }
+
+    private static void testDirectionAwarePriority() {
+        System.out.print("Testing direction-aware chunk priority scoring...");
+        com.mcjournal.ChunkStreamer streamer = new com.mcjournal.ChunkStreamer(12);
+        ChunkPos playerPos = new ChunkPos(0, 0);
+
+        // Player looking towards positive X
+        float lookX = 1.0f;
+        float lookZ = 0.0f;
+
+        ChunkPos current = new ChunkPos(0, 0);
+        ChunkPos ahead = new ChunkPos(4, 0);
+        ChunkPos behind = new ChunkPos(-4, 0);
+        ChunkPos perpendicular = new ChunkPos(0, 4);
+
+        double pCurrent = streamer.computePriority(current, playerPos, lookX, lookZ);
+        double pAhead = streamer.computePriority(ahead, playerPos, lookX, lookZ);
+        double pBehind = streamer.computePriority(behind, playerPos, lookX, lookZ);
+        double pPerp = streamer.computePriority(perpendicular, playerPos, lookX, lookZ);
+
+        assert pCurrent <= pAhead : "Current chunk should have priority <= chunk ahead";
+        assert pAhead < pPerp : "Chunk directly ahead should have higher priority (lower score) than perpendicular chunk";
+        assert pPerp < pBehind : "Perpendicular chunk should have higher priority (lower score) than chunk behind";
+
+        // Verify min-heap priority queue poll order
+        java.util.PriorityQueue<ChunkPos> pq = streamer.createPriorityQueue(playerPos, lookX, lookZ);
+        pq.add(behind);
+        pq.add(ahead);
+        pq.add(current);
+
+        assert pq.poll().equals(current) : "First chunk polled must be current chunk";
+        assert pq.poll().equals(ahead) : "Second chunk polled must be chunk ahead";
+        assert pq.poll().equals(behind) : "Third chunk polled must be chunk behind";
+
+        System.out.println(" PASSED!");
+    }
+
+    private static void testPrimitiveStateIdStorage() {
+        System.out.print("Testing primitive state ID chunk storage...");
+        Chunk chunk = new Chunk(1, 2);
+        int stoneId = Blocks.STONE.getDefaultState().getStateId();
+        int waterId = Blocks.WATER.getDefaultState().getStateId();
+
+        chunk.setStateId(0, 64, 0, stoneId);
+        assert chunk.getStateId(0, 64, 0) == stoneId : "getStateId mismatch";
+        assert chunk.getBlockState(0, 64, 0).is(Blocks.STONE) : "getBlockState mismatch";
+
+        chunk.setBlockState(1, 64, 1, Blocks.WATER.getDefaultState());
+        assert chunk.getStateId(1, 64, 1) == waterId : "setStateId mismatch";
+
+        // Boundary checks
+        assert chunk.getStateId(-1, 0, 0) == 0 : "Out-of-bounds getStateId should be 0 (AIR)";
+        assert chunk.getStateId(16, 0, 0) == 0 : "Out-of-bounds getStateId should be 0 (AIR)";
+
         System.out.println(" PASSED!");
     }
 }
