@@ -1,11 +1,16 @@
 package com.mcjournal.client;
 
-import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.Item;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.Blocks;
+import com.mcjournal.physics.PhysicsSystem;
 import org.joml.Vector3f;
 
 public class Player {
+    // Physics and Collision Engine Subsystem (P7.1)
+    private final PhysicsSystem physicsSystem = new PhysicsSystem();
+
     // Physical dimensions (Vanilla Minecraft: 0.6 x 1.8 x 0.6)
     public static final float WIDTH = 0.6f;
     public static final float HEIGHT = 1.8f;
@@ -14,9 +19,9 @@ public class Player {
     public static final float STEP_HEIGHT = 0.6f; // Vanilla 0.6 block step-up
 
     // Movement constants
-    public static final float GRAVITY = 0.08f;       // blocks per tick^2
-    public static final float DRAG_Y = 0.98f;        // vertical air drag
-    public static final float JUMP_IMPULSE = 0.42f;  // vanilla jump impulse (~1.25 block height)
+    public static final float GRAVITY = PhysicsSystem.GRAVITY;       // blocks per tick^2
+    public static final float DRAG_Y = PhysicsSystem.DRAG_Y;        // vertical air drag
+    public static final float JUMP_IMPULSE = PhysicsSystem.JUMP_IMPULSE;  // vanilla jump impulse (~1.25 block height)
 
     public final Vector3f pos = new Vector3f(8.0f, 16.0f, 8.0f);
     public final Vector3f prevPos = new Vector3f(8.0f, 16.0f, 8.0f);
@@ -46,7 +51,7 @@ public class Player {
 
     // 9-Slot Hotbar Inventory (Slot 0: Iron Axe, Slot 1: Iron Shovel, Slot 2: Iron Pickaxe)
     public final byte[] hotbarBlocks = new byte[]{
-        Item.IRON_AXE, Item.IRON_SHOVEL, Item.IRON_PICKAXE, Block.AIR, Block.AIR, Block.AIR, Block.AIR, Block.AIR, Block.AIR
+        Item.IRON_AXE, Item.IRON_SHOVEL, Item.IRON_PICKAXE, 0, 0, 0, 0, 0, 0
     };
     public final int[] hotbarCounts = new int[]{
         1, 1, 1, 0, 0, 0, 0, 0, 0
@@ -54,7 +59,7 @@ public class Player {
 
     public byte getSelectedBlock() {
         int slot = Math.clamp(selectedSlot, 0, 8);
-        return (hotbarCounts[slot] > 0) ? hotbarBlocks[slot] : Block.AIR;
+        return (hotbarCounts[slot] > 0) ? hotbarBlocks[slot] : 0;
     }
 
     public int getSelectedCount() {
@@ -67,7 +72,7 @@ public class Player {
         if (hotbarCounts[slot] > 0 && !Item.isTool(hotbarBlocks[slot])) {
             hotbarCounts[slot]--;
             if (hotbarCounts[slot] == 0) {
-                hotbarBlocks[slot] = Block.AIR;
+                hotbarBlocks[slot] = 0;
             }
         }
     }
@@ -80,13 +85,13 @@ public class Player {
      */
     public int[] dropSelectedItem(boolean dropAll) {
         int slot = Math.clamp(selectedSlot, 0, 8);
-        if (hotbarCounts[slot] > 0 && hotbarBlocks[slot] != Block.AIR) {
+        if (hotbarCounts[slot] > 0 && hotbarBlocks[slot] != 0) {
             byte type = hotbarBlocks[slot];
             int countToDrop = (dropAll || Item.isTool(type)) ? hotbarCounts[slot] : 1;
             hotbarCounts[slot] -= countToDrop;
             if (hotbarCounts[slot] <= 0) {
                 hotbarCounts[slot] = 0;
-                hotbarBlocks[slot] = Block.AIR;
+                hotbarBlocks[slot] = 0;
             }
             return new int[]{type, countToDrop};
         }
@@ -100,7 +105,7 @@ public class Player {
      * @return true if there is an existing non-full stack for this item or an empty hotbar slot available.
      */
     public boolean canAddItem(byte blockType) {
-        if (blockType == Block.AIR) return false;
+        if (blockType == 0) return false;
         boolean tool = Item.isTool(blockType);
 
         // 1. If not a tool, check if it can merge into an existing non-full stack
@@ -114,7 +119,7 @@ public class Player {
 
         // 2. Check for an empty slot
         for (int i = 0; i < 9; i++) {
-            if (hotbarBlocks[i] == Block.AIR || hotbarCounts[i] <= 0) {
+            if (hotbarBlocks[i] == 0 || hotbarCounts[i] <= 0) {
                 return true;
             }
         }
@@ -131,7 +136,7 @@ public class Player {
      * @return Remaining items that could not fit (0 if entire stack was collected).
      */
     public int addItem(byte blockType, int count) {
-        if (blockType == Block.AIR || count <= 0) return 0;
+        if (blockType == 0 || count <= 0) return 0;
         int remaining = count;
         boolean tool = Item.isTool(blockType);
 
@@ -150,7 +155,7 @@ public class Player {
 
         // 2. Place into first empty slots
         for (int i = 0; i < 9; i++) {
-            if (hotbarBlocks[i] == Block.AIR || hotbarCounts[i] <= 0) {
+            if (hotbarBlocks[i] == 0 || hotbarCounts[i] <= 0) {
                 hotbarBlocks[i] = blockType;
                 int toAdd = tool ? 1 : Math.min(remaining, 64);
                 hotbarCounts[i] = toAdd;
@@ -162,6 +167,10 @@ public class Player {
         return remaining;
     }
 
+    public PhysicsSystem getPhysicsSystem() {
+        return physicsSystem;
+    }
+
     public void updateTick(ChunkManager world, boolean forward, boolean backward, boolean left, boolean right, boolean jump, boolean sprint, boolean sneak) {
         if (isDead) return;
 
@@ -169,7 +178,7 @@ public class Player {
         this.isSprinting = sprint && !sneak;
         this.isSneaking = sneak;
 
-        // 1. Calculate Input Direction
+        // 1. Calculate Input Direction Vectors
         float yawRad = (float) Math.toRadians(yaw);
         float forwardX = (float) Math.sin(yawRad);
         float forwardZ = (float) -Math.cos(yawRad);
@@ -190,109 +199,47 @@ public class Player {
             moveZ /= inputLen;
         }
 
-        // 2. Water Contact Detection (Full Player Body Check: Feet, Mid-Body, Head)
-        boolean inWater = world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + 0.1f), (int) Math.floor(pos.z)) == Block.WATER
-                       || world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + 0.8f), (int) Math.floor(pos.z)) == Block.WATER
-                       || world.getBlockAt((int) Math.floor(pos.x), (int) Math.floor(pos.y + EYE_HEIGHT), (int) Math.floor(pos.z)) == Block.WATER;
+        // 2. Authoritative Fixed-Step Physics Simulation (P7.1, P7.4)
+        PhysicsSystem.PhysicsState state = physicsSystem.updateEntity(
+            world,
+            pos,
+            prevPos,
+            velocity,
+            WIDTH,
+            HEIGHT,
+            STEP_HEIGHT,
+            EYE_HEIGHT,
+            onGround,
+            fallDistance,
+            highestY,
+            moveX,
+            moveZ,
+            forwardX,
+            forwardZ,
+            forward,
+            jump,
+            this.isSprinting,
+            this.isSneaking
+        );
 
-        float friction;
+        pos.set(state.pos());
+        velocity.set(state.velocity());
+        onGround = state.onGround();
+        fallDistance = state.fallDistance();
+        highestY = state.highestY();
 
-        if (inWater) {
-            fallDistance = 0; // Water completely breaks fall damage
-            highestY = pos.y;
-
-            // Water Fluid Drag (Substantial drag to rapidly attenuate high momentum)
-            friction = 0.80f;
-
-            // Significantly reduced movement speed in water (~75% reduction compared to land)
-            float baseSpeed = isSprinting ? 0.035f : (isSneaking ? 0.015f : 0.024f);
-            velocity.x += moveX * baseSpeed;
-            velocity.z += moveZ * baseSpeed;
-
-            // Fluid vertical dynamics & swimming
-            if (jump) {
-                if (onGround) {
-                    // Jumping off waterbed floor
-                    velocity.y = Math.min(velocity.y + 0.08f, 0.22f);
-                    onGround = false;
-                } else {
-                    // Standard upward swimming stroke (no horizontal velocity impulse)
-                    velocity.y = Math.min(velocity.y + 0.05f, 0.15f);
-                }
-            } else if (sneak) {
-                // Dive downwards
-                velocity.y = Math.max(velocity.y - 0.03f, -0.20f);
-            } else {
-                // Natural fluid drag & momentum deceleration
-                if (velocity.y < -0.06f) {
-                    velocity.y = (velocity.y - 0.01f) * 0.80f;
-                } else if (velocity.y > 0.02f) {
-                    velocity.y *= 0.80f;
-                } else {
-                    // Gentle terminal sinking in deep water
-                    velocity.y = Math.max(-0.04f, (velocity.y - 0.005f) * 0.80f);
-                }
-            }
-        } else {
-            // Land / Air Movement Slipperiness & Acceleration
-            float slipperiness = onGround ? 0.6f : 1.0f;
-            friction = slipperiness * 0.91f;
-
-            float baseSpeed = isSprinting ? 0.14f : (isSneaking ? 0.035f : 0.10f);
-            if (!onGround) baseSpeed *= 0.35f; // Air control
-
-            velocity.x += moveX * baseSpeed;
-            velocity.z += moveZ * baseSpeed;
-
-            // Jump Impulse (Vanilla 0.42 height impulse on dry land)
-            if (jump && onGround) {
-                velocity.y = JUMP_IMPULSE;
-                if (isSprinting) {
-                    velocity.x += forwardX * 0.20f;
-                    velocity.z += forwardZ * 0.20f;
-                } else if (forward) {
-                    velocity.x += forwardX * 0.10f;
-                    velocity.z += forwardZ * 0.10f;
-                }
-                onGround = false;
-            }
-
-            // Gravity & Vertical Drag (Air/Ground)
-            velocity.y = (velocity.y - GRAVITY) * DRAG_Y;
+        // 3. Fall Damage Resolution
+        if (state.fallDamage() > 0) {
+            takeDamage(state.fallDamage());
+            System.out.println("[Hardcore] Player took " + state.fallDamage() + " fall damage! (HP: " + health + "/20)");
         }
 
-        // 3. Move & Collide with Voxel Terrain (Y first, then X and Z with continuous step-up)
-        moveWithCollision(world, velocity.x, velocity.y, velocity.z, inWater);
-
-        // Apply Horizontal Friction / Fluid Resistance
-        velocity.x *= friction;
-        velocity.z *= friction;
-
-        // 5. Fall Damage Calculation (Vanilla Hardcore formula)
-        if (onGround) {
-            if (fallDistance > 3.5f) {
-                int damage = (int) Math.floor(fallDistance - 3.5f);
-                if (damage > 0) {
-                    takeDamage(damage);
-                    System.out.println("[Hardcore] Player took " + damage + " fall damage! (HP: " + health + "/20)");
-                }
-            }
-            fallDistance = 0;
-            highestY = pos.y;
-        } else {
-            if (pos.y < highestY) {
-                fallDistance = highestY - pos.y;
-            } else {
-                highestY = pos.y;
-            }
-        }
-
-        // 6. Hurt animation timer decay
+        // 4. Hurt animation timer decay
         if (hurtTime > 0) {
             hurtTime--;
         }
 
-        // Void Damage
+        // 5. Void Damage
         if (pos.y < -10) {
             takeDamage(20);
         }
@@ -310,91 +257,11 @@ public class Player {
         }
     }
 
-    private void moveWithCollision(ChunkManager world, float dx, float dy, float dz, boolean inWater) {
-        // Step 1: Move Y (Vertical) FIRST so jump lifts player before checking horizontal walls
-        float targetY = pos.y + dy;
-        if (dy < 0) {
-            // Falling down
-            if (!checkBlockCollision(world, pos.x, targetY, pos.z)) {
-                pos.y = targetY;
-                onGround = false;
-            } else {
-                // Landed on block
-                pos.y = (float) Math.floor(targetY) + 1.0f;
-                velocity.y = 0;
-                onGround = true;
-            }
-        } else if (dy > 0) {
-            // Jumping / Rising up (Check ceiling collision at head level)
-            if (!checkBlockCollision(world, pos.x, targetY, pos.z)) {
-                pos.y = targetY;
-                onGround = false;
-            } else {
-                velocity.y = 0;
-            }
-        }
-
-        // Step 2: Move X (Horizontal with 0.6-block step-up and jump-clearing)
-        if (dx != 0) {
-            float targetX = pos.x + dx;
-            if (!checkBlockCollision(world, targetX, pos.y, pos.z)) {
-                pos.x = targetX;
-            } else {
-                // Auto Step-Up 0.6-block ledge
-                if (!checkBlockCollision(world, targetX, pos.y + STEP_HEIGHT, pos.z)) {
-                    pos.x = targetX;
-                    if (onGround || inWater) pos.y += STEP_HEIGHT;
-                } else if ((!onGround || inWater) && (velocity.y > 0 || inWater) && !checkBlockCollision(world, targetX, pos.y + 1.05f, pos.z)) {
-                    // Mid-jump or swimming out of water: allow forward traversal and lift onto 1-block ledge
-                    pos.x = targetX;
-                    pos.y += STEP_HEIGHT;
-                } else {
-                    velocity.x = 0;
-                }
-            }
-        }
-
-        // Step 3: Move Z (Horizontal with 0.6-block step-up and jump-clearing)
-        if (dz != 0) {
-            float targetZ = pos.z + dz;
-            if (!checkBlockCollision(world, pos.x, pos.y, targetZ)) {
-                pos.z = targetZ;
-            } else {
-                // Auto Step-Up 0.6-block ledge
-                if (!checkBlockCollision(world, pos.x, pos.y + STEP_HEIGHT, targetZ)) {
-                    pos.z = targetZ;
-                    if (onGround || inWater) pos.y += STEP_HEIGHT;
-                } else if ((!onGround || inWater) && (velocity.y > 0 || inWater) && !checkBlockCollision(world, pos.x, pos.y + 1.05f, targetZ)) {
-                    // Mid-jump or swimming out of water: allow forward traversal and lift onto 1-block ledge
-                    pos.z = targetZ;
-                    pos.y += STEP_HEIGHT;
-                } else {
-                    velocity.z = 0;
-                }
-            }
-        }
-    }
-
-    private boolean checkBlockCollision(ChunkManager world, float px, float py, float pz) {
-        float halfW = (WIDTH / 2.0f) - 0.04f; // 0.26 half-width for smooth traversal
-        int minX = (int) Math.floor(px - halfW + 0.001f);
-        int maxX = (int) Math.floor(px + halfW - 0.001f);
-        int minY = (int) Math.floor(py + 0.01f);
-        int maxY = (int) Math.floor(py + HEIGHT - 0.05f);
-        int minZ = (int) Math.floor(pz - halfW + 0.001f);
-        int maxZ = (int) Math.floor(pz + halfW - 0.001f);
-
-        for (int y = minY; y <= maxY; y++) {
-            for (int z = minZ; z <= maxZ; z++) {
-                for (int x = minX; x <= maxX; x++) {
-                    byte block = world.getBlockAt(x, y, z);
-                    if (Block.isSolid(block)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+    /**
+     * Broad-phase voxel collision check delegated to CollisionDetector (P7.1 & P7.2).
+     */
+    public boolean checkBlockCollision(ChunkManager world, float px, float py, float pz) {
+        return physicsSystem.getCollisionDetector().hasBlockCollisionAt(world, px, py, pz, WIDTH, HEIGHT);
     }
 
     public Vector3f getEyePosition(float partialTick) {
