@@ -1,12 +1,14 @@
 package com.mcjournal.client;
 
-import com.mcjournal.Block;
 import com.mcjournal.Chunk;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.ChunkMeshBuilder;
 import com.mcjournal.ChunkPos;
 import com.mcjournal.FluidPhysicsManager;
 import com.mcjournal.Item;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.Blocks;
 import com.mcjournal.client.gui.*;
 import org.joml.Vector3f;
 
@@ -195,7 +197,7 @@ public class MCJournalApp {
                 currentSeed,
                 player,
                 this.worldTimeTicks,
-                chunkManager != null ? chunkManager.getModifiedBlockStates() : null
+                chunkManager != null ? chunkManager.getModifiedBlockStatesAsStringMap() : null
             );
             this.isInWorld = false;
         }
@@ -236,6 +238,7 @@ public class MCJournalApp {
             ChunkMeshBuilder.MeshData mesh = chunkManager.getChunkMesh(uploadPos);
             if (mesh != null) {
                 chunkRenderer.uploadChunkMesh(uploadPos, mesh);
+                chunkManager.markGpuLoaded(uploadPos);
             }
         }
 
@@ -283,7 +286,7 @@ public class MCJournalApp {
             int spawnZ = 8;
             int spawnY = 66;
             for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
-                if (Block.isSolid(chunkManager.getBlockAt(spawnX, y, spawnZ))) {
+                if (chunkManager.getBlockStateAt(spawnX, y, spawnZ).isSolid()) {
                     spawnY = y + 2;
                     break;
                 }
@@ -297,7 +300,7 @@ public class MCJournalApp {
             player.health = 20;
             player.hunger = 20;
             player.selectedSlot = 0;
-            Arrays.fill(player.hotbarBlocks, Block.AIR);
+            Arrays.fill(player.hotbarBlocks, (byte) 0);
             Arrays.fill(player.hotbarCounts, 0);
             player.hotbarBlocks[0] = Item.IRON_AXE;
             player.hotbarCounts[0] = 1;
@@ -610,7 +613,7 @@ public class MCJournalApp {
 
         boolean dropAll = input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || input.isKeyDown(GLFW_KEY_RIGHT_CONTROL);
         int[] dropped = player.dropSelectedItem(dropAll);
-        if (dropped != null && dropped[0] != Block.AIR && dropped[1] > 0) {
+        if (dropped != null && dropped[0] != 0 && dropped[1] > 0) {
             byte dropType = (byte) dropped[0];
             int count = dropped[1];
 
@@ -636,7 +639,7 @@ public class MCJournalApp {
                 handRenderer.triggerSwing();
             }
 
-            System.out.println("[Inventory] 🏹 Threw " + count + "x " + (Item.isTool(dropType) ? Item.getName(dropType) : Block.getName(dropType)));
+            System.out.println("[Inventory] 🏹 Threw " + count + "x " + (Item.isTool(dropType) ? Item.getName(dropType) : BlockStateRegistry.getBlockType(dropType).getName()));
         }
     }
 
@@ -644,21 +647,12 @@ public class MCJournalApp {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (isInWorld && chunkManager != null) {
-            // Drain pending GPU unloads
-            ChunkPos unloadPos;
-            while ((unloadPos = chunkManager.pollPendingMeshUnload()) != null) {
-                chunkRenderer.unloadChunkMesh(unloadPos);
-            }
+            // 1. Asynchronously process dirty chunks from block mutations & fluid updates
+            chunkManager.processDirtyChunks();
 
-            // Drain pending GPU uploads (budget: 8 uploads per frame for smooth 60+ FPS streaming)
-            for (int i = 0; i < 8; i++) {
-                ChunkPos uploadPos = chunkManager.pollPendingMeshUpload();
-                if (uploadPos == null) break;
-                ChunkMeshBuilder.MeshData mesh = chunkManager.getChunkMesh(uploadPos);
-                if (mesh != null) {
-                    chunkRenderer.uploadChunkMesh(uploadPos, mesh);
-                }
-            }
+            // 2. Drain pending GPU unloads and budgeted GPU uploads
+            chunkManager.processGpuUnloads(chunkRenderer);
+            chunkManager.processGpuUploads(chunkRenderer);
 
             Vector3f eyePos = player.getEyePosition(partialTick);
             camera.setPosition(eyePos.x, eyePos.y, eyePos.z);
@@ -674,6 +668,7 @@ public class MCJournalApp {
             camera.setRoll(damageTilt);
             camera.updateView();
             frustumCuller.update(camera.getProjectionMatrix(), camera.getViewMatrix());
+            chunkRenderer.updateVisibility(frustumCuller, eyePos.x, eyePos.z, chunkManager.getRenderDistance());
 
             float curTime = (float) glfwGetTime();
             float timeOfDayFraction = (float) (worldTimeTicks / 24000.0);
@@ -682,7 +677,7 @@ public class MCJournalApp {
             int eyeBlockX = (int) Math.floor(eyePos.x);
             int eyeBlockY = (int) Math.floor(eyePos.y);
             int eyeBlockZ = (int) Math.floor(eyePos.z);
-            boolean isUnderwater = (chunkManager.getBlockAt(eyeBlockX, eyeBlockY, eyeBlockZ) == Block.WATER);
+            boolean isUnderwater = chunkManager.getBlockStateAt(eyeBlockX, eyeBlockY, eyeBlockZ).isWater();
 
             // Dynamically calibrate atmospheric horizon fog to current render distance (zero pop-in at horizon)
             float curFogStart = isUnderwater ? RenderingConfig.UNDERWATER_FOG_START : Math.max(32.0f, (chunkManager.getRenderDistance() - 2.5f) * 16.0f);
@@ -725,16 +720,23 @@ public class MCJournalApp {
             chunkShader.setUniform("uWaterAbsorptionMu", RenderingConfig.WATER_ABSORPTION_MU);
             chunkShader.setUniform("uAoMinClamp", RenderingConfig.AO_MIN_CLAMP);
 
-            // Render Solid Geometry (Opaque Voxel Blocks with Frustum Culling)
+            // 1. Render Solid Geometry (Opaque Voxel Blocks with Hardware Early-Z)
             chunkShader.setUniform("uIsWater", 0);
-            chunkRenderer.renderSolid(frustumCuller);
+            chunkShader.setUniform("uIsCutout", 0);
+            chunkRenderer.renderSolid();
 
-            // Render Dropped 3D Item Entities (Miniature textured voxel blocks)
+            // 2. Render Cutout Geometry (Cross Foliage & Leaves with Alpha Test)
+            chunkShader.setUniform("uIsCutout", 1);
+            chunkRenderer.renderCutout();
+
+            // 3. Render Dropped 3D Item Entities (Miniature textured voxel blocks)
+            chunkShader.setUniform("uIsCutout", 0);
             itemEntityManager.render(chunkShader, camera, partialTick);
 
-            // Render Water Geometry (Stylized Depth Absorption & Fresnel Reflections with Frustum Culling)
+            // 4. Render Water Geometry (Stylized Depth Absorption & Fresnel Reflections)
+            chunkShader.setUniform("uIsCutout", 0);
             chunkShader.setUniform("uIsWater", 1);
-            chunkRenderer.renderWater(frustumCuller, isUnderwater);
+            chunkRenderer.renderWater(isUnderwater);
 
             chunkShader.unbind();
             atlas.unbind();
@@ -795,7 +797,7 @@ public class MCJournalApp {
                 currentSeed,
                 player,
                 this.worldTimeTicks,
-                chunkManager != null ? chunkManager.getModifiedBlockStates() : null
+                chunkManager != null ? chunkManager.getModifiedBlockStatesAsStringMap() : null
             );
         }
         if (chunkShader != null) chunkShader.cleanup();
