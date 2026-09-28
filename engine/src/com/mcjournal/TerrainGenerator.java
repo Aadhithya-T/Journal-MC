@@ -1,6 +1,8 @@
 package com.mcjournal;
 
 import java.util.*;
+import com.mcjournal.block.Blocks;
+import com.mcjournal.block.BlockState;
 
 public class TerrainGenerator {
     public static final int SEA_LEVEL = 62; // Minecraft 1.17 Standard Sea Level
@@ -12,6 +14,19 @@ public class TerrainGenerator {
     private final SimplexNoise caveNoise1;
     private final SimplexNoise caveNoise2;
     private final List<POI> pois = new ArrayList<>();
+
+    private static final int ID_AIR = Blocks.AIR.getDefaultState().getStateId();
+    private static final int ID_BEDROCK = Blocks.BEDROCK.getDefaultState().getStateId();
+    private static final int ID_STONE = Blocks.STONE.getDefaultState().getStateId();
+    private static final int ID_DIRT = Blocks.DIRT.getDefaultState().getStateId();
+    private static final int ID_GRASS = Blocks.GRASS.getDefaultState().getStateId();
+    private static final int ID_SAND = Blocks.SAND.getDefaultState().getStateId();
+    private static final int ID_WATER = Blocks.WATER.getDefaultState().getStateId();
+    private static final int ID_DIAMOND_ORE = Blocks.DIAMOND_ORE.getDefaultState().getStateId();
+    private static final int ID_COBBLESTONE = Blocks.COBBLESTONE.getDefaultState().getStateId();
+    private static final int ID_POPPY = Blocks.POPPY.getDefaultState().getStateId();
+    private static final int ID_DANDELION = Blocks.DANDELION.getDefaultState().getStateId();
+    private static final int ID_TALL_GRASS = Blocks.TALL_GRASS.getDefaultState().getStateId();
 
     public record POI(String id, String name, String subtitle, String icon, int x, int z, String excerpt) {}
 
@@ -81,16 +96,16 @@ public class TerrainGenerator {
                 int surfaceY = computeHeight(wx, wz);
 
                 // 1. Bedrock Floor (Y = 0 with random bedrock bumps up to Y = 3)
-                chunk.setBlock(lx, 0, lz, Block.BEDROCK);
+                chunk.setStateId(lx, 0, lz, ID_BEDROCK);
                 for (int by = 1; by <= 3; by++) {
                     if (rng.nextFloat() < (1.0f - by * 0.28f)) {
-                        chunk.setBlock(lx, by, lz, Block.BEDROCK);
+                        chunk.setStateId(lx, by, lz, ID_BEDROCK);
                     }
                 }
 
                 // 2. Underground Mantle (Stone, Ores & 3D Caves)
                 for (int y = 1; y < surfaceY; y++) {
-                    if (chunk.getBlock(lx, y, lz) == Block.BEDROCK) continue;
+                    if (chunk.getStateId(lx, y, lz) == ID_BEDROCK) continue;
 
                     if (y < surfaceY - 4) {
                         // 3D Minecraft 1.17 Cave & Tunnel Carving
@@ -106,9 +121,9 @@ public class TerrainGenerator {
                             if (isWormCave || isCavern) {
                                 // Deep underground spring pools below Y = 12
                                 if (y <= 11 && y >= 9 && !isWormCave) {
-                                    chunk.setBlock(lx, y, lz, Block.WATER);
+                                    chunk.setStateId(lx, y, lz, ID_WATER);
                                 } else {
-                                    chunk.setBlock(lx, y, lz, Block.AIR);
+                                    chunk.setStateId(lx, y, lz, ID_AIR);
                                 }
                                 continue;
                             }
@@ -118,7 +133,7 @@ public class TerrainGenerator {
                         if (y <= 16) {
                             double diamondNoise = detailNoise.noise2D(wx * 0.45, wz * 0.45 + y * 0.3);
                             if (diamondNoise > 0.72) {
-                                chunk.setBlock(lx, y, lz, Block.DIAMOND_ORE);
+                                chunk.setStateId(lx, y, lz, ID_DIAMOND_ORE);
                                 continue;
                             }
                         }
@@ -126,16 +141,16 @@ public class TerrainGenerator {
                         // Cobblestone vein clusters in deep stone
                         double cobbleNoise = detailNoise.noise2D(wx * 0.15, wz * 0.15 + y * 0.1);
                         if (cobbleNoise > 0.75) {
-                            chunk.setBlock(lx, y, lz, Block.COBBLESTONE);
+                            chunk.setStateId(lx, y, lz, ID_COBBLESTONE);
                         } else {
-                            chunk.setBlock(lx, y, lz, Block.STONE);
+                            chunk.setStateId(lx, y, lz, ID_STONE);
                         }
                     } else {
                         // Subsurface Dirt / Sand Layer (3-4 blocks below surface)
                         if (surfaceY <= SEA_LEVEL + 1) {
-                            chunk.setBlock(lx, y, lz, Block.SAND);
+                            chunk.setStateId(lx, y, lz, ID_SAND);
                         } else {
-                            chunk.setBlock(lx, y, lz, Block.DIRT);
+                            chunk.setStateId(lx, y, lz, ID_DIRT);
                         }
                     }
                 }
@@ -143,31 +158,31 @@ public class TerrainGenerator {
                 // 3. Surface & Shoreline Layering
                 if (surfaceY <= SEA_LEVEL) {
                     // Underwater River / Ocean Floor
-                    chunk.setBlock(lx, surfaceY, lz, Block.SAND);
+                    chunk.setStateId(lx, surfaceY, lz, ID_SAND);
 
                     // Water column filling up to Sea Level (Y = 62)
                     for (int wy = surfaceY + 1; wy <= SEA_LEVEL; wy++) {
-                        chunk.setBlock(lx, wy, lz, Block.WATER);
+                        chunk.setStateId(lx, wy, lz, ID_WATER);
                     }
                 } else if (surfaceY <= SEA_LEVEL + 2) {
                     // Beach / Shoreline
-                    chunk.setBlock(lx, surfaceY, lz, Block.SAND);
+                    chunk.setStateId(lx, surfaceY, lz, ID_SAND);
                 } else if (surfaceY > 105) {
                     // High Mountain Cliff / Rocky Peaks
-                    chunk.setBlock(lx, surfaceY, lz, Block.STONE);
+                    chunk.setStateId(lx, surfaceY, lz, ID_STONE);
                 } else {
                     // Lush Plains / Forest Surface (Grass Block)
-                    chunk.setBlock(lx, surfaceY, lz, Block.GRASS);
+                    chunk.setStateId(lx, surfaceY, lz, ID_GRASS);
 
                     // 4. Wildflower & Foliage Scatter
                     double vegNoise = detailNoise.noise2D(wx * 0.28, wz * 0.28);
                     if (surfaceY + 1 < Chunk.HEIGHT) {
                         if (vegNoise > 0.83) {
-                            chunk.setBlock(lx, surfaceY + 1, lz, Block.POPPY);
+                            chunk.setStateId(lx, surfaceY + 1, lz, ID_POPPY);
                         } else if (vegNoise > 0.76) {
-                            chunk.setBlock(lx, surfaceY + 1, lz, Block.DANDELION);
+                            chunk.setStateId(lx, surfaceY + 1, lz, ID_DANDELION);
                         } else if (vegNoise > 0.52) {
-                            chunk.setBlock(lx, surfaceY + 1, lz, Block.TALL_GRASS);
+                            chunk.setStateId(lx, surfaceY + 1, lz, ID_TALL_GRASS);
                         }
                     }
                 }
@@ -197,18 +212,18 @@ public class TerrainGenerator {
         int ty = computeHeight(wx, wz);
 
         // Only plant on grass above sea level and below high mountain peaks
-        if (ty >= SEA_LEVEL + 2 && ty <= 95 && chunk.getBlock(tx, ty, tz) == Block.GRASS) {
-            byte logType = isBirch ? Block.BIRCH_LOG : Block.OAK_LOG;
-            byte leafType = isBirch ? Block.BIRCH_LEAVES : Block.OAK_LEAVES;
+        if (ty >= SEA_LEVEL + 2 && ty <= 95 && chunk.getBlockState(tx, ty, tz).is(Blocks.GRASS)) {
+            BlockState logType = isBirch ? Blocks.BIRCH_LOG.getDefaultState() : Blocks.OAK_LOG.getDefaultState();
+            BlockState leafType = isBirch ? Blocks.BIRCH_LEAVES.getDefaultState() : Blocks.OAK_LEAVES.getDefaultState();
             int trunkHeight = isBirch ? 5 : 4;
 
             // Clear any foliage above the ground
-            chunk.setBlock(tx, ty + 1, tz, Block.AIR);
+            chunk.setBlockState(tx, ty + 1, tz, Blocks.AIR.getDefaultState());
 
             // Wood Trunk
             for (int y = 1; y <= trunkHeight; y++) {
                 if (ty + y < Chunk.HEIGHT) {
-                    chunk.setBlock(tx, ty + y, tz, logType);
+                    chunk.setBlockState(tx, ty + y, tz, logType);
                 }
             }
 
@@ -218,24 +233,24 @@ public class TerrainGenerator {
                 for (int dz = -2; dz <= 2; dz++) {
                     if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
                     if (tx + dx >= 0 && tx + dx < 16 && tz + dz >= 0 && tz + dz < 16) {
-                        if (leafBase < Chunk.HEIGHT) chunk.setBlock(tx + dx, leafBase, tz + dz, leafType);
-                        if (leafBase + 1 < Chunk.HEIGHT) chunk.setBlock(tx + dx, leafBase + 1, tz + dz, leafType);
+                        if (leafBase < Chunk.HEIGHT) chunk.setBlockState(tx + dx, leafBase, tz + dz, leafType);
+                        if (leafBase + 1 < Chunk.HEIGHT) chunk.setBlockState(tx + dx, leafBase + 1, tz + dz, leafType);
                     }
                 }
             }
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     if (tx + dx >= 0 && tx + dx < 16 && tz + dz >= 0 && tz + dz < 16) {
-                        if (leafBase + 2 < Chunk.HEIGHT) chunk.setBlock(tx + dx, leafBase + 2, tz + dz, leafType);
+                        if (leafBase + 2 < Chunk.HEIGHT) chunk.setBlockState(tx + dx, leafBase + 2, tz + dz, leafType);
                     }
                 }
             }
             if (leafBase + 3 < Chunk.HEIGHT) {
-                chunk.setBlock(tx, leafBase + 3, tz, leafType);
-                if (tx + 1 < 16) chunk.setBlock(tx + 1, leafBase + 3, tz, leafType);
-                if (tx - 1 >= 0) chunk.setBlock(tx - 1, leafBase + 3, tz, leafType);
-                if (tz + 1 < 16) chunk.setBlock(tx, leafBase + 3, tz + 1, leafType);
-                if (tz - 1 >= 0) chunk.setBlock(tx, leafBase + 3, tz - 1, leafType);
+                chunk.setBlockState(tx, leafBase + 3, tz, leafType);
+                if (tx + 1 < 16) chunk.setBlockState(tx + 1, leafBase + 3, tz, leafType);
+                if (tx - 1 >= 0) chunk.setBlockState(tx - 1, leafBase + 3, tz, leafType);
+                if (tz + 1 < 16) chunk.setBlockState(tx, leafBase + 3, tz + 1, leafType);
+                if (tz - 1 >= 0) chunk.setBlockState(tx, leafBase + 3, tz - 1, leafType);
             }
         }
     }

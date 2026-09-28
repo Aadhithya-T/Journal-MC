@@ -63,13 +63,12 @@ public class WorldSaveManager {
             this.hotbarCounts = (hotbarCounts != null) ? hotbarCounts.clone() : new int[9];
             this.worldTime = (worldTime >= 0.0) ? (worldTime % 24000.0) : 6000.0;
             this.modifiedBlockStates = new HashMap<>();
-            this.modifiedBlocks = new HashMap<>();
+            this.modifiedBlocks = null;
 
             if (blockStates != null) {
                 for (Map.Entry<String, BlockState> entry : blockStates.entrySet()) {
                     BlockState s = entry.getValue();
                     this.modifiedBlockStates.put(entry.getKey(), s.getSerializedName());
-                    this.modifiedBlocks.put(entry.getKey(), s.getLegacyId());
                 }
             }
         }

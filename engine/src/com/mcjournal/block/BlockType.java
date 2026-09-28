@@ -79,6 +79,9 @@ public class BlockType {
     }
 
     public void setDefaultState(BlockState state) {
+        if (this.defaultState != null) {
+            throw new IllegalStateException("Default state already set for block: " + id);
+        }
         this.defaultState = state;
     }
 

@@ -1,12 +1,12 @@
 package com.mcjournal.client;
 
-import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.FluidPhysicsManager;
 import com.mcjournal.Item;
 import com.mcjournal.block.BlockProperties;
 import com.mcjournal.block.BlockState;
 import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.BlockType;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.block.property.Axis;
 import org.joml.Vector3f;
@@ -50,7 +50,7 @@ public class BlockBreakingManager {
 
             // 2. Handle Mining with Left Mouse Button (LMB)
             if (lmbDown) {
-                float hardness = Block.getHardness(currentHit.blockType);
+                float hardness = (currentHit.state != null) ? currentHit.state.getHardness() : BlockStateRegistry.getDefaultState(currentHit.blockType).getHardness();
 
                 if (hardness == 0.0f) {
                     // Instant break (Flowers, Tall Grass)
@@ -63,13 +63,13 @@ public class BlockBreakingManager {
                     // Spawn mining chip particles periodically while hitting
                     hitParticleTick++;
                     if (hitParticleTick % 4 == 0 && particles != null) {
-                        particles.spawnMiningHitParticles(currentHit.bx, currentHit.by, currentHit.bz, currentHit.blockType, currentHit.normalX, currentHit.normalY, currentHit.normalZ);
+                        particles.spawnMiningHitParticles(currentHit.bx, currentHit.by, currentHit.bz, currentHit.state, currentHit.normalX, currentHit.normalY, currentHit.normalZ);
                     }
 
                     // Minecraft Java Edition Mining Formula:
                     byte heldTool = player.getSelectedBlock();
-                    float toolSpeed = Item.getMiningSpeedMultiplier(heldTool, currentHit.blockType);
-                    boolean canHarvest = Item.canHarvest(heldTool, currentHit.blockType);
+                    float toolSpeed = Item.getMiningSpeedMultiplier(heldTool, currentHit.state.getBlock());
+                    boolean canHarvest = Item.canHarvest(heldTool, currentHit.state.getBlock());
 
                     // If can harvest: damage = toolSpeed / (hardness * 30)
                     // If cannot harvest (wrong tool for pickaxe blocks): damage = 1.0 / (hardness * 100)
@@ -102,16 +102,17 @@ public class BlockBreakingManager {
                 byte blockToPlace = player.getSelectedBlock();
 
                 // Tools cannot be placed into the world as blocks
-                if (blockToPlace != Block.AIR && !Item.isTool(blockToPlace)) {
+                if (blockToPlace != 0 && !Item.isTool(blockToPlace)) {
                     // Check plant placement validity (flowers and tall grass cannot be placed in air, on walls/ceilings, or on non-soil)
                     boolean canPlace = true;
-                    if (Block.isPlant(blockToPlace)) {
+                    BlockType typeToPlace = BlockStateRegistry.getBlockType(blockToPlace);
+                    if (typeToPlace.isPlant()) {
                         // Plants can only be placed upright on top of soil (Grass Block or Dirt)
                         if (currentHit.normalY != 1) {
                             canPlace = false;
                         } else {
-                            byte blockBelow = world.getBlockAt(placeX, placeY - 1, placeZ);
-                            if (!Block.canPlantSurviveOn(blockBelow)) {
+                            BlockState blockBelow = world.getBlockStateAt(placeX, placeY - 1, placeZ);
+                            if (!blockBelow.is(Blocks.GRASS) && !blockBelow.is(Blocks.DIRT)) {
                                 canPlace = false;
                             }
                         }
@@ -120,11 +121,11 @@ public class BlockBreakingManager {
                     // Check that placed block doesn't intersect player bounding box
                     if (canPlace && !isIntersectingPlayer(player, placeX, placeY, placeZ)) {
                         BlockState targetBlock = world.getBlockStateAt(placeX, placeY, placeZ);
-                        if (targetBlock.isAir() || targetBlock.is(com.mcjournal.block.Blocks.WATER)) {
-                            BlockState stateToPlace = com.mcjournal.block.BlockStateRegistry.getDefaultState(blockToPlace);
-                            if (stateToPlace.contains(com.mcjournal.block.BlockProperties.AXIS)) {
-                                com.mcjournal.block.property.Axis axis = com.mcjournal.block.property.Axis.fromNormal(currentHit.normalX, currentHit.normalY, currentHit.normalZ);
-                                stateToPlace = stateToPlace.with(com.mcjournal.block.BlockProperties.AXIS, axis);
+                        if (targetBlock.isAir() || targetBlock.isWater()) {
+                            BlockState stateToPlace = BlockStateRegistry.getDefaultState(blockToPlace);
+                            if (stateToPlace.contains(BlockProperties.AXIS)) {
+                                Axis axis = Axis.fromNormal(currentHit.normalX, currentHit.normalY, currentHit.normalZ);
+                                stateToPlace = stateToPlace.with(BlockProperties.AXIS, axis);
                             }
 
                             world.setBlockStateAt(placeX, placeY, placeZ, stateToPlace);
@@ -145,32 +146,35 @@ public class BlockBreakingManager {
     }
 
     private void breakTargetBlock(ChunkManager world, ChunkRenderer renderer, ParticleManager particles, ItemEntityManager itemEntities, FluidPhysicsManager fluidPhysics, Player player, int bx, int by, int bz) {
-        byte brokenType = world.getBlockAt(bx, by, bz);
-        if (brokenType != Block.AIR && brokenType != Block.BEDROCK) {
-            world.setBlockAt(bx, by, bz, Block.AIR);
+        BlockState brokenState = world.getBlockStateAt(bx, by, bz);
+        if (!brokenState.isAir() && !brokenState.isBedrock()) {
+            byte brokenType = brokenState.getLegacyId();
+            world.setBlockStateAt(bx, by, bz, Blocks.AIR.getDefaultState());
             reuploadChunkMeshes(world, renderer, bx, bz);
 
             // Spawn dropped block item entity if player can harvest this block with held tool
             byte heldTool = player.getSelectedBlock();
-            boolean canHarvest = Item.canHarvest(heldTool, brokenType);
+            boolean canHarvest = Item.canHarvest(heldTool, brokenState.getBlock());
             if (canHarvest) {
-                byte dropType = Block.getDrop(brokenType);
-                if (dropType != Block.AIR && itemEntities != null) {
+                BlockType dropBlock = brokenState.getDrop();
+                byte dropType = (dropBlock != null) ? dropBlock.getLegacyId() : 0;
+                if (dropType != 0 && itemEntities != null) {
                     itemEntities.spawnItem(dropType, 1, bx + 0.5f, by + 0.3f, bz + 0.5f);
                 }
             }
 
             // Spawn block disintegration debris particle cloud
             if (particles != null) {
-                particles.spawnBlockBreakParticles(bx, by, bz, brokenType);
+                particles.spawnBlockBreakParticles(bx, by, bz, brokenState);
             }
 
             // If a plant was resting on top of this block, break it too & drop it
-            byte blockAbove = world.getBlockAt(bx, by + 1, bz);
-            if (Block.isPlant(blockAbove)) {
-                world.setBlockAt(bx, by + 1, bz, Block.AIR);
-                byte plantDrop = Block.getDrop(blockAbove);
-                if (plantDrop != Block.AIR && itemEntities != null) {
+            BlockState blockAbove = world.getBlockStateAt(bx, by + 1, bz);
+            if (blockAbove.isPlant()) {
+                world.setBlockStateAt(bx, by + 1, bz, Blocks.AIR.getDefaultState());
+                BlockType plantDropBlock = blockAbove.getDrop();
+                byte plantDrop = (plantDropBlock != null) ? plantDropBlock.getLegacyId() : 0;
+                if (plantDrop != 0 && itemEntities != null) {
                     itemEntities.spawnItem(plantDrop, 1, bx + 0.5f, by + 1.3f, bz + 0.5f);
                 }
                 if (particles != null) {
@@ -184,8 +188,8 @@ public class BlockBreakingManager {
                 fluidPhysics.onBlockChanged(world, renderer, particles, bx, by, bz);
             }
 
-            String toolDesc = (heldTool == Block.AIR) ? "by hand" : ("with " + (Item.isTool(heldTool) ? Item.getName(heldTool) : Block.getName(heldTool)));
-            System.out.println("[Mining] ⛏ Broke " + Block.getName(brokenType) + " " + toolDesc + " at (" + bx + ", " + by + ", " + bz + ")!");
+            String toolDesc = (heldTool == 0) ? "by hand" : ("with " + (Item.isTool(heldTool) ? Item.getName(heldTool) : BlockStateRegistry.getBlockType(heldTool).getName()));
+            System.out.println("[Mining] ⛏ Broke " + brokenState.getBlock().getName() + " " + toolDesc + " at (" + bx + ", " + by + ", " + bz + ")!");
         }
     }
 

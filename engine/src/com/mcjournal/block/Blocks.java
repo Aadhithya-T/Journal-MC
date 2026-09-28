@@ -67,6 +67,10 @@ public final class Blocks {
 
     private Blocks() {}
 
+    public static BlockState state(BlockType block) {
+        return block != null ? block.getDefaultState() : AIR.getDefaultState();
+    }
+
     public static List<BlockType> getAll() {
         return Collections.unmodifiableList(ALL_BLOCKS);
     }

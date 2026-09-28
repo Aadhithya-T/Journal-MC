@@ -23,12 +23,32 @@ public class BlockState {
         return stateId;
     }
 
+    private boolean sealed = false;
+
     void setStateId(int id) {
+        if (this.stateId != -1) {
+            throw new IllegalStateException("BlockState ID already initialized: " + this.stateId);
+        }
         this.stateId = id;
     }
 
     void setTransition(Property<?> property, Comparable<?> value, BlockState target) {
+        if (sealed) {
+            throw new IllegalStateException("Cannot add transitions to a sealed BlockState");
+        }
         transitions.computeIfAbsent(property, k -> new HashMap<>()).put(value, target);
+    }
+
+    void sealTransitions() {
+        if (sealed) return;
+        for (Map.Entry<Property<?>, Map<Comparable<?>, BlockState>> entry : transitions.entrySet()) {
+            entry.setValue(Collections.unmodifiableMap(new HashMap<>(entry.getValue())));
+        }
+        this.sealed = true;
+    }
+
+    public boolean isSealed() {
+        return sealed;
     }
 
     @SuppressWarnings("unchecked")
@@ -89,6 +109,14 @@ public class BlockState {
 
     public boolean isFluid() {
         return this.owner.isFluid();
+    }
+
+    public boolean isWater() {
+        return this.owner == Blocks.WATER;
+    }
+
+    public boolean isBedrock() {
+        return this.owner == Blocks.BEDROCK;
     }
 
     public byte getLegacyId() {

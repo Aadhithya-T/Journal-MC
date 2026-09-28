@@ -69,6 +69,11 @@ public final class BlockStateRegistry {
                 }
             }
         }
+
+        // Seal all registered states to enforce strict immutability at runtime
+        for (BlockState state : STATES_BY_ID) {
+            state.sealTransitions();
+        }
     }
 
     @SuppressWarnings("unchecked")

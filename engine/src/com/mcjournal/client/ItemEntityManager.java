@@ -1,8 +1,10 @@
 package com.mcjournal.client;
 
-import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.Item;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.BlockType;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.FloatBuffer;
@@ -61,14 +63,14 @@ public class ItemEntityManager {
     }
 
     public void spawnItem(byte blockType, int count, float x, float y, float z) {
-        if (blockType == Block.AIR || count <= 0) return;
+        if (blockType == 0 || count <= 0) return;
         synchronized (spawnQueue) {
             spawnQueue.add(new ItemEntity(blockType, count, x, y, z));
         }
     }
 
     public void spawnThrownItem(byte blockType, int count, float x, float y, float z, float vx, float vy, float vz) {
-        if (blockType == Block.AIR || count <= 0) return;
+        if (blockType == 0 || count <= 0) return;
         synchronized (spawnQueue) {
             spawnQueue.add(new ItemEntity(blockType, count, x, y, z, vx, vy, vz, 1.2f));
         }
@@ -112,12 +114,12 @@ public class ItemEntityManager {
                     int unadded = player.addItem(item.blockType, item.count);
                     if (unadded == 0) {
                         // Entire stack collected
-                        System.out.println("[Inventory] 📦 Picked up " + item.count + "x " + Block.getName(item.blockType));
+                        System.out.println("[Inventory] 📦 Picked up " + item.count + "x " + BlockStateRegistry.getBlockType(item.blockType).getName());
                         it.remove();
                     } else if (unadded < item.count) {
                         // Partial stack collected (inventory almost full)
                         int collected = item.count - unadded;
-                        System.out.println("[Inventory] 📦 Picked up " + collected + "x " + Block.getName(item.blockType) + " (" + unadded + " remaining on ground)");
+                        System.out.println("[Inventory] 📦 Picked up " + collected + "x " + BlockStateRegistry.getBlockType(item.blockType).getName() + " (" + unadded + " remaining on ground)");
                         item.count = unadded;
                         item.pickupDelay = 0.5f;
                         item.velocity.x *= 0.1f;
@@ -182,54 +184,57 @@ public class ItemEntityManager {
                 putRotatedVertex(vertexBuffer,  halfItem, itemSize, 0, uMin, vMax, 0, 0, -1, cos, sin, ix, iy, iz);
 
                 totalVertices += 12;
-            } else if (Block.isPlant(item.blockType)) {
-                // Render crossed 2-quad foliage for flowers & tall grass (X-cross)
-                int tile = Block.getDisplayFaceTile(item.blockType);
-                float[] uv = TextureAtlas.getTileUV(tile);
-                float uMin = uv[0]; float uMax = uv[1];
-                float vMin = uv[2]; float vMax = uv[3];
-
-                // Quad 1: Diagonal / (Double-sided)
-                putRotatedVertex(vertexBuffer, -halfS, 0, -halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, 0,  halfS, uMax, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, s,  halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-
-                putRotatedVertex(vertexBuffer, -halfS, 0, -halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, s,  halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer, -halfS, s, -halfS, uMin, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-
-                // Backside of Quad 1
-                putRotatedVertex(vertexBuffer, -halfS, 0, -halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer, -halfS, s, -halfS, uMin, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, s,  halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-
-                putRotatedVertex(vertexBuffer, -halfS, 0, -halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, s,  halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, 0,  halfS, uMax, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-
-                // Quad 2: Diagonal \ (Double-sided)
-                putRotatedVertex(vertexBuffer, -halfS, 0,  halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, 0, -halfS, uMax, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, s, -halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-
-                putRotatedVertex(vertexBuffer, -halfS, 0,  halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, s, -halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer, -halfS, s,  halfS, uMin, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-
-                // Backside of Quad 2
-                putRotatedVertex(vertexBuffer, -halfS, 0,  halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer, -halfS, s,  halfS, uMin, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, s, -halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-
-                putRotatedVertex(vertexBuffer, -halfS, 0,  halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, s, -halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfS, 0, -halfS, uMax, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
-
-                totalVertices += 24;
             } else {
-                // 3D Miniature Block Cube (6 Faces with authentic textures & orientation)
-                for (int face = 0; face < 6; face++) {
-                    int slot = Block.getBlockFaceSlot(item.blockType, face);
+                BlockType itemType = BlockStateRegistry.getBlockType(item.blockType);
+                if (itemType.isPlant()) {
+                    // Render crossed 2-quad foliage for flowers & tall grass (X-cross)
+                    int tile = itemType.getDisplayFaceTile();
+                    float[] uv = TextureAtlas.getTileUV(tile);
+                    float uMin = uv[0]; float uMax = uv[1];
+                    float vMin = uv[2]; float vMax = uv[3];
+
+                    // Quad 1: Diagonal / (Double-sided)
+                    putRotatedVertex(vertexBuffer, -halfS, 0, -halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, 0,  halfS, uMax, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, s,  halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+
+                    putRotatedVertex(vertexBuffer, -halfS, 0, -halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, s,  halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer, -halfS, s, -halfS, uMin, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+
+                    // Backside of Quad 1
+                    putRotatedVertex(vertexBuffer, -halfS, 0, -halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer, -halfS, s, -halfS, uMin, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, s,  halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+
+                    putRotatedVertex(vertexBuffer, -halfS, 0, -halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, s,  halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, 0,  halfS, uMax, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+
+                    // Quad 2: Diagonal \ (Double-sided)
+                    putRotatedVertex(vertexBuffer, -halfS, 0,  halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, 0, -halfS, uMax, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, s, -halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+
+                    putRotatedVertex(vertexBuffer, -halfS, 0,  halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, s, -halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer, -halfS, s,  halfS, uMin, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+
+                    // Backside of Quad 2
+                    putRotatedVertex(vertexBuffer, -halfS, 0,  halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer, -halfS, s,  halfS, uMin, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, s, -halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+
+                    putRotatedVertex(vertexBuffer, -halfS, 0,  halfS, uMin, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, s, -halfS, uMax, vMax, 0, 1, 0, cos, sin, ix, iy, iz);
+                    putRotatedVertex(vertexBuffer,  halfS, 0, -halfS, uMax, vMin, 0, 1, 0, cos, sin, ix, iy, iz);
+
+                    totalVertices += 24;
+                } else {
+                    // 3D Miniature Block Cube (6 Faces with authentic textures & orientation)
+                    BlockState defaultState = itemType.getDefaultState();
+                    for (int face = 0; face < 6; face++) {
+                        int slot = defaultState.getFaceTextureSlot(face);
                     float[] uv = TextureAtlas.getTileUV(slot);
                     float uMin = uv[0]; float uMax = uv[1];
                     float vMin = uv[2]; float vMax = uv[3];
@@ -293,6 +298,7 @@ public class ItemEntityManager {
                     totalVertices += 6;
                 }
             }
+        }
 
             if (totalVertices + VERTICES_PER_CUBE >= BUFFER_CAPACITY / FLOATS_PER_VERTEX) {
                 break; // Buffer safety clamp
@@ -339,23 +345,7 @@ public class ItemEntityManager {
     }
 
     private static int getBlockFaceSlot(byte blockType, int faceIndex) {
-        return switch (blockType) {
-            case Block.GRASS -> (faceIndex == 2) ? 0 : (faceIndex == 3 ? 2 : 1);
-            case Block.DIRT -> 2;
-            case Block.STONE -> 3;
-            case Block.COBBLESTONE -> 4;
-            case Block.SAND -> 5;
-            case Block.BEDROCK -> 6;
-            case Block.OAK_LOG -> (faceIndex == 2 || faceIndex == 3) ? 8 : 7;
-            case Block.BIRCH_LOG -> (faceIndex == 2 || faceIndex == 3) ? 8 : 15;
-            case Block.OAK_LEAVES, Block.BIRCH_LEAVES -> 9;
-            case Block.DIAMOND_ORE -> 10;
-            case Block.WATER -> 11;
-            case Block.TALL_GRASS -> 12;
-            case Block.POPPY -> 13;
-            case Block.DANDELION -> 14;
-            default -> 2;
-        };
+        return BlockStateRegistry.getDefaultState(blockType).getFaceTextureSlot(faceIndex);
     }
 
     public void cleanup() {

@@ -1,25 +1,37 @@
 package com.mcjournal.client;
 
-import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.Blocks;
 import org.joml.Vector3f;
 
 public class Raycast {
     public static class Hit {
         public final int bx, by, bz;
         public final int normalX, normalY, normalZ;
+        public final BlockState state;
         public final byte blockType;
         public final float distance;
 
-        public Hit(int bx, int by, int bz, int normalX, int normalY, int normalZ, byte blockType, float distance) {
+        public Hit(int bx, int by, int bz, int normalX, int normalY, int normalZ, BlockState state, float distance) {
             this.bx = bx;
             this.by = by;
             this.bz = bz;
             this.normalX = normalX;
             this.normalY = normalY;
             this.normalZ = normalZ;
-            this.blockType = blockType;
+            this.state = (state != null) ? state : Blocks.AIR.getDefaultState();
+            this.blockType = this.state.getLegacyId();
             this.distance = distance;
+        }
+
+        @Deprecated
+        public Hit(int bx, int by, int bz, int normalX, int normalY, int normalZ, byte blockType, float distance) {
+            this(bx, by, bz, normalX, normalY, normalZ, com.mcjournal.block.BlockStateRegistry.getDefaultState(blockType), distance);
+        }
+
+        public com.mcjournal.block.BlockType getBlock() {
+            return state.getBlock();
         }
     }
 
@@ -58,9 +70,9 @@ public class Raycast {
         float dist = 0;
 
         while (dist <= maxDistance) {
-            byte block = world.getBlockAt(x, y, z);
-            if (block != Block.AIR && block != Block.WATER) {
-                return new Hit(x, y, z, normalX, normalY, normalZ, block, dist);
+            BlockState state = world.getBlockStateAt(x, y, z);
+            if (!state.isAir() && !state.isWater()) {
+                return new Hit(x, y, z, normalX, normalY, normalZ, state, dist);
             }
 
             if (tMaxX < tMaxY) {

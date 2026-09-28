@@ -1,7 +1,7 @@
 package com.mcjournal.client;
 
-import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
+import com.mcjournal.block.BlockState;
 import org.joml.Vector3f;
 
 import java.util.Random;
@@ -64,7 +64,7 @@ public class ItemEntity {
         int bX = (int) Math.floor(pos.x);
         int bY = (int) Math.floor(pos.y);
         int bZ = (int) Math.floor(pos.z);
-        boolean inWater = (world != null && world.getBlockAt(bX, bY, bZ) == Block.WATER);
+        boolean inWater = (world != null && world.getBlockStateAt(bX, bY, bZ).isWater());
 
         if (inWater) {
             // Gentle water buoyancy & fluid resistance
@@ -109,7 +109,7 @@ public class ItemEntity {
             int floorY = (int) Math.floor(nextY);
             int floorZ = (int) Math.floor(pos.z);
 
-            if (world != null && Block.isSolid(world.getBlockAt(floorX, floorY, floorZ))) {
+            if (world != null && world.getBlockStateAt(floorX, floorY, floorZ).isSolid()) {
                 pos.y = floorY + 1.0f + 0.02f;
                 velocity.y = 0.0f;
                 onGround = true;
@@ -122,7 +122,7 @@ public class ItemEntity {
             int ceilY = (int) Math.floor(nextY + SIZE);
             int ceilZ = (int) Math.floor(pos.z);
 
-            if (world != null && Block.isSolid(world.getBlockAt(ceilX, ceilY, ceilZ))) {
+            if (world != null && world.getBlockStateAt(ceilX, ceilY, ceilZ).isSolid()) {
                 velocity.y = 0.0f;
             } else {
                 pos.y = nextY;
@@ -134,7 +134,7 @@ public class ItemEntity {
         int checkX = (int) Math.floor(nextX + Math.signum(velocity.x) * (SIZE / 2.0f));
         int checkY = (int) Math.floor(pos.y + 0.05f);
         int checkZ = (int) Math.floor(pos.z);
-        if (world != null && Block.isSolid(world.getBlockAt(checkX, checkY, checkZ))) {
+        if (world != null && world.getBlockStateAt(checkX, checkY, checkZ).isSolid()) {
             velocity.x = 0.0f;
         } else {
             pos.x = nextX;
@@ -144,7 +144,7 @@ public class ItemEntity {
         float nextZ = pos.z + velocity.z * dt;
         checkX = (int) Math.floor(pos.x);
         checkZ = (int) Math.floor(nextZ + Math.signum(velocity.z) * (SIZE / 2.0f));
-        if (world != null && Block.isSolid(world.getBlockAt(checkX, checkY, checkZ))) {
+        if (world != null && world.getBlockStateAt(checkX, checkY, checkZ).isSolid()) {
             velocity.z = 0.0f;
         } else {
             pos.z = nextZ;

@@ -1,7 +1,9 @@
 package com.mcjournal.client;
 
-import com.mcjournal.Block;
 import com.mcjournal.Item;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.BlockType;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.system.MemoryUtil;
@@ -723,16 +725,17 @@ public class FirstPersonHandRenderer {
         if (blockType == currentHeldBlockType && heldBlockVao != 0) return;
         currentHeldBlockType = blockType;
 
-        if (blockType == Block.AIR || Item.isTool(blockType)) {
+        if (blockType == 0 || Item.isTool(blockType)) {
             heldBlockVertexCount = 0;
             return;
         }
 
         FloatBuffer buffer = MemoryUtil.memAllocFloat(64 * 11);
+        BlockType type = BlockStateRegistry.getBlockType(blockType);
 
-        if (Block.isPlant(blockType)) {
+        if (type.isPlant()) {
             // Render 2D crossed quads in fist for flowers & tall grass on the far end
-            int tile = Block.getDisplayFaceTile(blockType);
+            int tile = type.getDisplayFaceTile();
             float[] uv = TextureAtlas.getTileUV(tile);
             float u0 = uv[0], u1 = uv[1], v0 = uv[2], v1 = uv[3];
 
@@ -760,9 +763,11 @@ public class FirstPersonHandRenderer {
             float y0 = cy - s, y1 = cy + s;
             float z0 = cz - s, z1 = cz + s;
 
+            BlockState defaultState = type.getDefaultState();
+
             // 6 Faces with authentic Block TextureAtlas UVs
             for (int face = 0; face < 6; face++) {
-                int slot = Block.getBlockFaceSlot(blockType, face);
+                int slot = defaultState.getFaceTextureSlot(face);
                 float[] uv = TextureAtlas.getTileUV(slot);
                 float u0 = uv[0], u1 = uv[1], v0 = uv[2], v1 = uv[3];
 
@@ -807,7 +812,7 @@ public class FirstPersonHandRenderer {
         boolean isHoldingShovel = (heldItem == Item.IRON_SHOVEL);
         boolean isHoldingPickaxe = (heldItem == Item.IRON_PICKAXE);
         boolean isHoldingTool = isHoldingAxe || isHoldingShovel || isHoldingPickaxe;
-        boolean isHoldingBlock = (heldItem != Block.AIR && !isHoldingTool);
+        boolean isHoldingBlock = (heldItem != 0 && !isHoldingTool);
 
         if (isHoldingBlock) {
             updateHeldBlockMesh(heldItem);

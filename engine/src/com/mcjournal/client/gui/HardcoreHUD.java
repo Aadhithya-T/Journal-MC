@@ -1,7 +1,9 @@
 package com.mcjournal.client.gui;
 
-import com.mcjournal.Block;
 import com.mcjournal.Item;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.BlockType;
 import com.mcjournal.client.Player;
 import com.mcjournal.client.TextureAtlas;
 import org.lwjgl.system.MemoryUtil;
@@ -399,7 +401,7 @@ public class HardcoreHUD {
             byte blockType = player.hotbarBlocks[i];
             int count = player.hotbarCounts[i];
 
-            if (blockType != Block.AIR && count > 0) {
+            if (blockType != 0 && count > 0) {
                 drawBlockItemInSlot(gui, atlasTextureId, blockType, slotX, hotbarY, slotSize);
 
                 // Render Stack Count in bottom right (Tools like Iron Axe do not display stack numbers)
@@ -492,7 +494,7 @@ public class HardcoreHUD {
     }
 
     private void drawBlockItemInSlot(GuiRenderer gui, int atlasTextureId, byte blockType, float slotX, float hotbarY, float slotSize) {
-        if (blockType == Block.AIR) return;
+        if (blockType == 0) return;
 
         if (blockType == Item.IRON_AXE) {
             // Render 2D Pixel-Art Iron Axe Sprite centered in slot
@@ -523,9 +525,11 @@ public class HardcoreHUD {
 
         if (atlasTextureId == 0) return;
 
-        if (Block.isPlant(blockType)) {
+        BlockType type = BlockStateRegistry.getBlockType(blockType);
+
+        if (type.isPlant()) {
             // Flat 2D Flower / Tall Grass icon
-            int tile = Block.getDisplayFaceTile(blockType);
+            int tile = type.getDisplayFaceTile();
             float[] uv = TextureAtlas.getTileUV(tile);
             float iconSize = 26;
             float ix = slotX + (slotSize - 2 - iconSize) / 2.0f;
@@ -537,8 +541,10 @@ public class HardcoreHUD {
             float cy = hotbarY + (slotSize - 2) / 2.0f - 1.0f;
             float s = 11.5f; // half-width span
 
+            BlockState state = type.getDefaultState();
+
             // Top Face (Rhombus) - Full 1.0 Brightness
-            int topSlot = Block.getBlockFaceSlot(blockType, 2);
+            int topSlot = state.getFaceTextureSlot(2);
             float[] topUV = TextureAtlas.getTileUV(topSlot);
             gui.drawTexturedQuadArbitrary(
                 atlasTextureId,
@@ -550,7 +556,7 @@ public class HardcoreHUD {
             );
 
             // Left Face (West Side) - 0.70 Shading
-            int leftSlot = Block.getBlockFaceSlot(blockType, 1);
+            int leftSlot = state.getFaceTextureSlot(1);
             float[] leftUV = TextureAtlas.getTileUV(leftSlot);
             gui.drawTexturedQuadArbitrary(
                 atlasTextureId,
@@ -562,7 +568,7 @@ public class HardcoreHUD {
             );
 
             // Right Face (South Side) - 0.85 Shading
-            int rightSlot = Block.getBlockFaceSlot(blockType, 4);
+            int rightSlot = state.getFaceTextureSlot(4);
             float[] rightUV = TextureAtlas.getTileUV(rightSlot);
             gui.drawTexturedQuadArbitrary(
                 atlasTextureId,

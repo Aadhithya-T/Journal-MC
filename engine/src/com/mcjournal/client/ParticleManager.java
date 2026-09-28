@@ -1,7 +1,9 @@
 package com.mcjournal.client;
 
-import com.mcjournal.Block;
 import com.mcjournal.ChunkManager;
+import com.mcjournal.block.BlockState;
+import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.block.BlockType;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.system.MemoryUtil;
@@ -87,8 +89,9 @@ public class ParticleManager {
         MemoryUtil.memFree(vertexBuffer);
     }
 
-    public void spawnBlockBreakParticles(int bx, int by, int bz, byte blockType) {
-        Vector4f baseColor = parseHexColor(Block.getColor(blockType));
+    public void spawnBlockBreakParticles(int bx, int by, int bz, BlockState state) {
+        if (state == null) return;
+        Vector4f baseColor = parseHexColor(state.getBlock().getColorHex());
         int count = 28; // Disintegration cloud of ~28 debris fragments
 
         for (int i = 0; i < count; i++) {
@@ -116,8 +119,13 @@ public class ParticleManager {
         }
     }
 
-    public void spawnMiningHitParticles(int bx, int by, int bz, byte blockType, int normalX, int normalY, int normalZ) {
-        Vector4f baseColor = parseHexColor(Block.getColor(blockType));
+    public void spawnBlockBreakParticles(int bx, int by, int bz, byte blockType) {
+        spawnBlockBreakParticles(bx, by, bz, BlockStateRegistry.getDefaultState(blockType));
+    }
+
+    public void spawnMiningHitParticles(int bx, int by, int bz, BlockState state, int normalX, int normalY, int normalZ) {
+        if (state == null) return;
+        Vector4f baseColor = parseHexColor(state.getBlock().getColorHex());
         int count = 3;
 
         for (int i = 0; i < count; i++) {
@@ -141,6 +149,10 @@ public class ParticleManager {
 
             particles.add(p);
         }
+    }
+
+    public void spawnMiningHitParticles(int bx, int by, int bz, byte blockType, int normalX, int normalY, int normalZ) {
+        spawnMiningHitParticles(bx, by, bz, BlockStateRegistry.getDefaultState(blockType), normalX, normalY, normalZ);
     }
 
     public void update(double deltaTime, ChunkManager world) {
@@ -169,7 +181,7 @@ public class ParticleManager {
             int floorY = (int) Math.floor(p.pos.y);
             int floorZ = (int) Math.floor(p.pos.z);
 
-            if (world != null && Block.isSolid(world.getBlockAt(floorX, floorY, floorZ))) {
+            if (world != null && world.getBlockStateAt(floorX, floorY, floorZ).isSolid()) {
                 p.pos.y = floorY + 1.01f;
                 p.velocity.y = -p.velocity.y * 0.3f; // bounce damping
                 p.velocity.x *= 0.6f;
