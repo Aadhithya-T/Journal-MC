@@ -228,6 +228,9 @@ public class GameRenderer {
 
         // 6. Active Screen Menu Overlay
         screenManager.render(guiRenderer, fontRenderer, input, (float) deltaTime, window.getWidth(), window.getHeight());
+
+        // Latch frame statistics for the debug overlay
+        EngineMetrics.getInstance().endFrame();
     }
 
     public void cleanup() {

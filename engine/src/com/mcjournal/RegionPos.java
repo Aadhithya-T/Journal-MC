@@ -7,19 +7,19 @@ package com.mcjournal;
 public record RegionPos(int rx, int rz) {
 
     public static RegionPos fromChunkCoords(int cx, int cz) {
-        return new RegionPos(Math.floorDiv(cx, 32), Math.floorDiv(cz, 32));
+        return new RegionPos(Math.floorDiv(cx, EngineConstants.REGION_SIZE_CHUNKS), Math.floorDiv(cz, EngineConstants.REGION_SIZE_CHUNKS));
     }
 
     public static RegionPos fromWorldCoords(int wx, int wz) {
-        return fromChunkCoords(Math.floorDiv(wx, 16), Math.floorDiv(wz, 16));
+        return fromChunkCoords(Math.floorDiv(wx, EngineConstants.CHUNK_SIZE), Math.floorDiv(wz, EngineConstants.CHUNK_SIZE));
     }
 
     public int getLocalChunkX(int cx) {
-        return Math.floorMod(cx, 32);
+        return Math.floorMod(cx, EngineConstants.REGION_SIZE_CHUNKS);
     }
 
     public int getLocalChunkZ(int cz) {
-        return Math.floorMod(cz, 32);
+        return Math.floorMod(cz, EngineConstants.REGION_SIZE_CHUNKS);
     }
 
     public String getFileName() {

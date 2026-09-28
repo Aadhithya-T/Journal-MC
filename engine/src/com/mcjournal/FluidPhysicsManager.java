@@ -156,6 +156,7 @@ public class FluidPhysicsManager {
 
         // P6.2: Apply all buffered mutations in one batch, then trigger dirty meshing
         if (!mutationBuffer.isEmpty()) {
+            com.mcjournal.client.EngineMetrics.getInstance().recordFluidUpdates(mutationBuffer.size());
             for (Map.Entry<WorldBlockPos, BlockState> entry : mutationBuffer.entrySet()) {
                 WorldBlockPos p = entry.getKey();
                 world.setBlockStateAt(p.x(), p.y(), p.z(), entry.getValue());

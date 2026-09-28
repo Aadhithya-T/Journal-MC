@@ -67,9 +67,10 @@ public class ChunkRenderer {
 
     public void uploadChunkMesh(ChunkPos pos, ChunkMeshBuilder.MeshData meshData) {
         if (meshData == null) return;
+        long uploadStart = System.nanoTime();
         GPUChunkMesh mesh = meshes.computeIfAbsent(pos, k -> new GPUChunkMesh());
 
-        int stride = 13 * Float.BYTES; // 52 bytes per interleaved vertex
+        int stride = com.mcjournal.EngineConstants.BYTES_PER_VERTEX; // 52 bytes per interleaved vertex
 
         // 1. Upload Solid Mesh (Interleaved VBO + EBO)
         if (meshData.solidVertices != null && meshData.solidVertices.length > 0
@@ -189,6 +190,9 @@ public class ChunkRenderer {
         } else {
             mesh.waterIndexCount = 0;
         }
+
+        EngineMetrics.getInstance().recordGpuUpload();
+        EngineMetrics.getInstance().recordGpuUploadTime((System.nanoTime() - uploadStart) / 1_000_000.0);
     }
 
     /**
@@ -198,8 +202,8 @@ public class ChunkRenderer {
      */
     public void updateVisibility(FrustumCuller culler, float camX, float camZ, int renderDistance) {
         visibleChunks.clear();
-        int camChunkX = Math.floorDiv((int) Math.floor(camX), 16);
-        int camChunkZ = Math.floorDiv((int) Math.floor(camZ), 16);
+        int camChunkX = Math.floorDiv((int) Math.floor(camX), com.mcjournal.EngineConstants.CHUNK_SIZE);
+        int camChunkZ = Math.floorDiv((int) Math.floor(camZ), com.mcjournal.EngineConstants.CHUNK_SIZE);
         int maxDistSq = (renderDistance + 1) * (renderDistance + 1);
 
         for (Map.Entry<ChunkPos, GPUChunkMesh> entry : meshes.entrySet()) {
@@ -242,6 +246,7 @@ public class ChunkRenderer {
             if (mesh != null && mesh.solidVao != 0 && mesh.solidIndexCount > 0) {
                 glBindVertexArray(mesh.solidVao);
                 glDrawElements(GL_TRIANGLES, mesh.solidIndexCount, GL_UNSIGNED_INT, 0);
+                EngineMetrics.getInstance().recordDrawCall((mesh.solidIndexCount / 6) * 4);
                 count++;
             }
         }
@@ -265,6 +270,7 @@ public class ChunkRenderer {
             if (mesh != null && mesh.cutoutVao != 0 && mesh.cutoutIndexCount > 0) {
                 glBindVertexArray(mesh.cutoutVao);
                 glDrawElements(GL_TRIANGLES, mesh.cutoutIndexCount, GL_UNSIGNED_INT, 0);
+                EngineMetrics.getInstance().recordDrawCall((mesh.cutoutIndexCount / 6) * 4);
             }
         }
         glBindVertexArray(0);
@@ -293,6 +299,7 @@ public class ChunkRenderer {
             if (mesh != null && mesh.waterVao != 0 && mesh.waterIndexCount > 0) {
                 glBindVertexArray(mesh.waterVao);
                 glDrawElements(GL_TRIANGLES, mesh.waterIndexCount, GL_UNSIGNED_INT, 0);
+                EngineMetrics.getInstance().recordDrawCall((mesh.waterIndexCount / 6) * 4);
             }
         }
         glBindVertexArray(0);

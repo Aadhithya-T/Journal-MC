@@ -486,10 +486,32 @@ public class HardcoreHUD {
         String modeStr = "Mode: HARDCORE | Biome: " + biomeName;
         font.drawString(gui, modeStr, 12, 48, 0.75f, 0xff5555, true);
 
-        if (showFps) {
+        if (showFps || com.mcjournal.client.EngineMetrics.getInstance().isDebugOverlayVisible()) {
             String fpsStr = fps + " FPS";
             int fpsCol = (fps >= 50) ? 0x55ff55 : (fps >= 30 ? 0xffff55 : 0xff5555);
             font.drawString(gui, fpsStr, 12, 66, 0.75f, fpsCol, true);
+        }
+
+        // F3 Debug Screen Card (P12)
+        com.mcjournal.client.EngineMetrics metrics = com.mcjournal.client.EngineMetrics.getInstance();
+        if (metrics.isDebugOverlayVisible()) {
+            int cardX = 12;
+            int cardY = 88;
+            int cardW = 190;
+            int cardH = 175;
+            gui.drawRect(cardX - 4, cardY - 4, cardW, cardH, 0.05f, 0.05f, 0.05f, 0.80f);
+
+            int textY = cardY;
+            font.drawString(gui, "--- ENGINE ---", cardX, textY, 0.80f, 0x55ffff, true); textY += 16;
+            font.drawString(gui, "FPS: " + metrics.getFps(), cardX, textY, 0.72f, 0xffffff, true); textY += 15;
+            font.drawString(gui, "TPS: " + metrics.getTps(), cardX, textY, 0.72f, 0xffffff, true); textY += 15;
+            font.drawString(gui, "Chunks: " + metrics.getChunksLoaded(), cardX, textY, 0.72f, 0xffffff, true); textY += 15;
+            font.drawString(gui, "Visible: " + renderedChunks, cardX, textY, 0.72f, 0xffffff, true); textY += 15;
+            font.drawString(gui, "Generating: " + metrics.getChunksGenerating(), cardX, textY, 0.72f, 0xffffff, true); textY += 15;
+            font.drawString(gui, "Meshing: " + metrics.getChunksMeshing(), cardX, textY, 0.72f, 0xffffff, true); textY += 15;
+            font.drawString(gui, "Vertices: " + com.mcjournal.client.EngineMetrics.formatVertices(metrics.getLastVerticesRendered()), cardX, textY, 0.72f, 0xffffff, true); textY += 15;
+            font.drawString(gui, "GPU uploads: " + metrics.getLastGpuUploads(), cardX, textY, 0.72f, 0xffffff, true); textY += 15;
+            font.drawString(gui, "Fluid updates: " + metrics.getLastFluidUpdates(), cardX, textY, 0.72f, 0xffffff, true);
         }
     }
 

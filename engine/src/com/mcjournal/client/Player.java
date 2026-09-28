@@ -12,16 +12,16 @@ public class Player {
     private final PhysicsSystem physicsSystem = new PhysicsSystem();
 
     // Physical dimensions (Vanilla Minecraft: 0.6 x 1.8 x 0.6)
-    public static final float WIDTH = 0.6f;
-    public static final float HEIGHT = 1.8f;
-    public static final float EYE_HEIGHT = 1.62f;
+    public static final float WIDTH = com.mcjournal.EngineConstants.PLAYER_WIDTH;
+    public static final float HEIGHT = com.mcjournal.EngineConstants.PLAYER_HEIGHT;
+    public static final float EYE_HEIGHT = com.mcjournal.EngineConstants.PLAYER_EYE_HEIGHT;
     public static final float SNEAK_EYE_HEIGHT = 1.27f;
-    public static final float STEP_HEIGHT = 0.6f; // Vanilla 0.6 block step-up
+    public static final float STEP_HEIGHT = com.mcjournal.EngineConstants.PLAYER_STEP_HEIGHT;
 
     // Movement constants
-    public static final float GRAVITY = PhysicsSystem.GRAVITY;       // blocks per tick^2
-    public static final float DRAG_Y = PhysicsSystem.DRAG_Y;        // vertical air drag
-    public static final float JUMP_IMPULSE = PhysicsSystem.JUMP_IMPULSE;  // vanilla jump impulse (~1.25 block height)
+    public static final float GRAVITY = com.mcjournal.EngineConstants.GRAVITY;       // blocks per tick^2
+    public static final float DRAG_Y = com.mcjournal.EngineConstants.DRAG_Y;        // vertical air drag
+    public static final float JUMP_IMPULSE = com.mcjournal.EngineConstants.JUMP_IMPULSE;  // vanilla jump impulse (~1.25 block height)
 
     public final Vector3f pos = new Vector3f(8.0f, 16.0f, 8.0f);
     public final Vector3f prevPos = new Vector3f(8.0f, 16.0f, 8.0f);

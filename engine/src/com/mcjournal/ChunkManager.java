@@ -107,7 +107,9 @@ public class ChunkManager {
 
                 genFutures.add(CompletableFuture.runAsync(() -> {
                     chunkStatuses.put(pos, ChunkStatus.GENERATING);
+                    long t0 = System.nanoTime();
                     Chunk chunk = generator.generateChunk(pos);
+                    com.mcjournal.client.EngineMetrics.getInstance().recordChunkGenTime((System.nanoTime() - t0) / 1_000_000.0);
                     chunks.put(pos, chunk);
                     chunkStatuses.put(pos, ChunkStatus.GENERATED);
                 }, chunkWorkers));
@@ -174,7 +176,9 @@ public class ChunkManager {
                     }
 
                     chunkStatuses.put(pos, ChunkStatus.GENERATING);
+                    long t0 = System.nanoTime();
                     Chunk chunk = generator.generateChunk(pos);
+                    com.mcjournal.client.EngineMetrics.getInstance().recordChunkGenTime((System.nanoTime() - t0) / 1_000_000.0);
                     chunks.put(pos, chunk);
                     chunkStatuses.put(pos, ChunkStatus.GENERATED);
 
@@ -459,6 +463,15 @@ public class ChunkManager {
      * deduplicates them, and dispatches background mesh rebuilds across the worker pool.
      */
     public void processDirtyChunks() {
+        Map<ChunkStatus, Integer> counts = getChunkStatusCounts();
+        com.mcjournal.client.EngineMetrics.getInstance().updateChunkCounts(
+            chunks.size(),
+            com.mcjournal.client.EngineMetrics.getInstance().getChunksVisible(),
+            counts.getOrDefault(ChunkStatus.GENERATING, 0),
+            counts.getOrDefault(ChunkStatus.MESHING, 0),
+            dirtyChunks.size()
+        );
+
         Set<ChunkPos> dirty = dirtyChunks.drainDirtyChunks();
         if (dirty.isEmpty()) return;
 
@@ -469,7 +482,9 @@ public class ChunkManager {
                 submitWorkerTask(() -> {
                     if (chunks.containsKey(pos)) {
                         chunkStatuses.put(pos, ChunkStatus.MESHING);
+                        long t0 = System.nanoTime();
                         ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(ChunkNeighborhood.of(chunk, this));
+                        com.mcjournal.client.EngineMetrics.getInstance().recordMeshGenTime((System.nanoTime() - t0) / 1_000_000.0);
                         meshes.put(pos, mesh);
                         uploadQueue.queueUpload(pos, mesh.getTotalBytes());
                         chunkStatuses.put(pos, ChunkStatus.MESHED);

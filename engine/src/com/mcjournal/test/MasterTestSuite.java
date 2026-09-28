@@ -21,6 +21,9 @@ public class MasterTestSuite {
 
         long suiteStartTime = System.currentTimeMillis();
 
+        // P12 & P13 Performance Instrumentation & Constants
+        runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
+
         // P11 New Dedicated Test Suites
         runSuite("P11: Block System (BlockState, Registry, Properties, Transitions)", () -> BlockSystemTest.main(new String[0]));
         runSuite("P11: World Coordinates & Chunk Boundaries", () -> WorldCoordinatesTest.main(new String[0]));

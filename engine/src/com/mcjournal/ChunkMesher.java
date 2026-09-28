@@ -26,7 +26,9 @@ public class ChunkMesher {
         Chunk chunk = chunks.get(pos);
         if (chunk != null) {
             chunkStatuses.put(pos, ChunkStatus.MESHING);
+            long t0 = System.nanoTime();
             ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(chunk, world);
+            com.mcjournal.client.EngineMetrics.getInstance().recordMeshGenTime((System.nanoTime() - t0) / 1_000_000.0);
             meshes.put(pos, mesh);
             uploadQueue.queueUpload(pos);
             chunkStatuses.put(pos, ChunkStatus.MESHED);
@@ -36,7 +38,9 @@ public class ChunkMesher {
     public void rebuildSingleMesh(ChunkPos pos, ChunkManager world) {
         Chunk chunk = chunks.get(pos);
         if (chunk != null) {
+            long t0 = System.nanoTime();
             ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(chunk, world);
+            com.mcjournal.client.EngineMetrics.getInstance().recordMeshGenTime((System.nanoTime() - t0) / 1_000_000.0);
             meshes.put(pos, mesh);
             uploadQueue.queueUpload(pos);
         }
@@ -51,7 +55,9 @@ public class ChunkMesher {
                     workers.submit(() -> {
                         if (chunks.containsKey(neighborPos)) {
                             chunkStatuses.put(neighborPos, ChunkStatus.MESHING);
+                            long t0 = System.nanoTime();
                             ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(neighborChunk, world);
+                            com.mcjournal.client.EngineMetrics.getInstance().recordMeshGenTime((System.nanoTime() - t0) / 1_000_000.0);
                             meshes.put(neighborPos, mesh);
                             uploadQueue.queueUpload(neighborPos);
                             chunkStatuses.put(neighborPos, ChunkStatus.MESHED);

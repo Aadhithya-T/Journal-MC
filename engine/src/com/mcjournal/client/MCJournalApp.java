@@ -20,7 +20,7 @@ import static org.lwjgl.glfw.GLFW.glfwGetTime;
  *   - Debug Modes: {@link DebugController}
  */
 public class MCJournalApp {
-    private static final double TICK_DURATION = 0.050; // 50ms = 20 TPS authoritative tick rate
+    private static final double TICK_DURATION = com.mcjournal.EngineConstants.TICK_DURATION_SECONDS; // 50ms = 20 TPS authoritative tick rate
 
     private final Window window;
     private final InputHandler input;
@@ -84,6 +84,7 @@ public class MCJournalApp {
                 currentFps = frameCount;
                 frameCount = 0;
                 fpsTimer -= 1.0;
+                EngineMetrics.getInstance().updateRates(currentFps, 20);
             }
 
             if (window.isResized()) {
