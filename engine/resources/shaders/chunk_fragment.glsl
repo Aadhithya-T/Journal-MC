@@ -42,14 +42,10 @@ void main() {
         texColor = texture(uAtlas, vUV);
     } else {
         vec2 localUV = fract(vUV);
-        // Top-face de-tiling rotation on upward-facing surfaces (Stone, Dirt, Sand, Cobble)
-        if (vNormal.y > 0.8) {
-            int rot = abs(int(floor(vWorldPos.x)) * 374761393 + int(floor(vWorldPos.z)) * 668265263) & 3;
-            if (rot == 1) localUV = vec2(localUV.y, 1.0 - localUV.x);
-            else if (rot == 2) localUV = vec2(1.0 - localUV.x, 1.0 - localUV.y);
-            else if (rot == 3) localUV = vec2(1.0 - localUV.y, localUV.x);
-        }
-        vec2 atlasUV = vTileBase + localUV * (1.0 / 8.0);
+        // Clamp strictly to inner tile bounds to eliminate bleeding into adjacent atlas tiles
+        const float eps = 0.5 / 512.0;
+        const float tileSpan = (1.0 / 8.0) - 2.0 * eps;
+        vec2 atlasUV = vTileBase + clamp(localUV, 0.0, 1.0) * tileSpan;
         texColor = textureGrad(uAtlas, atlasUV, dFdx(vUV) * (1.0 / 8.0), dFdy(vUV) * (1.0 / 8.0));
     }
     
