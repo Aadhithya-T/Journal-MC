@@ -14,6 +14,14 @@ public record ChunkPos(int x, int z) {
         return new ChunkPos(Math.floorDiv((int) Math.floor(wx), 16), Math.floorDiv((int) Math.floor(wz), 16));
     }
 
+    public int cx() {
+        return x;
+    }
+
+    public int cz() {
+        return z;
+    }
+
     public int distanceChebyshev(ChunkPos other) {
         return Math.max(Math.abs(this.x - other.x), Math.abs(this.z - other.z));
     }
