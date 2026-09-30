@@ -130,7 +130,7 @@ mc-journal/
 ├── CONCURRENCY.md                 # Thread safety rules and synchronization invariants
 ├── engine/
 │   ├── lib/                       # LWJGL 3.3.3 & JOML dependencies
-│   ├── resources/                 # Shaders, fonts, video backgrounds
+│   ├── resources/                 # Shaders, fonts, textures
 │   └── src/com/mcjournal/
 │       ├── EngineConstants.java   # Centralized engine geometry, physics & timing constants
 │       ├── Chunk.java             # Voxel chunk container (16x256x16)

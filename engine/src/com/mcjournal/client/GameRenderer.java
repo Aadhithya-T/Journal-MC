@@ -12,7 +12,7 @@ import static org.lwjgl.opengl.GL11.*;
  * GameRenderer orchestrates the multi-pass 3D and 2D rendering pipeline:
  * sky atmosphere, solid/cutout/water voxel geometry, dropped 3D items,
  * selection outline, particle effects, first-person hand viewmodel,
- * in-game HUD & hurt vignette, and menu video background.
+ * in-game HUD & hurt vignette, and menu background.
  */
 public class GameRenderer {
     private TextureAtlas atlas;
@@ -21,7 +21,6 @@ public class GameRenderer {
     private GuiRenderer guiRenderer;
     private FontRenderer fontRenderer;
     private HardcoreHUD hud;
-    private VideoBackgroundManager videoBackgroundManager;
     private BlockSelectionRenderer blockSelectionRenderer;
     private FirstPersonHandRenderer handRenderer;
 
@@ -37,9 +36,6 @@ public class GameRenderer {
 
         skyRenderer = new SkyRenderer();
         skyRenderer.init();
-
-        videoBackgroundManager = new VideoBackgroundManager();
-        videoBackgroundManager.init();
 
         blockSelectionRenderer = new BlockSelectionRenderer();
         blockSelectionRenderer.init();
@@ -62,10 +58,6 @@ public class GameRenderer {
         return chunkRenderer;
     }
 
-    public VideoBackgroundManager getVideoBackgroundManager() {
-        return videoBackgroundManager;
-    }
-
     public FirstPersonHandRenderer getHandRenderer() {
         return handRenderer;
     }
@@ -76,12 +68,6 @@ public class GameRenderer {
 
     public FontRenderer getFontRenderer() {
         return fontRenderer;
-    }
-
-    public void updateMenuBackground(double deltaTime) {
-        if (videoBackgroundManager != null) {
-            videoBackgroundManager.update(deltaTime);
-        }
     }
 
     public void render(double deltaTime, float partialTick,
@@ -220,9 +206,11 @@ public class GameRenderer {
                 guiRenderer.end();
             }
         } else {
-            // Live MP4 Video Background (Title / Menus)
-            if (videoBackgroundManager != null) {
-                videoBackgroundManager.render(window.getWidth(), window.getHeight());
+            // Authentic Minecraft dirt background (Title / Menus)
+            if (atlas != null) {
+                guiRenderer.begin(window.getWidth(), window.getHeight());
+                guiRenderer.drawDirtBackground(atlas.getTextureId(), window.getWidth(), window.getHeight());
+                guiRenderer.end();
             }
         }
 
@@ -240,7 +228,6 @@ public class GameRenderer {
         if (chunkRenderer != null) chunkRenderer.cleanup();
         if (guiRenderer != null) guiRenderer.cleanup();
         if (fontRenderer != null) fontRenderer.cleanup();
-        if (videoBackgroundManager != null) videoBackgroundManager.cleanup();
         if (blockSelectionRenderer != null) blockSelectionRenderer.cleanup();
         if (handRenderer != null) handRenderer.cleanup();
         if (hud != null) hud.cleanup();

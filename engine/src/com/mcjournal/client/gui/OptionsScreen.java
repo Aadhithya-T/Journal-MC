@@ -51,14 +51,10 @@ public class OptionsScreen extends Screen {
             init(width, height);
         }));
 
-        // Row 3: Fog Quality & Theme Info
-        buttons.add(new Button(5, "Fog: " + settings.getFogModeString(), startX, startY + 96, btnW, btnH, () -> {
+        // Row 3: Fog Quality
+        buttons.add(new Button(5, "Fog: " + settings.getFogModeString(), (width - btnW) / 2, startY + 96, btnW, btnH, () -> {
             settings.cycleFogMode();
             init(width, height);
-        }));
-
-        buttons.add(new Button(6, "Theme: " + app.getVideoBackgroundManager().getCurrentThemeName(), startX + btnW + gap, startY + 96, btnW, btnH, () -> {
-            // Displays current session menu video background theme
         }));
 
         // Done Button (Centered bottom)

@@ -99,7 +99,7 @@ public class TitleScreen extends Screen {
         String leftFooter = "Minecraft* 26.1.2 - Singleplayer (Hardcore Edition)";
         font.drawString(gui, leftFooter, 8, height - 18, 0.72f, 0xcccccc, true);
 
-        String rightFooter = "Java 26 + OpenGL 3.3 | " + app.getVideoBackgroundManager().getCurrentThemeName();
+        String rightFooter = "Java 26 + OpenGL 3.3";
         float rightW = font.getStringWidth(rightFooter, 0.72f);
         font.drawString(gui, rightFooter, width - rightW - 8, height - 18, 0.72f, 0xcccccc, true);
 

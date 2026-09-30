@@ -1,6 +1,7 @@
 package com.mcjournal.client.gui;
 
 import com.mcjournal.client.ShaderProgram;
+import com.mcjournal.client.TextureAtlas;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryUtil;
 
@@ -133,6 +134,22 @@ public class GuiRenderer {
 
         drawRect(0, screenHeight - footerHeight, screenWidth, footerHeight, 0.08f, 0.08f, 0.10f, 0.85f);
         drawRect(0, screenHeight - footerHeight, screenWidth, 2, 0.0f, 0.0f, 0.0f, 1.0f);
+    }
+
+    public void drawDirtBackground(int textureId, int screenWidth, int screenHeight) {
+        float[] uv = TextureAtlas.getTileUV(2); // BlockType DIRT = 2
+        int tileSize = 64;
+        for (int y = 0; y < screenHeight; y += tileSize) {
+            int h = Math.min(tileSize, screenHeight - y);
+            float vFraction = (float) h / (float) tileSize;
+            float vEnd = uv[3] + (uv[2] - uv[3]) * vFraction;
+            for (int x = 0; x < screenWidth; x += tileSize) {
+                int w = Math.min(tileSize, screenWidth - x);
+                float uFraction = (float) w / (float) tileSize;
+                float uEnd = uv[0] + (uv[1] - uv[0]) * uFraction;
+                drawTexturedQuad(textureId, x, y, w, h, uv[0], uv[3], uEnd, vEnd, 0.28f, 0.28f, 0.28f, 1.0f);
+            }
+        }
     }
 
     public void drawBevelBox(float x, float y, float w, float h, int bgHex, int borderLightHex, int borderDarkHex) {

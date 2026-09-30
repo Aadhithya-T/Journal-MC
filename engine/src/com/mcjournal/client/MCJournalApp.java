@@ -94,7 +94,6 @@ public class MCJournalApp {
             }
 
             // Subsystem updates
-            gameRenderer.updateMenuBackground(deltaTime);
             atmosphericSystem.update(deltaTime, worldSession.isInWorld(), screenManager.hasScreen());
             debugController.update(input);
 
@@ -225,10 +224,6 @@ public class MCJournalApp {
 
     public TextureAtlas getAtlas() {
         return gameRenderer.getAtlas();
-    }
-
-    public VideoBackgroundManager getVideoBackgroundManager() {
-        return gameRenderer.getVideoBackgroundManager();
     }
 
     public static void main(String[] args) {
