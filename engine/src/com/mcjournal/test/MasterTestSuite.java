@@ -21,6 +21,9 @@ public class MasterTestSuite {
 
         long suiteStartTime = System.currentTimeMillis();
 
+        // Phase 1: Finite World Configuration & Bounds
+        runSuite("Phase 1: Finite World Configuration & Bounds", () -> FiniteWorldBoundsTest.main(new String[0]));
+
         // P12 & P13 Performance Instrumentation & Constants
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
 
