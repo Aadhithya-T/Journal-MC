@@ -54,3 +54,4 @@ public final class StructureDefinition {
         return "StructureDefinition{" + id + " ('" + displayName + "')}";
     }
 }
+

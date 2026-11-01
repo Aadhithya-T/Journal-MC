@@ -45,7 +45,12 @@ public class StructureRegistry {
         return definitions.size();
     }
 
+    public synchronized boolean isEmpty() {
+        return definitions.isEmpty();
+    }
+
     public synchronized void clear() {
         definitions.clear();
     }
 }
+

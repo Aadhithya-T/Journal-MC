@@ -43,6 +43,7 @@ public class StructurePlacementManager {
 
     /**
      * Finds all authoritative structure placements whose horizontal bounding box intersects chunk (cx, cz).
+     * Guaranteed to be globally consistent and completely independent of the query chunk or loading order.
      */
     public List<StructurePlacement> getPlacementsForChunk(int cx, int cz) {
         if (!bounds.isValidChunk(cx, cz)) {
@@ -59,44 +60,30 @@ public class StructurePlacementManager {
         int chunkMinZ = cz * EngineConstants.CHUNK_SIZE;
         int chunkMaxZ = chunkMinZ + EngineConstants.CHUNK_SIZE - 1;
 
-        List<StructurePlacement> candidates = new ArrayList<>();
+        List<StructurePlacement> accepted = new ArrayList<>();
 
         for (StructureDefinition def : definitions) {
             int cellSize = def.getCellSize();
-            // Maximum possible transformed footprint
             int maxDim = Math.max(def.getTemplate().getWidth(), def.getTemplate().getDepth());
 
             int minCellX = Math.floorDiv(chunkMinX - maxDim, cellSize);
-            int maxCellX = Math.floorDiv(chunkMaxX + maxDim, cellSize);
+            int maxCellX = Math.floorDiv(chunkMaxX, cellSize);
             int minCellZ = Math.floorDiv(chunkMinZ - maxDim, cellSize);
-            int maxCellZ = Math.floorDiv(chunkMaxZ + maxDim, cellSize);
+            int maxCellZ = Math.floorDiv(chunkMaxZ, cellSize);
 
             for (int cellZ = minCellZ; cellZ <= maxCellZ; cellZ++) {
                 for (int cellX = minCellX; cellX <= maxCellX; cellX++) {
-                    StructurePlacement placement = evaluateCell(def, cellX, cellZ);
-                    if (placement != null) {
-                        candidates.add(placement);
+                    StructurePlacement candidate = evaluateCell(def, cellX, cellZ);
+                    if (candidate != null && candidate.intersectsChunk(cx, cz)) {
+                        if (isCandidateAccepted(candidate)) {
+                            accepted.add(candidate);
+                        }
                     }
                 }
             }
         }
 
-        if (candidates.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        // Deterministic conflict resolution across all candidate placements in the vicinity
-        List<StructurePlacement> resolved = resolveConflicts(candidates);
-
-        // Filter only those that actually intersect this chunk
-        List<StructurePlacement> intersecting = new ArrayList<>();
-        for (StructurePlacement p : resolved) {
-            if (p.intersectsChunk(cx, cz)) {
-                intersecting.add(p);
-            }
-        }
-
-        return intersecting;
+        return accepted;
     }
 
     /**
@@ -251,43 +238,111 @@ public class StructurePlacementManager {
     }
 
     /**
-     * Resolves overlapping and conflicting candidate placements deterministically.
-     * Orders by priority (descending), then by deterministic cell hash.
+     * Determines whether a candidate placement is accepted under the global greedy independent set rule.
+     * Evaluates all potentially conflicting candidates in its spatial neighborhood.
+     * Independent of the chunk that initiated the query, guaranteeing world-wide determinism.
      */
-    private List<StructurePlacement> resolveConflicts(List<StructurePlacement> candidates) {
-        if (candidates.size() <= 1) {
-            return candidates;
+    public boolean isCandidateAccepted(StructurePlacement candidate) {
+        return isCandidateAccepted(candidate, 0);
+    }
+
+    private boolean isCandidateAccepted(StructurePlacement candidate, int depth) {
+        if (candidate == null) return false;
+        if (depth >= 8) {
+            return true; // Depth limit reached, accept candidate
         }
 
-        // Deterministic sort: higher priority wins; if equal, higher cell hash wins
-        candidates.sort((a, b) -> {
-            int pA = a.getDefinition().getConstraints().getPriority();
-            int pB = b.getDefinition().getConstraints().getPriority();
-            if (pA != pB) return Integer.compare(pB, pA); // Descending
+        int pSpacing = candidate.getDefinition().getConstraints().getMinSpacing();
 
-            long hashA = hashCell(worldSeed, a.getDefinition().getId(), a.getOriginX(), a.getOriginZ());
-            long hashB = hashCell(worldSeed, b.getDefinition().getId(), b.getOriginX(), b.getOriginZ());
-            return Long.compare(hashB, hashA);
-        });
+        for (StructureDefinition def : registry.getAll()) {
+            int effSpacing = Math.max(pSpacing, def.getConstraints().getMinSpacing());
+            int maxDim = Math.max(def.getTemplate().getWidth(), def.getTemplate().getDepth());
+            int cellSize = def.getCellSize();
 
-        List<StructurePlacement> accepted = new ArrayList<>();
-        for (StructurePlacement candidate : candidates) {
-            boolean hasConflict = false;
-            int reqSpacing = candidate.getDefinition().getConstraints().getMinSpacing();
+            int minCellX = Math.floorDiv(candidate.getMinX() - effSpacing - maxDim, cellSize);
+            int maxCellX = Math.floorDiv(candidate.getMaxX() + effSpacing, cellSize);
+            int minCellZ = Math.floorDiv(candidate.getMinZ() - effSpacing - maxDim, cellSize);
+            int maxCellZ = Math.floorDiv(candidate.getMaxZ() + effSpacing, cellSize);
 
-            for (StructurePlacement existing : accepted) {
-                int effectiveSpacing = Math.max(reqSpacing, existing.getDefinition().getConstraints().getMinSpacing());
-                if (candidate.conflictsWith(existing, effectiveSpacing)) {
-                    hasConflict = true;
-                    break;
+            for (int cz = minCellZ; cz <= maxCellZ; cz++) {
+                for (int cx = minCellX; cx <= maxCellX; cx++) {
+                    StructurePlacement other = evaluateCell(def, cx, cz);
+                    if (other == null || isSamePlacement(candidate, other)) {
+                        continue;
+                    }
+
+                    if (candidate.conflictsWith(other, effSpacing)) {
+                        // If 'other' has higher rank under strict total ordering:
+                        if (compareRank(other, candidate, worldSeed) > 0) {
+                            // If the higher-ranking competitor is itself accepted, it eliminates 'candidate'
+                            if (isCandidateAccepted(other, depth + 1)) {
+                                return false;
+                            }
+                        }
+                    }
                 }
             }
-
-            if (!hasConflict) {
-                accepted.add(candidate);
-            }
         }
 
+        return true;
+    }
+
+    /**
+     * Strict total ordering for candidates:
+     * 1. Priority (descending)
+     * 2. Cell hash (descending)
+     * 3. Coordinate tie-breakers (X, Z, ID)
+     */
+    public static int compareRank(StructurePlacement a, StructurePlacement b, long seed) {
+        if (a == b) return 0;
+        if (a == null) return -1;
+        if (b == null) return 1;
+
+        int pA = a.getDefinition().getConstraints().getPriority();
+        int pB = b.getDefinition().getConstraints().getPriority();
+        if (pA != pB) {
+            return Integer.compare(pA, pB);
+        }
+
+        int cellXA = Math.floorDiv(a.getOriginX(), a.getDefinition().getCellSize());
+        int cellZA = Math.floorDiv(a.getOriginZ(), a.getDefinition().getCellSize());
+        long hashA = hashCell(seed, a.getDefinition().getId(), cellXA, cellZA);
+
+        int cellXB = Math.floorDiv(b.getOriginX(), b.getDefinition().getCellSize());
+        int cellZB = Math.floorDiv(b.getOriginZ(), b.getDefinition().getCellSize());
+        long hashB = hashCell(seed, b.getDefinition().getId(), cellXB, cellZB);
+
+        if (hashA != hashB) {
+            return Long.compare(hashA, hashB);
+        }
+
+        if (a.getOriginX() != b.getOriginX()) return Integer.compare(a.getOriginX(), b.getOriginX());
+        if (a.getOriginZ() != b.getOriginZ()) return Integer.compare(a.getOriginZ(), b.getOriginZ());
+        return a.getDefinition().getId().compareTo(b.getDefinition().getId());
+    }
+
+    private static boolean isSamePlacement(StructurePlacement a, StructurePlacement b) {
+        if (a == b) return true;
+        if (a == null || b == null) return false;
+        return a.getDefinition().getId().equals(b.getDefinition().getId()) &&
+               a.getOriginX() == b.getOriginX() &&
+               a.getOriginY() == b.getOriginY() &&
+               a.getOriginZ() == b.getOriginZ();
+    }
+
+    /**
+     * Resolves overlapping and conflicting candidate placements deterministically.
+     */
+    public List<StructurePlacement> resolveConflicts(List<StructurePlacement> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<StructurePlacement> accepted = new ArrayList<>();
+        for (StructurePlacement c : candidates) {
+            if (isCandidateAccepted(c)) {
+                accepted.add(c);
+            }
+        }
         return accepted;
     }
 

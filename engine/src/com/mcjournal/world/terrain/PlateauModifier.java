@@ -63,3 +63,4 @@ public class PlateauModifier implements TerrainModifier {
         return currentHeight;
     }
 }
+

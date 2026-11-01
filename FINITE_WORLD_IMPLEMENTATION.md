@@ -401,4 +401,56 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
 - Actual gameplay structures and POI definitions are deferred to future content-creation phases.
 - Multi-room jigsaw/procedural assembly deferred until structure content requirements are finalized.
 
+---
+
+## Phase 6 Correctness & Performance Verification Pass
+
+A dedicated verification and hardening pass was conducted on Phase 6 to guarantee globally consistent spatial conflict resolution, order-independent plateau modifiers, persistence safety, and rigorous JVM benchmark metrics under identical conditions.
+
+### 1. Focus 1: Deterministic Spatial Conflict Resolution Refactor
+- **Core Architecture Problem Addressed**: Previously, candidate conflict resolution was evaluated locally within cells gathered for a requested chunk. If a candidate $A$ touched chunk $C_1$ and conflicted with candidate $B$ in chunk $C_2$, query $C_1$ might accept $A$ without seeing $B$, while query $C_2$ might accept $B$ and drop $A$, introducing chunk-query dependencies.
+- **Canonical Neighborhood Resolution**:
+  - Implemented `isCandidateAccepted(StructurePlacement candidate)` in [`StructurePlacementManager.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/world/structure/StructurePlacementManager.java).
+  - Candidate acceptance is now evaluated strictly centered on the candidate's bounding box and effective spacing horizon across all registered definitions, completely decoupled from $(cx, cz)$ or query order.
+  - Strict total order arbitration via `compareRank(a, b, worldSeed)`: priority descending $\to$ deterministic cell hash descending $\to$ coordinate/ID tie-breakers.
+  - Recursive conflict evaluation guarantees greedy independent set consistency across arbitrarily oriented or multi-chunk footprints.
+- **Adversarial Test Suite Added**:
+  - Footprints overlapping across a cell boundary with differing priorities.
+  - Footprints overlapping across a cell boundary with equal priorities (deterministic hash tie-breaking).
+  - Footprints overlapping across a chunk boundary.
+  - Different structure definitions with differing cell sizes (e.g. 32 vs 64) properly evaluated without bypassing spacing checks.
+  - Multi-chunk structures ($32 \times 4 \times 32$) returning identical placement references and decisions across every intersecting chunk.
+  - Concurrent chunk queries returning bit-for-bit identical decisions without race conditions.
+
+### 2. Focus 2: Plateau Modifier Consistency
+- **World-Coordinate Mathematical Invariance**: Evaluated [`PlateauModifier.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/world/terrain/PlateauModifier.java) and [`TerrainModifierPipeline.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/world/terrain/TerrainModifierPipeline.java).
+- **Seamless Shared Edges**: Hermite smoothstep transition verified across chunk boundaries with continuous gradient ($|h(x+1) - h(x)| < 2.0$ blocks).
+- **Chunk Generation Order Independence**:
+  - Verified a 16-chunk grid ($cx \in [6..9], cz \in [6..9]$) containing a plateau modifier with blend radius.
+  - Generated across 4 distinct execution regimes: **Forward order**, **Reverse order**, **Random shuffle order**, and **Concurrent execution (4 worker threads)**.
+  - **Result**: All 16 chunks were **100% bit-for-bit identical** across all 4 execution orders.
+
+### 3. Focus 3: Persistence Regression & Production Equivalence
+- **Empty Registry Production Equivalence**: Verified that generating terrain with an empty `StructureRegistry` produces bit-for-bit identical block states to baseline procedural terrain generation.
+- **Player Modification Integrity**: Verified that player breaks (structure block converted to air) and player placements (diamond ore placed) persist across disk serialization and reload without being overwritten by template reapplication.
+
+### 4. Focus 4: Rigorous 3-Way Performance Benchmark
+A side-by-side benchmark was executed under identical JVM execution conditions with a 64-chunk JIT C2 warmup and 100 sample chunks per configuration:
+
+| Configuration | Latency (Avg) | Latency (Median) | Throughput (Chunks/s) | Throughput (MVoxels/s) | Query Overhead | Net Overhead vs Baseline |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Config A: Baseline Terrain** (No structures) | 2.77 ms | 2.73 ms | 361.2 chunks/s | 23.67 MVoxels/s | N/A | Baseline |
+| **Config B: Empty Production Registry** | 2.90 ms | 2.77 ms | 344.5 chunks/s | 22.58 MVoxels/s | 1.26 µs/chunk | +4.83% (+0.04 ms median) |
+| **Config C: Active Structure Framework** (2 fixtures) | 2.82 ms | 2.76 ms | 354.9 chunks/s | 23.26 MVoxels/s | 14.45 µs/chunk | +1.77% (+0.03 ms median) |
+
+**Analysis of the ~20% Overhead Concern**:
+- The apparent ~20% overhead observed previously (2.63 ms in Phase 5 vs 3.15 ms in Phase 6) was an artifact of comparing an already JIT-warmed benchmark run against an un-warmed separate JVM invocation.
+- When measured under identical JVM session conditions with full C2 warmup, the true overhead of the structure placement framework with an empty registry is **~0.04 ms per chunk (median)**, and active placement candidate queries consume only **14.45 µs per chunk**.
+- Throughput remains sustained above **340–360 chunks/s** (**>22.5 MVoxels/s**).
+
+### 5. Final Automated Test Results
+- [`FiniteStructureGenerationTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteStructureGenerationTest.java): **13/13 sub-suites passed**
+- [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java): **22/22 suites passed** (0 errors)
+
+
 

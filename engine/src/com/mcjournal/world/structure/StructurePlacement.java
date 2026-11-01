@@ -84,3 +84,4 @@ public final class StructurePlacement {
                 ") [" + minX + ".." + maxX + " x " + minZ + ".." + maxZ + "], rot=" + rotation + "}";
     }
 }
+
