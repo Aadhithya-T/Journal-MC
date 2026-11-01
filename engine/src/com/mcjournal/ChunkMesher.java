@@ -5,6 +5,7 @@ import java.util.concurrent.ExecutorService;
 
 /**
  * Handles chunk voxel mesh generation and neighbor mesh rebuilds.
+ * Enforces world bounds so invalid out-of-world chunk meshes are never requested or built.
  */
 public class ChunkMesher {
     private final ConcurrentMap<ChunkPos, Chunk> chunks;
@@ -23,6 +24,9 @@ public class ChunkMesher {
     }
 
     public void meshChunk(ChunkPos pos, ChunkManager world) {
+        if (pos == null || (world != null && !world.getWorldBounds().isValidChunk(pos))) {
+            return;
+        }
         Chunk chunk = chunks.get(pos);
         if (chunk != null) {
             chunkStatuses.put(pos, ChunkStatus.MESHING);
@@ -36,6 +40,9 @@ public class ChunkMesher {
     }
 
     public void rebuildSingleMesh(ChunkPos pos, ChunkManager world) {
+        if (pos == null || (world != null && !world.getWorldBounds().isValidChunk(pos))) {
+            return;
+        }
         Chunk chunk = chunks.get(pos);
         if (chunk != null) {
             long t0 = System.nanoTime();
@@ -47,6 +54,9 @@ public class ChunkMesher {
     }
 
     public void rebuildNeighborIfLoaded(ChunkPos neighborPos, ChunkManager world, ExecutorService workers) {
+        if (neighborPos == null || (world != null && !world.getWorldBounds().isValidChunk(neighborPos))) {
+            return;
+        }
         Chunk neighborChunk = chunks.get(neighborPos);
         ChunkStatus status = chunkStatuses.getOrDefault(neighborPos, ChunkStatus.UNLOADED);
         if (neighborChunk != null && status != ChunkStatus.MESHING && status != ChunkStatus.GENERATING && !status.isUnloading()) {

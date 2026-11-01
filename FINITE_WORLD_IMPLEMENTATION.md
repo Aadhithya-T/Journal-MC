@@ -97,3 +97,53 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
 - **Full Test Suite Baseline**:
   - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to execute `FiniteWorldBoundsTest`.
   - **17/17 test suites passed with 0 errors**.
+
+---
+
+## Phase 2: Finite Chunk System, Streaming & Partial Edge Chunks
+
+### 1. Architectural Changes & Key Decisions
+- **`ChunkManager` (`com.mcjournal.ChunkManager`)**:
+  - Bound to `WorldBounds` authority (defaults to `WorldBounds.DEFAULT`).
+  - Audited all coordinate access pathways (`setChunk`, `getChunk`, `isChunkLoaded`, `getChunkStatus`, `getBlockStateAt`, `setBlockStateAt`, `breakBlock`, `applyModifiedWorldBlockStates`).
+  - Requests for invalid chunks are rejected without allocating or queueing tasks.
+  - Access semantics cleanly integrated: `getCoordinateStatus` and `getChunkCoordinateStatus` differentiate between `OUT_OF_WORLD`, `UNLOADED`, and `LOADED`.
+  - `waitForInitialChunks`: bounds-clamped to valid chunk coordinates; duplicate requests deduplicated.
+- **`ChunkStreamer` (`com.mcjournal.ChunkStreamer`)**:
+  - Injected with `WorldBounds` to filter streaming candidates at all edges and corners.
+  - Out-of-world chunk candidates are discarded before queueing into `loadQueue` or thread workers.
+  - Unload logic preserves valid chunks; chunks are never unloaded simply because neighboring coordinates lie outside the world.
+- **`TerrainGenerator` (`com.mcjournal.TerrainGenerator`)**:
+  - Restricts voxel population to valid local bounds: $lx < maxLx$ and $lz < maxLz$ where $maxLx = bounds.getValidLocalBlockCountX(cx)$ and $maxLz = bounds.getValidLocalBlockCountZ(cz)$.
+  - In partial chunks ($cx=156$, $cz=156$), invalid local columns ($4..15$) remain empty (Air / 0).
+  - Out-of-world chunks return empty air chunk without executing noise sampling.
+  - Tree trunk and canopy leaf placement restricted to valid local coordinates ($tx+dx < maxLx$, $tz+dz < maxLz$).
+- **`ChunkGenerator` (`com.mcjournal.ChunkGenerator`)**:
+  - Sanitizes disk loads for partial chunks to ensure invalid local voxels are strictly zeroed.
+  - Restricts delta overlay application to valid local positions within partial bounds.
+  - `registerDelta`: strictly rejects modifications outside valid chunk boundaries or invalid partial local indices.
+- **`ChunkNeighborhood` (`com.mcjournal.ChunkNeighborhood`)**:
+  - Added `isNeighborOutOfWorld(dirX, dirZ)` and `isNeighborLoaded(dirX, dirZ)`.
+  - Direct array access methods (`getStateId`, `isTransparent`, `isAOSolid`, `isSolid`, `isWater`) treat out-of-world voxels and invalid partial chunk voxels as transparent Air (0).
+  - Out-of-world space does not darken Ambient Occlusion (`isAOSolid` returns `false`).
+- **`GreedySliceMesher` / `ChunkMeshBuilder` (`com.mcjournal.GreedySliceMesher`, `com.mcjournal.ChunkMeshBuilder`)**:
+  - Slice loops and greedy quad expansion bounded by `maxLx` and `maxLz`.
+  - Quad emission for partial chunks does not emit geometry with coordinates $> 2500$.
+  - Exposed perimeter walls at $X=2499$ ($+X$ face) and $Z=2499$ ($+Z$ face) render cleanly against out-of-world transparent Air.
+- **`DirtyChunkSet` (`com.mcjournal.DirtyChunkSet`)**:
+  - Bounds-aware dirty tracking: ignores block modification notifications outside world bounds.
+- **Unbounded Compatibility for Pure Algorithm Tests**:
+  - Added `WorldBounds.UNBOUNDED` for testing low-level coordinate wrapping, negative raycasting, and unbounded persistence without interfering with the authoritative finite world configuration.
+
+### 2. Verification & Automated Test Results
+- **Dedicated Test Suite**: [`FiniteChunkSystemTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteChunkSystemTest.java) added with 7 comprehensive test suites:
+  1. Valid chunk ranges $[0..156]$ and strict rejection of out-of-world chunk coordinates ($cx=-1$, $cz=-1$, $cx=157$, $cz=157$).
+  2. Partial edge chunk local limits: $(156,0)$ has $maxLx=4, maxLz=16$; $(0,156)$ has $maxLx=16, maxLz=4$; $(156,156)$ has $maxLx=4, maxLz=4$.
+  3. Terrain generator partial chunk voxel isolation: valid columns populated, invalid local columns ($4..15$) remain strictly Air.
+  4. Chunk streamer edge & corner filtering: player positioned near West, East, North, South edges and all 4 corners never queues out-of-world chunks.
+  5. `ChunkNeighborhood` boundary transparency & AO solid isolation: out-of-world neighbors treated as transparent Air without AO darkening.
+  6. Partial chunk meshing & perimeter wall quad generation: $(156,156)$ produces $+X$ face at $X=2500$ and $+Z$ face at $Z=2500$, with no vertex coordinates $> 2500$.
+  7. Block mutations and delta overlay rejection: setting/breaking blocks outside $[0..2499]$ or in invalid partial columns is rejected.
+- **Master Test Suite Execution**:
+  - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to include `FiniteChunkSystemTest`.
+  - **18/18 test suites passed with 0 errors** (2565 ms total execution time).

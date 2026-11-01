@@ -3,6 +3,7 @@ package com.mcjournal;
 import com.mcjournal.block.BlockState;
 import com.mcjournal.block.BlockStateRegistry;
 import com.mcjournal.block.Blocks;
+import com.mcjournal.world.WorldBounds;
 
 import java.io.File;
 import java.util.*;
@@ -16,11 +17,14 @@ import java.util.concurrent.*;
  * - ChunkGenerator (terrain generation and voxel delta overlay)
  * - ChunkMesher (voxel polygonization and neighbor boundary rebuilds)
  * - ChunkUploadQueue (GPU upload and unload queues)
+ *
+ * Integrated with WorldBounds to enforce finite-world dimensions (2500x2500x256).
  */
 public class ChunkManager {
     public static final int DEFAULT_RENDER_DISTANCE = 12; // 12 chunks = 192 blocks radius
     public static final int UNLOAD_PADDING = 3;            // Unload at renderDistance + 3 (15 chunks)
 
+    private final WorldBounds bounds;
     private final ChunkStreamer streamer;
     private final ChunkPersistence persistence;
     private final ChunkGenerator generator;
@@ -32,24 +36,30 @@ public class ChunkManager {
     private final ConcurrentMap<ChunkPos, ChunkMeshBuilder.MeshData> meshes = new ConcurrentHashMap<>();
     private final ConcurrentMap<WorldBlockPos, BlockState> modifiedBlockStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<ChunkPos, ChunkStatus> chunkStatuses = new ConcurrentHashMap<>();
-    private final DirtyChunkSet dirtyChunks = new DirtyChunkSet();
+    private final DirtyChunkSet dirtyChunks;
 
     private final ExecutorService chunkWorkers;
 
     public ChunkManager(long seed) {
-        this(DEFAULT_RENDER_DISTANCE, seed, null);
+        this(DEFAULT_RENDER_DISTANCE, seed, null, WorldBounds.DEFAULT);
     }
 
     public ChunkManager(int renderDistance, long seed) {
-        this(renderDistance, seed, null);
+        this(renderDistance, seed, null, WorldBounds.DEFAULT);
     }
 
     public ChunkManager(int renderDistance, long seed, File worldDir) {
-        this.streamer = new ChunkStreamer(renderDistance);
+        this(renderDistance, seed, worldDir, WorldBounds.DEFAULT);
+    }
+
+    public ChunkManager(int renderDistance, long seed, File worldDir, WorldBounds bounds) {
+        this.bounds = (bounds != null) ? bounds : WorldBounds.DEFAULT;
+        this.streamer = new ChunkStreamer(renderDistance, this.bounds);
         this.persistence = new ChunkPersistence(worldDir);
-        this.generator = new ChunkGenerator(seed, this.persistence);
+        this.generator = new ChunkGenerator(seed, this.persistence, this.bounds);
         this.uploadQueue = new ChunkUploadQueue();
         this.mesher = new ChunkMesher(this.chunks, this.meshes, this.chunkStatuses, this.uploadQueue);
+        this.dirtyChunks = new DirtyChunkSet(this.bounds);
 
         int numWorkers = Math.clamp(Runtime.getRuntime().availableProcessors() - 1, 2, 8);
         this.chunkWorkers = Executors.newFixedThreadPool(numWorkers, r -> {
@@ -57,6 +67,10 @@ public class ChunkManager {
             t.setDaemon(true);
             return t;
         });
+    }
+
+    public WorldBounds getWorldBounds() {
+        return bounds;
     }
 
     public void setRenderDistance(int newDistance) {
@@ -94,6 +108,7 @@ public class ChunkManager {
     /**
      * Synchronously generates and meshes the initial spawn area (e.g. 5x5 chunks around spawn)
      * so the player spawns with solid ground and immediate surroundings rendered.
+     * Enforces world bounds so chunks outside the world are never queued.
      */
     public void waitForInitialChunks(int spawnCx, int spawnCz, int radius) {
         List<CompletableFuture<Void>> genFutures = new ArrayList<>();
@@ -101,9 +116,21 @@ public class ChunkManager {
 
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dz = -radius; dz <= radius; dz++) {
-                ChunkPos pos = new ChunkPos(spawnCx + dx, spawnCz + dz);
+                int cx = spawnCx + dx;
+                int cz = spawnCz + dz;
+                if (!bounds.isValidChunk(cx, cz)) {
+                    continue;
+                }
+
+                ChunkPos pos = new ChunkPos(cx, cz);
+                if (chunks.containsKey(pos)) {
+                    continue; // Prevent duplicate generation requests
+                }
+                if (chunkStatuses.putIfAbsent(pos, ChunkStatus.QUEUED) != null) {
+                    continue;
+                }
+
                 initialPositions.add(pos);
-                chunkStatuses.put(pos, ChunkStatus.QUEUED);
 
                 genFutures.add(CompletableFuture.runAsync(() -> {
                     chunkStatuses.put(pos, ChunkStatus.GENERATING);
@@ -146,6 +173,7 @@ public class ChunkManager {
     /**
      * Called every tick to update world streaming around the player.
      * Loads newly visible chunks in spiral order and unloads distant chunks.
+     * Enforces bounds so out-of-world coordinates are never queued.
      */
     public void updatePlayerPosition(int playerCx, int playerCz, float lookDirX, float lookDirZ) {
         if (chunkWorkers.isShutdown()) return;
@@ -155,7 +183,13 @@ public class ChunkManager {
         // 1. Queue generation for chunks in render distance (prioritized by look direction and distance)
         PriorityQueue<ChunkPos> loadQueue = streamer.createPriorityQueue(currentPos, lookDirX, lookDirZ);
         for (ChunkStreamer.ChunkOffset offset : streamer.getSpiralOffsets()) {
-            ChunkPos pos = new ChunkPos(playerCx + offset.dx(), playerCz + offset.dz());
+            int cx = playerCx + offset.dx();
+            int cz = playerCz + offset.dz();
+            if (!bounds.isValidChunk(cx, cz)) {
+                continue; // Reject out-of-world chunks upfront
+            }
+
+            ChunkPos pos = new ChunkPos(cx, cz);
             ChunkStatus status = chunkStatuses.get(pos);
             if (status != null && status.isUnloading()) continue;
             if (!chunks.containsKey(pos) && chunkStatuses.putIfAbsent(pos, ChunkStatus.QUEUED) == null) {
@@ -190,11 +224,13 @@ public class ChunkManager {
 
                     mesher.meshChunk(pos, this);
 
-                    // Rebuild loaded neighbor boundary meshes
-                    mesher.rebuildNeighborIfLoaded(new ChunkPos(pos.x() - 1, pos.z()), this, chunkWorkers);
-                    mesher.rebuildNeighborIfLoaded(new ChunkPos(pos.x() + 1, pos.z()), this, chunkWorkers);
-                    mesher.rebuildNeighborIfLoaded(new ChunkPos(pos.x(), pos.z() - 1), this, chunkWorkers);
-                    mesher.rebuildNeighborIfLoaded(new ChunkPos(pos.x(), pos.z() + 1), this, chunkWorkers);
+                    // Rebuild loaded neighbor boundary meshes (only if within world bounds)
+                    int px = pos.x();
+                    int pz = pos.z();
+                    if (bounds.isValidChunk(px - 1, pz)) mesher.rebuildNeighborIfLoaded(new ChunkPos(px - 1, pz), this, chunkWorkers);
+                    if (bounds.isValidChunk(px + 1, pz)) mesher.rebuildNeighborIfLoaded(new ChunkPos(px + 1, pz), this, chunkWorkers);
+                    if (bounds.isValidChunk(px, pz - 1)) mesher.rebuildNeighborIfLoaded(new ChunkPos(px, pz - 1), this, chunkWorkers);
+                    if (bounds.isValidChunk(px, pz + 1)) mesher.rebuildNeighborIfLoaded(new ChunkPos(px, pz + 1), this, chunkWorkers);
                 } catch (Exception e) {
                     chunkStatuses.remove(pos);
                     e.printStackTrace();
@@ -259,6 +295,9 @@ public class ChunkManager {
     }
 
     public boolean isChunkLoaded(ChunkPos pos) {
+        if (pos == null || !bounds.isValidChunk(pos)) {
+            return false;
+        }
         ChunkStatus status = chunkStatuses.get(pos);
         return status != null && !status.isUnloading() && status != ChunkStatus.UNLOADED && chunks.containsKey(pos);
     }
@@ -268,16 +307,28 @@ public class ChunkManager {
     }
 
     public ChunkStatus getChunkStatus(ChunkPos pos) {
+        if (pos == null || !bounds.isValidChunk(pos)) {
+            return ChunkStatus.UNLOADED;
+        }
         return chunkStatuses.getOrDefault(pos, ChunkStatus.UNLOADED);
     }
 
+    public WorldBounds.CoordinateStatus getCoordinateStatus(int wx, int wy, int wz) {
+        return bounds.getCoordinateStatus(this, wx, wy, wz);
+    }
+
+    public WorldBounds.CoordinateStatus getChunkCoordinateStatus(int cx, int cz) {
+        return bounds.getChunkCoordinateStatus(this, cx, cz);
+    }
+
     public void markGpuLoaded(ChunkPos pos) {
-        if (chunkStatuses.containsKey(pos)) {
+        if (pos != null && chunkStatuses.containsKey(pos)) {
             chunkStatuses.put(pos, ChunkStatus.GPU_LOADED);
         }
     }
 
     public void confirmGpuUnloaded(ChunkPos pos) {
+        if (pos == null) return;
         chunkStatuses.put(pos, ChunkStatus.GPU_UNLOADED);
         Chunk chunk = chunks.remove(pos);
         if (chunk != null && chunk.isDirty()) {
@@ -292,10 +343,16 @@ public class ChunkManager {
     }
 
     public Chunk getChunk(ChunkPos pos) {
+        if (pos == null || !bounds.isValidChunk(pos)) {
+            return null;
+        }
         return chunks.get(pos);
     }
 
     public void setChunk(ChunkPos pos, Chunk chunk) {
+        if (pos == null || !bounds.isValidChunk(pos)) {
+            return; // Reject chunks outside world bounds
+        }
         if (chunk != null) {
             chunks.put(pos, chunk);
             chunkStatuses.put(pos, ChunkStatus.GENERATED);
@@ -314,6 +371,9 @@ public class ChunkManager {
     }
 
     public ChunkMeshBuilder.MeshData getChunkMesh(ChunkPos pos) {
+        if (pos == null || !bounds.isValidChunk(pos)) {
+            return null;
+        }
         return meshes.get(pos);
     }
 
@@ -357,7 +417,7 @@ public class ChunkManager {
 
     public void applyModifiedWorldBlockStates(Map<WorldBlockPos, BlockState> deltas) {
         if (deltas == null || deltas.isEmpty()) return;
-        Set<ChunkPos> dirtyChunks = new HashSet<>();
+        Set<ChunkPos> dirtyMeshChunks = new HashSet<>();
 
         for (Map.Entry<WorldBlockPos, BlockState> entry : deltas.entrySet()) {
             WorldBlockPos pos = entry.getKey();
@@ -365,12 +425,20 @@ public class ChunkManager {
             int wx = pos.x();
             int wy = pos.y();
             int wz = pos.z();
-            BlockState state = entry.getValue();
+            if (!bounds.isValidBlock(wx, wy, wz)) {
+                continue; // Reject out-of-world modifications
+            }
 
             int cx = Math.floorDiv(wx, 16);
             int cz = Math.floorDiv(wz, 16);
             int lx = Math.floorMod(wx, 16);
             int lz = Math.floorMod(wz, 16);
+
+            if (!bounds.isLocalBlockValid(cx, cz, lx, wy, lz)) {
+                continue; // Reject invalid partial chunk coordinates
+            }
+
+            BlockState state = entry.getValue();
             int idx = Chunk.getIndex(lx, wy, lz);
 
             ChunkPos cpos = new ChunkPos(cx, cz);
@@ -380,29 +448,31 @@ public class ChunkManager {
             Chunk chunk = chunks.get(cpos);
             if (chunk != null) {
                 chunk.setBlockState(lx, wy, lz, state);
-                dirtyChunks.add(cpos);
-                if (lx == 0) dirtyChunks.add(new ChunkPos(cx - 1, cz));
-                if (lx == 15) dirtyChunks.add(new ChunkPos(cx + 1, cz));
-                if (lz == 0) dirtyChunks.add(new ChunkPos(cx, cz - 1));
-                if (lz == 15) dirtyChunks.add(new ChunkPos(cx, cz + 1));
+                dirtyMeshChunks.add(cpos);
+                if (lx == 0 && bounds.isValidChunk(cx - 1, cz)) dirtyMeshChunks.add(new ChunkPos(cx - 1, cz));
+                if (lx == 15 && bounds.isValidChunk(cx + 1, cz)) dirtyMeshChunks.add(new ChunkPos(cx + 1, cz));
+                if (lz == 0 && bounds.isValidChunk(cx, cz - 1)) dirtyMeshChunks.add(new ChunkPos(cx, cz - 1));
+                if (lz == 15 && bounds.isValidChunk(cx, cz + 1)) dirtyMeshChunks.add(new ChunkPos(cx, cz + 1));
             }
         }
 
-        for (ChunkPos cpos : dirtyChunks) {
+        for (ChunkPos cpos : dirtyMeshChunks) {
             rebuildSingleMesh(cpos.x(), cpos.z());
         }
     }
 
     public int getStateIdAt(int wx, int wy, int wz) {
-        if (wy < 0 || wy >= Chunk.HEIGHT) return 0;
+        if (!bounds.isValidBlock(wx, wy, wz)) return 0;
 
         int cx = Math.floorDiv(wx, 16);
         int cz = Math.floorDiv(wz, 16);
-        Chunk chunk = getChunk(cx, cz);
-        if (chunk == null) return 0;
-
         int lx = Math.floorMod(wx, 16);
         int lz = Math.floorMod(wz, 16);
+
+        if (!bounds.isLocalBlockValid(cx, cz, lx, wy, lz)) return 0;
+
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk == null) return 0;
 
         return chunk.getStateId(lx, wy, lz);
     }
@@ -413,27 +483,32 @@ public class ChunkManager {
     }
 
     public BlockState getBlockStateAt(int wx, int wy, int wz) {
-        if (wy < 0 || wy >= Chunk.HEIGHT) return Blocks.AIR.getDefaultState();
+        if (!bounds.isValidBlock(wx, wy, wz)) return Blocks.AIR.getDefaultState();
 
         int cx = Math.floorDiv(wx, 16);
         int cz = Math.floorDiv(wz, 16);
-        Chunk chunk = getChunk(cx, cz);
-        if (chunk == null) return Blocks.AIR.getDefaultState();
-
         int lx = Math.floorMod(wx, 16);
         int lz = Math.floorMod(wz, 16);
+
+        if (!bounds.isLocalBlockValid(cx, cz, lx, wy, lz)) return Blocks.AIR.getDefaultState();
+
+        Chunk chunk = getChunk(cx, cz);
+        if (chunk == null) return Blocks.AIR.getDefaultState();
 
         return chunk.getBlockState(lx, wy, lz);
     }
 
     public boolean setBlockStateAt(int wx, int wy, int wz, BlockState state) {
-        if (wy < 0 || wy >= Chunk.HEIGHT || state == null) return false;
+        if (state == null || !bounds.isValidBlock(wx, wy, wz)) return false;
 
         int cx = Math.floorDiv(wx, 16);
         int cz = Math.floorDiv(wz, 16);
-        ChunkPos cpos = new ChunkPos(cx, cz);
         int lx = Math.floorMod(wx, 16);
         int lz = Math.floorMod(wz, 16);
+
+        if (!bounds.isLocalBlockValid(cx, cz, lx, wy, lz)) return false;
+
+        ChunkPos cpos = new ChunkPos(cx, cz);
         int idx = Chunk.getIndex(lx, wy, lz);
 
         generator.registerDelta(cpos, idx, state);
@@ -476,6 +551,7 @@ public class ChunkManager {
         if (dirty.isEmpty()) return;
 
         for (ChunkPos pos : dirty) {
+            if (!bounds.isValidChunk(pos)) continue;
             Chunk chunk = chunks.get(pos);
             ChunkStatus status = chunkStatuses.getOrDefault(pos, ChunkStatus.UNLOADED);
             if (chunk != null && !status.isUnloading()) {
@@ -500,6 +576,7 @@ public class ChunkManager {
     public void flushDirtyChunks() {
         Set<ChunkPos> dirty = dirtyChunks.drainDirtyChunks();
         for (ChunkPos pos : dirty) {
+            if (!bounds.isValidChunk(pos)) continue;
             Chunk chunk = chunks.get(pos);
             if (chunk != null) {
                 chunkStatuses.put(pos, ChunkStatus.MESHING);
@@ -560,12 +637,22 @@ public class ChunkManager {
     }
 
     public void rebuildSingleMesh(ChunkPos pos) {
+        if (pos == null || !bounds.isValidChunk(pos)) return;
         mesher.rebuildSingleMesh(pos, this);
     }
 
     public record BreakResult(byte blockType, BlockState blockState, String name, String color, int x, int y, int z) {}
 
     public BreakResult breakBlock(int wx, int wy, int wz) {
+        if (!bounds.isValidBlock(wx, wy, wz)) return null;
+
+        int cx = Math.floorDiv(wx, 16);
+        int cz = Math.floorDiv(wz, 16);
+        int lx = Math.floorMod(wx, 16);
+        int lz = Math.floorMod(wz, 16);
+
+        if (!bounds.isLocalBlockValid(cx, cz, lx, wy, lz)) return null;
+
         BlockState current = getBlockStateAt(wx, wy, wz);
         if (current.isAir() || current.is(Blocks.BEDROCK) || current.is(Blocks.WATER)) {
             return null;
@@ -578,6 +665,10 @@ public class ChunkManager {
     public float getGroundHeight(float wx, float wz, Float currentY) {
         int rx = (int) Math.floor(wx);
         int rz = (int) Math.floor(wz);
+
+        if (!bounds.isValidHorizontal(rx, rz)) {
+            return 1.0f;
+        }
 
         int startY = (currentY != null) ? Math.min(Chunk.HEIGHT - 2, (int) Math.floor(currentY + 0.6f)) : Chunk.HEIGHT - 2;
 

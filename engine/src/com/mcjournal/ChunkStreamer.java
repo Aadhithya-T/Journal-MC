@@ -1,13 +1,17 @@
 package com.mcjournal;
 
+import com.mcjournal.world.WorldBounds;
+
 import java.util.*;
 
 /**
  * Handles chunk streaming offsets, distance calculations, and player tracking.
+ * Enforces world boundaries so out-of-world chunks are never streamed or queued.
  */
 public class ChunkStreamer {
     public static final int UNLOAD_PADDING = 3;
 
+    private final WorldBounds bounds;
     private int renderDistance;
     private int unloadDistance;
     private volatile List<ChunkOffset> spiralOffsets;
@@ -21,7 +25,16 @@ public class ChunkStreamer {
     }
 
     public ChunkStreamer(int initialRenderDistance) {
+        this(initialRenderDistance, WorldBounds.DEFAULT);
+    }
+
+    public ChunkStreamer(int initialRenderDistance, WorldBounds bounds) {
+        this.bounds = (bounds != null) ? bounds : WorldBounds.DEFAULT;
         setRenderDistance(initialRenderDistance);
+    }
+
+    public WorldBounds getWorldBounds() {
+        return bounds;
     }
 
     public synchronized void setRenderDistance(int newDistance) {
@@ -61,6 +74,22 @@ public class ChunkStreamer {
         }
         Collections.sort(offsets);
         return Collections.unmodifiableList(offsets);
+    }
+
+    /**
+     * Returns valid in-world chunk positions around the player position within render distance,
+     * ordered by spiral distance. Strictly filters out any chunk coordinates outside world bounds.
+     */
+    public List<ChunkPos> computeStreamingChunks(int playerCx, int playerCz) {
+        List<ChunkPos> result = new ArrayList<>();
+        for (ChunkOffset offset : spiralOffsets) {
+            int cx = playerCx + offset.dx();
+            int cz = playerCz + offset.dz();
+            if (bounds.isValidChunk(cx, cz)) {
+                result.add(new ChunkPos(cx, cz));
+            }
+        }
+        return result;
     }
 
     public double computePriority(ChunkPos candidate, ChunkPos playerPos, float lookDirX, float lookDirZ) {

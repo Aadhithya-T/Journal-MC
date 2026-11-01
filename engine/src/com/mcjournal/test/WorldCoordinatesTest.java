@@ -123,7 +123,7 @@ public class WorldCoordinatesTest {
     private static void testChunkBoundaryNeighborhoodAccess() {
         System.out.print("[P11 - World] Chunk boundary traversal & 3x3 neighborhood lookups... ");
 
-        ChunkManager manager = new ChunkManager(12345L);
+        ChunkManager manager = new ChunkManager(4, 12345L, null, com.mcjournal.world.WorldBounds.UNBOUNDED);
 
         int centerCx = 0;
         int centerCz = 0;

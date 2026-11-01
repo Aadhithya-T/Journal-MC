@@ -22,7 +22,7 @@ public class MutationAndGpuPipelineTest {
     private static void testDirtyChunkSetDeduplication() {
         System.out.print("Testing DirtyChunkSet deduplication... ");
 
-        DirtyChunkSet dirtySet = new DirtyChunkSet();
+        DirtyChunkSet dirtySet = new DirtyChunkSet(com.mcjournal.world.WorldBounds.UNBOUNDED);
 
         // 50 block changes inside chunk (2, 3)
         for (int i = 0; i < 50; i++) {
@@ -42,7 +42,7 @@ public class MutationAndGpuPipelineTest {
     private static void testDirtyChunkBoundaryTracking() {
         System.out.print("Testing chunk boundary and corner dirtiness tracking... ");
 
-        DirtyChunkSet dirtySet = new DirtyChunkSet();
+        DirtyChunkSet dirtySet = new DirtyChunkSet(com.mcjournal.world.WorldBounds.UNBOUNDED);
 
         // 1. Interior voxel at (5, 64, 5) in chunk (0, 0) -> only (0, 0) dirty
         dirtySet.markBlockModified(5, 64, 5);

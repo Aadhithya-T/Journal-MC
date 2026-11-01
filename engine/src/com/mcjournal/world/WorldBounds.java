@@ -24,6 +24,7 @@ public final class WorldBounds {
     }
 
     private final WorldConfiguration config;
+    private final boolean bounded;
     private final int minChunkX;
     private final int maxChunkX;
     private final int minChunkZ;
@@ -32,20 +33,34 @@ public final class WorldBounds {
     private final int totalChunksZ;
     private final int totalChunks;
 
-    public static final WorldBounds DEFAULT = new WorldBounds(WorldConfiguration.createDefault(0L));
+    public static final WorldBounds DEFAULT = new WorldBounds(WorldConfiguration.createDefault(0L), true);
+    public static final WorldBounds UNBOUNDED = new WorldBounds(
+        new WorldConfiguration(Integer.MAX_VALUE, Integer.MAX_VALUE, 256, 0L, 1,
+            WorldConfiguration.BoundaryType.NATURAL, 0, 66, 0),
+        false
+    );
 
     public WorldBounds(WorldConfiguration config) {
+        this(config, true);
+    }
+
+    public WorldBounds(WorldConfiguration config, boolean bounded) {
         if (config == null) {
             throw new IllegalArgumentException("WorldConfiguration cannot be null");
         }
         this.config = config;
+        this.bounded = bounded;
         this.minChunkX = 0;
         this.minChunkZ = 0;
-        this.maxChunkX = Math.ceilDiv(config.width(), EngineConstants.CHUNK_SIZE) - 1;
-        this.maxChunkZ = Math.ceilDiv(config.depth(), EngineConstants.CHUNK_SIZE) - 1;
-        this.totalChunksX = maxChunkX + 1;
-        this.totalChunksZ = maxChunkZ + 1;
-        this.totalChunks = totalChunksX * totalChunksZ;
+        this.maxChunkX = bounded ? (Math.ceilDiv(config.width(), EngineConstants.CHUNK_SIZE) - 1) : Integer.MAX_VALUE;
+        this.maxChunkZ = bounded ? (Math.ceilDiv(config.depth(), EngineConstants.CHUNK_SIZE) - 1) : Integer.MAX_VALUE;
+        this.totalChunksX = bounded ? (maxChunkX + 1) : Integer.MAX_VALUE;
+        this.totalChunksZ = bounded ? (maxChunkZ + 1) : Integer.MAX_VALUE;
+        this.totalChunks = bounded ? (totalChunksX * totalChunksZ) : Integer.MAX_VALUE;
+    }
+
+    public boolean isBounded() {
+        return bounded;
     }
 
     public WorldConfiguration getConfig() {
@@ -96,9 +111,10 @@ public final class WorldBounds {
 
     /**
      * Checks if horizontal (X, Z) coordinates fall strictly within world boundaries.
-     * Negative coordinates are strictly rejected.
+     * Negative coordinates are strictly rejected when bounded.
      */
     public boolean isValidHorizontal(int x, int z) {
+        if (!bounded) return true;
         return x >= 0 && x < config.width() && z >= 0 && z < config.depth();
     }
 
@@ -123,6 +139,7 @@ public final class WorldBounds {
      * For 2500x2500, cx in [0, 156] and cz in [0, 156].
      */
     public boolean isValidChunk(int cx, int cz) {
+        if (!bounded) return true;
         return cx >= minChunkX && cx <= maxChunkX && cz >= minChunkZ && cz <= maxChunkZ;
     }
 
@@ -137,6 +154,7 @@ public final class WorldBounds {
      * For 2500 width: 2500 % 16 = 4, so chunk 156 is partial (valid local X: 0..3).
      */
     public boolean isPartialChunkX(int cx) {
+        if (!bounded) return false;
         return cx == maxChunkX && (config.width() % EngineConstants.CHUNK_SIZE != 0);
     }
 
@@ -144,6 +162,7 @@ public final class WorldBounds {
      * A chunk is partial along Z if it is the boundary chunk and depth is not a multiple of 16.
      */
     public boolean isPartialChunkZ(int cz) {
+        if (!bounded) return false;
         return cz == maxChunkZ && (config.depth() % EngineConstants.CHUNK_SIZE != 0);
     }
 
@@ -165,6 +184,7 @@ public final class WorldBounds {
      * For invalid chunks, returns 0.
      */
     public int getValidLocalBlockCountX(int cx) {
+        if (!bounded) return EngineConstants.CHUNK_SIZE;
         if (cx < minChunkX || cx > maxChunkX) return 0;
         if (cx == maxChunkX) {
             int rem = config.width() % EngineConstants.CHUNK_SIZE;
@@ -177,6 +197,7 @@ public final class WorldBounds {
      * Returns the count of valid local blocks along Z inside chunk cz.
      */
     public int getValidLocalBlockCountZ(int cz) {
+        if (!bounded) return EngineConstants.CHUNK_SIZE;
         if (cz < minChunkZ || cz > maxChunkZ) return 0;
         if (cz == maxChunkZ) {
             int rem = config.depth() % EngineConstants.CHUNK_SIZE;

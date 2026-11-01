@@ -3,11 +3,13 @@ package com.mcjournal;
 import java.util.*;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.block.BlockState;
+import com.mcjournal.world.WorldBounds;
 
 public class TerrainGenerator {
     public static final int SEA_LEVEL = 62; // Minecraft 1.17 Standard Sea Level
     public static final int BASE_GROUND_LEVEL = 64; // Minecraft 1.17 Plains Ground Level
 
+    private final WorldBounds bounds;
     private final SimplexNoise baseNoise;
     private final SimplexNoise detailNoise;
     private final SimplexNoise mountainNoise;
@@ -31,12 +33,21 @@ public class TerrainGenerator {
     public record POI(String id, String name, String subtitle, String icon, int x, int z, String excerpt) {}
 
     public TerrainGenerator(long seed) {
+        this(seed, WorldBounds.DEFAULT);
+    }
+
+    public TerrainGenerator(long seed, WorldBounds bounds) {
+        this.bounds = (bounds != null) ? bounds : WorldBounds.DEFAULT;
         this.baseNoise = new SimplexNoise(seed);
         this.detailNoise = new SimplexNoise(seed + 1337);
         this.mountainNoise = new SimplexNoise(seed + 9999);
         this.caveNoise1 = new SimplexNoise(seed + 4242);
         this.caveNoise2 = new SimplexNoise(seed + 8484);
         initPOIs();
+    }
+
+    public WorldBounds getWorldBounds() {
+        return bounds;
     }
 
     private void initPOIs() {
@@ -86,10 +97,20 @@ public class TerrainGenerator {
 
     public Chunk generateChunk(int cx, int cz) {
         Chunk chunk = new Chunk(cx, cz);
+        if (!bounds.isValidChunk(cx, cz)) {
+            return chunk; // Out-of-world chunk remains empty air
+        }
+
+        int maxLx = bounds.getValidLocalBlockCountX(cx);
+        int maxLz = bounds.getValidLocalBlockCountZ(cz);
+        if (maxLx <= 0 || maxLz <= 0) {
+            return chunk;
+        }
+
         Random rng = new Random((long) cx * 341873128712L + (long) cz * 132897987541L);
 
-        for (int lz = 0; lz < 16; lz++) {
-            for (int lx = 0; lx < 16; lx++) {
+        for (int lz = 0; lz < maxLz; lz++) {
+            for (int lx = 0; lx < maxLx; lx++) {
                 int wx = cx * 16 + lx;
                 int wz = cz * 16 + lz;
 
@@ -194,19 +215,23 @@ public class TerrainGenerator {
         if (seedHash % 3 <= 1) {
             int t1x = (seedHash >> 2) % 8 + 4;
             int t1z = (seedHash >> 5) % 8 + 4;
-            plantTree(chunk, cx, cz, t1x, t1z, seedHash % 2 == 0);
+            plantTree(chunk, cx, cz, t1x, t1z, seedHash % 2 == 0, maxLx, maxLz);
 
             if (seedHash % 3 == 0) {
                 int t2x = ((seedHash >> 7) % 6) + 2;
                 int t2z = ((seedHash >> 9) % 6) + 8;
-                plantTree(chunk, cx, cz, t2x, t2z, seedHash % 4 == 0);
+                plantTree(chunk, cx, cz, t2x, t2z, seedHash % 4 == 0, maxLx, maxLz);
             }
         }
 
         return chunk;
     }
 
-    private void plantTree(Chunk chunk, int cx, int cz, int tx, int tz, boolean isBirch) {
+    private void plantTree(Chunk chunk, int cx, int cz, int tx, int tz, boolean isBirch, int maxLx, int maxLz) {
+        if (tx < 0 || tx >= maxLx || tz < 0 || tz >= maxLz) {
+            return;
+        }
+
         int wx = cx * 16 + tx;
         int wz = cz * 16 + tz;
         int ty = computeHeight(wx, wz);
@@ -227,29 +252,33 @@ public class TerrainGenerator {
                 }
             }
 
-            // Canopy Leaves (3D Minecraft tree canopy)
+            // Canopy Leaves (3D Minecraft tree canopy) strictly within valid local bounds
             int leafBase = ty + trunkHeight - 1;
             for (int dx = -2; dx <= 2; dx++) {
                 for (int dz = -2; dz <= 2; dz++) {
                     if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
-                    if (tx + dx >= 0 && tx + dx < 16 && tz + dz >= 0 && tz + dz < 16) {
-                        if (leafBase < Chunk.HEIGHT) chunk.setBlockState(tx + dx, leafBase, tz + dz, leafType);
-                        if (leafBase + 1 < Chunk.HEIGHT) chunk.setBlockState(tx + dx, leafBase + 1, tz + dz, leafType);
+                    int lx = tx + dx;
+                    int lz = tz + dz;
+                    if (lx >= 0 && lx < maxLx && lz >= 0 && lz < maxLz) {
+                        if (leafBase < Chunk.HEIGHT) chunk.setBlockState(lx, leafBase, lz, leafType);
+                        if (leafBase + 1 < Chunk.HEIGHT) chunk.setBlockState(lx, leafBase + 1, lz, leafType);
                     }
                 }
             }
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
-                    if (tx + dx >= 0 && tx + dx < 16 && tz + dz >= 0 && tz + dz < 16) {
-                        if (leafBase + 2 < Chunk.HEIGHT) chunk.setBlockState(tx + dx, leafBase + 2, tz + dz, leafType);
+                    int lx = tx + dx;
+                    int lz = tz + dz;
+                    if (lx >= 0 && lx < maxLx && lz >= 0 && lz < maxLz) {
+                        if (leafBase + 2 < Chunk.HEIGHT) chunk.setBlockState(lx, leafBase + 2, lz, leafType);
                     }
                 }
             }
             if (leafBase + 3 < Chunk.HEIGHT) {
                 chunk.setBlockState(tx, leafBase + 3, tz, leafType);
-                if (tx + 1 < 16) chunk.setBlockState(tx + 1, leafBase + 3, tz, leafType);
+                if (tx + 1 < maxLx) chunk.setBlockState(tx + 1, leafBase + 3, tz, leafType);
                 if (tx - 1 >= 0) chunk.setBlockState(tx - 1, leafBase + 3, tz, leafType);
-                if (tz + 1 < 16) chunk.setBlockState(tx, leafBase + 3, tz + 1, leafType);
+                if (tz + 1 < maxLz) chunk.setBlockState(tx, leafBase + 3, tz + 1, leafType);
                 if (tz - 1 >= 0) chunk.setBlockState(tx, leafBase + 3, tz - 1, leafType);
             }
         }

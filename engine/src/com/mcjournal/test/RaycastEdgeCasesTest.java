@@ -37,7 +37,7 @@ public class RaycastEdgeCasesTest {
     private static void testInternalVoxelOrigin() {
         System.out.print("[P11 - Raycast] Origin inside solid block... ");
 
-        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"));
+        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"), com.mcjournal.world.WorldBounds.UNBOUNDED);
         Chunk c = new Chunk(0, 0);
         c.setBlockState(5, 64, 5, Blocks.STONE.getDefaultState());
         cm.setChunk(c.getPos(), c);
@@ -57,7 +57,7 @@ public class RaycastEdgeCasesTest {
     private static void testGrazingParallelRay() {
         System.out.print("[P11 - Raycast] Grazing ray parallel to voxel face... ");
 
-        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"));
+        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"), com.mcjournal.world.WorldBounds.UNBOUNDED);
         Chunk c = new Chunk(0, 0);
         c.setBlockState(5, 64, 5, Blocks.STONE.getDefaultState());
         cm.setChunk(c.getPos(), c);
@@ -75,7 +75,7 @@ public class RaycastEdgeCasesTest {
     private static void testExactBoundaryOrigin() {
         System.out.print("[P11 - Raycast] Ray origin exactly on voxel face boundary... ");
 
-        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"));
+        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"), com.mcjournal.world.WorldBounds.UNBOUNDED);
         Chunk c = new Chunk(0, 0);
         c.setBlockState(5, 64, 5, Blocks.STONE.getDefaultState());
         cm.setChunk(c.getPos(), c);
@@ -102,7 +102,7 @@ public class RaycastEdgeCasesTest {
     private static void testChunkBoundaryCrossing() {
         System.out.print("[P11 - Raycast] Ray crossing chunk boundary (x=15 -> x=16)... ");
 
-        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"));
+        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"), com.mcjournal.world.WorldBounds.UNBOUNDED);
         Chunk chunk0 = new Chunk(0, 0);
         Chunk chunk1 = new Chunk(1, 0);
 
@@ -127,7 +127,7 @@ public class RaycastEdgeCasesTest {
     private static void testNegativeCoordinateTraversal() {
         System.out.print("[P11 - Raycast] Traversal across negative coordinates... ");
 
-        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"));
+        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"), com.mcjournal.world.WorldBounds.UNBOUNDED);
         Chunk negChunk = new Chunk(-1, -1);
 
         // Place block at world (-5, 70, -8) -> local (-5 & 15 = 11, 70, -8 & 15 = 8)
@@ -148,7 +148,7 @@ public class RaycastEdgeCasesTest {
     private static void testMaxDistanceCutoff() {
         System.out.print("[P11 - Raycast] Max distance reach cutoff... ");
 
-        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"));
+        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"), com.mcjournal.world.WorldBounds.UNBOUNDED);
         Chunk c = new Chunk(0, 0);
         c.setBlockState(8, 64, 8, Blocks.STONE.getDefaultState());
         cm.setChunk(c.getPos(), c);
@@ -171,7 +171,7 @@ public class RaycastEdgeCasesTest {
     private static void testEmptyAirMiss() {
         System.out.print("[P11 - Raycast] Empty air miss handling... ");
 
-        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"));
+        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_ray_edge"), com.mcjournal.world.WorldBounds.UNBOUNDED);
         Chunk c = new Chunk(0, 0); // All air
         cm.setChunk(c.getPos(), c);
 
