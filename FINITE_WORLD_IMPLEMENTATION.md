@@ -258,4 +258,71 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
   - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) contains `FiniteWorldPersistenceTest`.
   - **20/20 test suites passed with 0 errors** (7352 ms total execution time).
 
+---
+
+## Phase 5: Terrain & Biome Architecture, Climate Sampling & Natural Boundaries
+
+### 1. Architectural Changes & Key Decisions
+- **`Biome` & `BiomeRegistry` (`com.mcjournal.world.biome`)**:
+  - Extensible, data-driven biome definition independent of rendering:
+    - Encapsulates climate targets (`targetTemperature`, `targetMoisture`, `targetContinentalness`), terrain height parameters (`baseHeight`, `heightVariation`, `roughness`), and block palettes (`surfaceBlock`, `subsurfaceBlock`, `deepBlock`, `underwaterBlock`, `waterLevel`, `treeDensity`, `foliageDensity`).
+    - Enforces **hard limit of 10 maximum biomes** in `BiomeRegistry` (`MAX_BIOMES = 10`), throwing `IllegalStateException` on overflow.
+    - Rejects duplicate biome IDs and null/invalid biome parameters.
+    - Provides authoritative fallback default biome (`plains`).
+    - Standard initial exploration roster: 5 registered biomes (`plains`, `forest`, `mountains`, `desert`, `ocean`), leaving slots available for future biome definitions without locking in a final roster.
+- **`ClimateSampler` & `ClimateParameters` (`com.mcjournal.world.biome`)**:
+  - Continuous multi-octave climate sampling derived deterministically from world seed:
+    - Independent Simplex noise generators for `temperature` (scale ~650 blocks), `moisture` (scale ~550 blocks), and `continentalness` (scale ~800 blocks), complemented with higher-frequency detail variation.
+    - Values normalized to $[-1.0, 1.0]$.
+    - Thread-safe, stateless, and independent of chunk generation order.
+- **`BiomeSampler` (`com.mcjournal.world.biome`)**:
+  - Smooth multi-biome transition and parameter blending:
+    - Selects primary biome via weighted Euclidean distance in climate space.
+    - Continuous terrain parameter blending using inverse-distance squared weighting:
+      $$\text{blendedParam} = \frac{\sum w_i \cdot \text{param}_i}{\sum w_i}, \quad w_i = \frac{1}{(d_i^2 + \epsilon)^2}$$
+    - Eliminates discrete height jumps and unnatural cliffs at biome boundaries.
+- **Natural Boundary Terrain Shaping (`TerrainGenerator.computeHeight`)**:
+  - Seamlessly integrates with `WorldBounds.EdgeZone`:
+    - `CORE` (> 200 blocks from edge): standard procedural biome terrain.
+    - `APPROACH`, `PERIMETER`, `BORDER` ($\le 200$ blocks from border): Hermite smoothstep elevation shaping combined with perimeter feature noise.
+    - Elevates borders naturally into craggy coastal cliffs and mountain ridges (rising to $Y=70..160$) that provide an intuitive, organic boundary without reliance on synthetic rectangular walls.
+    - River carving channels naturally damped near perimeter walls to preserve structural integrity.
+    - All terrain remains strictly within vertical limits $[40, 245]$ and horizontal boundaries $[0, 2499]$.
+- **Hybrid Procedural & Authored Terrain (`com.mcjournal.world.terrain`)**:
+  - `TerrainModifier` interface and `TerrainModifierPipeline`:
+    - Clean execution pipeline for deterministic authored terrain modifiers (plateaus, valleys, future POI preparation).
+    - Can modify height and override/adapt biomes without modifying generator internals.
+- **Terrain-Aware Spawn Resolution (`com.mcjournal.world.terrain.SpawnLocator`)**:
+  - Replaced arbitrary spawn scans with deterministic outward spiral search around $(1250, 1250)$:
+    - Validates ground surface is dry ($surfaceY > SEA\_LEVEL$).
+    - Verifies local slope is level ($\le 1$ block drop to adjacent blocks).
+    - Ensures 2+ blocks of vertical clearance.
+    - Verifies complete player collision box ($[x-0.3, x+0.3], [z-0.3, z+0.3], [y, y+1.8]$) fits inside `WorldBounds`.
+    - Integrated with `WorldSession.enterWorld`: fresh worlds resolve safe terrain spawn; existing saved player positions are preserved.
+- **Thread Safety & Chunk Column Caching**:
+  - All noise generators and registries are immutable and thread-safe.
+  - Column-level evaluation: climate, biome, and surface height computed once per $(lx, lz)$ column rather than per-voxel.
+  - Generates identical chunk blocks whether executed sequentially or concurrently across multiple worker threads.
+
+### 2. Verification & Automated Test Results
+- **Dedicated Test Suite**: [`FiniteTerrainGenerationTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteTerrainGenerationTest.java) added with 11 comprehensive test suites:
+  1. Biome architecture, validation, duplicate rejection, and strict MAX_BIOMES=10 limit enforcement.
+  2. Climate sampling determinism, $[-1.0, 1.0]$ ranges, and seed divergence.
+  3. Terrain height determinism, vertical bounds $[40, 245]$, and chunk boundary seam continuity (max delta $\le 4$ across borders).
+  4. Biome transitions and continuous parameter blending (smooth step variation $< 3.0$).
+  5. Block palette validity and partial edge chunk voxel isolation (columns $lx \ge 4$ or $lz \ge 4$ in chunk 156 strictly remain AIR).
+  6. Natural boundary shaping on all 4 borders (West, East, North, South) and corners.
+  7. Hybrid procedural/authored terrain modifier pipeline execution.
+  8. Terrain-aware spawn resolution: dry land, slope flatness, clearance, bounds containment, and determinism (located at $(1250, 64, 1250)$ for test seed).
+  9. Preservation of saved player coordinates and stats on world load.
+  10. Concurrency vs sequential generation thread-safety (100% bit-for-bit identical chunk blocks across 8 concurrent worker threads).
+  11. Generation performance benchmark: average **2.58 ms per chunk** across 25 chunks.
+- **Master Test Suite Execution**:
+  - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to include `FiniteTerrainGenerationTest`.
+  - **21/21 test suites passed with 0 errors** (9337 ms total execution time).
+
+### 3. Known Limitations & Deferred Items
+- Final 10-biome roster and final authored biome distribution are intentionally not locked in (Phase 6 POI / structure integration).
+- Deep cave expansion and multi-tier subterranean caverns deferred to future phases.
+
 

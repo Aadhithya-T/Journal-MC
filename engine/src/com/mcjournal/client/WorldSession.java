@@ -122,9 +122,19 @@ public class WorldSession {
         int defaultSpawnX = worldConfig.spawnX();
         int defaultSpawnY = worldConfig.spawnY();
         int defaultSpawnZ = worldConfig.spawnZ();
-        float targetPlayerX = (existingSave != null ? existingSave.playerX : defaultSpawnX);
-        float targetPlayerY = (existingSave != null ? existingSave.playerY : defaultSpawnY);
-        float targetPlayerZ = (existingSave != null ? existingSave.playerZ : defaultSpawnZ);
+
+        // Terrain-aware safe spawn resolution for fresh world initialization
+        if (existingSave == null) {
+            com.mcjournal.world.terrain.SpawnLocator.SpawnPosition safeSpawn =
+                com.mcjournal.world.terrain.SpawnLocator.findSafeSpawn(chunkManager.getGenerator(), worldBounds);
+            defaultSpawnX = safeSpawn.x();
+            defaultSpawnY = safeSpawn.y();
+            defaultSpawnZ = safeSpawn.z();
+        }
+
+        float targetPlayerX = (existingSave != null ? existingSave.playerX : defaultSpawnX + 0.5f);
+        float targetPlayerY = (existingSave != null ? existingSave.playerY : (float) defaultSpawnY);
+        float targetPlayerZ = (existingSave != null ? existingSave.playerZ : defaultSpawnZ + 0.5f);
 
         // Validate spawn coordinates against world bounds using complete player AABB
         if (!worldBounds.isPlayerAABBInsideWorld(targetPlayerX, targetPlayerY, targetPlayerZ)) {
@@ -203,16 +213,10 @@ public class WorldSession {
                 atmosphericSystem.setWorldTimeTicks(6000.0); // Day 1 baseline
             }
 
-            // Safe surface spawn scan for new world
-            int spawnX = com.mcjournal.EngineConstants.DEFAULT_SPAWN_X;
-            int spawnZ = com.mcjournal.EngineConstants.DEFAULT_SPAWN_Z;
-            int spawnY = 66;
-            for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
-                if (chunkManager.getBlockStateAt(spawnX, y, spawnZ).isSolid()) {
-                    spawnY = y + 2;
-                    break;
-                }
-            }
+            // Terrain-aware safe surface spawn for new world
+            float spawnX = defaultSpawnX + 0.5f;
+            float spawnY = (float) defaultSpawnY;
+            float spawnZ = defaultSpawnZ + 0.5f;
 
             player.pos.set(spawnX, spawnY, spawnZ);
             player.prevPos.set(spawnX, spawnY, spawnZ);
