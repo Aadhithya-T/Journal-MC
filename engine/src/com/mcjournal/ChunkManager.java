@@ -157,13 +157,17 @@ public class ChunkManager {
         streamer.setLastPlayerChunkPos(new ChunkPos(spawnCx, spawnCz));
     }
 
-    private void submitWorkerTask(Runnable r) {
+    public void submitWorkerTask(Runnable r) {
         if (chunkWorkers.isShutdown()) return;
         try {
             chunkWorkers.submit(r);
         } catch (RejectedExecutionException ignored) {
             // Pool is shutting down
         }
+    }
+
+    public ExecutorService getWorkerExecutorForTest() {
+        return chunkWorkers;
     }
 
     public void updatePlayerPosition(int playerCx, int playerCz) {
@@ -201,6 +205,7 @@ public class ChunkManager {
             ChunkPos pos = loadQueue.poll();
             submitWorkerTask(() -> {
                 try {
+                    if (Thread.currentThread().isInterrupted() || chunkWorkers.isShutdown()) return;
                     // Cancellation check: abort if player moved away before task executed
                     if (chunkStatuses.get(pos) != ChunkStatus.QUEUED) return;
                     ChunkPos lastPos = streamer.getLastPlayerChunkPos();
@@ -213,6 +218,12 @@ public class ChunkManager {
                     long t0 = System.nanoTime();
                     Chunk chunk = generator.generateChunk(pos);
                     com.mcjournal.client.EngineMetrics.getInstance().recordChunkGenTime((System.nanoTime() - t0) / 1_000_000.0);
+
+                    if (Thread.currentThread().isInterrupted() || chunkWorkers.isShutdown()) {
+                        chunkStatuses.remove(pos);
+                        return;
+                    }
+
                     chunks.put(pos, chunk);
                     chunkStatuses.put(pos, ChunkStatus.GENERATED);
 
@@ -238,9 +249,9 @@ public class ChunkManager {
             });
         }
 
-        // 2. Unload chunks beyond unload distance
+        // 2. Unload chunks beyond unload distance (triggered on player chunk step or excess chunk count)
         ChunkPos lastPos = streamer.getLastPlayerChunkPos();
-        if (lastPos == null || !lastPos.equals(currentPos)) {
+        if (lastPos == null || !lastPos.equals(currentPos) || chunks.size() > streamer.getSpiralOffsets().size()) {
             streamer.setLastPlayerChunkPos(currentPos);
             for (ChunkPos pos : streamer.computeChunksToUnload(currentPos, chunks.keySet())) {
                 ChunkStatus status = chunkStatuses.get(pos);
@@ -559,11 +570,13 @@ public class ChunkManager {
             ChunkStatus status = chunkStatuses.getOrDefault(pos, ChunkStatus.UNLOADED);
             if (chunk != null && !status.isUnloading()) {
                 submitWorkerTask(() -> {
+                    if (Thread.currentThread().isInterrupted() || chunkWorkers.isShutdown()) return;
                     if (chunks.containsKey(pos)) {
                         chunkStatuses.put(pos, ChunkStatus.MESHING);
                         long t0 = System.nanoTime();
                         ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(ChunkNeighborhood.of(chunk, this));
                         com.mcjournal.client.EngineMetrics.getInstance().recordMeshGenTime((System.nanoTime() - t0) / 1_000_000.0);
+                        if (Thread.currentThread().isInterrupted() || chunkWorkers.isShutdown()) return;
                         meshes.put(pos, mesh);
                         uploadQueue.queueUpload(pos, mesh.getTotalBytes());
                         chunkStatuses.put(pos, ChunkStatus.MESHED);
@@ -700,9 +713,17 @@ public class ChunkManager {
         try {
             if (!chunkWorkers.awaitTermination(3, TimeUnit.SECONDS)) {
                 chunkWorkers.shutdownNow();
+                if (!chunkWorkers.awaitTermination(3, TimeUnit.SECONDS)) {
+                    System.err.println("[ChunkManager] Warning: ChunkWorker pool failed to terminate within timeout.");
+                }
             }
         } catch (InterruptedException e) {
             chunkWorkers.shutdownNow();
+            try {
+                if (!chunkWorkers.awaitTermination(3, TimeUnit.SECONDS)) {
+                    System.err.println("[ChunkManager] Warning: ChunkWorker pool failed to terminate after interrupt.");
+                }
+            } catch (InterruptedException ignored) {}
             Thread.currentThread().interrupt();
         }
         saveAllModifiedChunks();

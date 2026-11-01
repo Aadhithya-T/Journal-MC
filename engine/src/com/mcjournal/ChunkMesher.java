@@ -63,11 +63,13 @@ public class ChunkMesher {
             if (workers != null && !workers.isShutdown()) {
                 try {
                     workers.submit(() -> {
+                        if (Thread.currentThread().isInterrupted() || workers.isShutdown()) return;
                         if (chunks.containsKey(neighborPos)) {
                             chunkStatuses.put(neighborPos, ChunkStatus.MESHING);
                             long t0 = System.nanoTime();
                             ChunkMeshBuilder.MeshData mesh = ChunkMeshBuilder.buildMesh(neighborChunk, world);
                             com.mcjournal.client.EngineMetrics.getInstance().recordMeshGenTime((System.nanoTime() - t0) / 1_000_000.0);
+                            if (Thread.currentThread().isInterrupted() || workers.isShutdown()) return;
                             meshes.put(neighborPos, mesh);
                             uploadQueue.queueUpload(neighborPos);
                             chunkStatuses.put(neighborPos, ChunkStatus.MESHED);

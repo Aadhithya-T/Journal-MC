@@ -20,6 +20,7 @@ import org.joml.Vector3f;
 import java.io.File;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Phase 7 Master Integration & Stability Test Suite.
@@ -47,6 +48,7 @@ public class FiniteWorldIntegrationAndStabilityTest {
             testWorldLifecycleAndPersistenceRoundTrip();
             testConcurrencyAndStreamingStress();
             testSustainedStreamingAndResourceStability();
+            testPhase71RiskVerification();
 
             System.out.println("\n>>> ALL PHASE 7 INTEGRATION & STABILITY AUDIT TESTS PASSED! <<<\n");
         } catch (Throwable t) {
@@ -476,6 +478,188 @@ public class FiniteWorldIntegrationAndStabilityTest {
 
         System.out.println(String.format("PASSED (Active Chunks: %d | Mem Delta: %+.1f MB | Avg Step: %.2f ms)",
                 activeChunks, memDeltaMB, avgMsPerStep));
+    }
+
+    // =========================================================================
+    // 6. PHASE 7.1 RISK VERIFICATION (SHUTDOWN, UNLOADED MUTATIONS, ITEM DIMS, HEADLESS)
+    // =========================================================================
+
+    private static void testPhase71RiskVerification() {
+        System.out.println("\n--- RUNNING PHASE 7.1 FINAL RISK VERIFICATION ---");
+        testChunkWorkerShutdownWithDelayedTask();
+        testUnloadedChunkMutationsAndMemoryBounds();
+        testItemEntityDimensionsAndContainmentPrecision();
+        testHeadlessGpuUnloadResourceRelease();
+    }
+
+    private static void testChunkWorkerShutdownWithDelayedTask() {
+        System.out.print("[Phase 7.1] Chunk worker shutdown with delayed task & interrupt safety... ");
+        File worldDir = new File(TEST_WORLD_DIR, "shutdown_risk_test");
+        cleanupDir(worldDir);
+        worldDir.mkdirs();
+
+        ChunkManager manager = new ChunkManager(4, 99999L, worldDir, WorldBounds.DEFAULT);
+        AtomicBoolean taskStarted = new AtomicBoolean(false);
+        AtomicBoolean taskInterruptedOrCompleted = new AtomicBoolean(false);
+        CountDownLatch latch = new CountDownLatch(1);
+
+        // Submit deliberately delayed task
+        manager.submitWorkerTask(() -> {
+            taskStarted.set(true);
+            latch.countDown();
+            try {
+                Thread.sleep(10000); // 10 seconds
+            } catch (InterruptedException e) {
+                taskInterruptedOrCompleted.set(true);
+                Thread.currentThread().interrupt();
+                return;
+            }
+            taskInterruptedOrCompleted.set(true);
+        });
+
+        try {
+            boolean started = latch.await(2, TimeUnit.SECONDS);
+            assert started : "Worker task failed to start within timeout";
+        } catch (InterruptedException e) {
+            throw new AssertionError("Latch wait interrupted", e);
+        }
+
+        // Now initiate shutdown
+        long t0 = System.currentTimeMillis();
+        manager.shutdown();
+        long elapsed = System.currentTimeMillis() - t0;
+
+        // Verify workers pool is fully terminated
+        assert manager.getWorkerExecutorForTest().isTerminated() : "Worker executor must be terminated";
+        assert taskInterruptedOrCompleted.get() : "Delayed worker task must have been interrupted or completed";
+        // Verify persistence closed safely without hanging indefinitely
+        assert elapsed < 5000 : "Shutdown took too long: " + elapsed + " ms";
+
+        System.out.println("PASSED (Terminated in " + elapsed + " ms)");
+    }
+
+    private static void testUnloadedChunkMutationsAndMemoryBounds() {
+        System.out.print("[Phase 7.1] Unloaded chunk mutations, delta integrity & streaming memory bounds... ");
+        File worldDir = new File(TEST_WORLD_DIR, "unloaded_mutations_test");
+        cleanupDir(worldDir);
+        worldDir.mkdirs();
+
+        ChunkManager manager = new ChunkManager(2, 424242L, worldDir, WorldBounds.DEFAULT);
+        int spawnCx = 78; // Center chunk (1250 / 16)
+        int spawnCz = 78;
+        manager.waitForInitialChunks(spawnCx, spawnCz, 1);
+        int initialLoaded = manager.getLoadedChunkCount();
+
+        // 1. Out-of-world mutation rejection
+        assert !manager.setBlockStateAt(-1, 64, 50, Blocks.STONE.getDefaultState()) : "Out-of-world negative X must be rejected";
+        assert !manager.setBlockStateAt(2500, 64, 50, Blocks.STONE.getDefaultState()) : "Out-of-world X=2500 must be rejected";
+        assert !manager.setBlockStateAt(100, 256, 100, Blocks.STONE.getDefaultState()) : "Out-of-world Y=256 must be rejected";
+        assert manager.getLoadedChunkCount() == initialLoaded : "Rejected mutations must not instantiate chunks";
+
+        // 2. Mutate distant unloaded chunk (10, 10)
+        int distantWx = 10 * 16 + 5;
+        int distantWz = 10 * 16 + 5;
+        boolean mutated = manager.setBlockStateAt(distantWx, 75, distantWz, Blocks.DIAMOND_ORE.getDefaultState());
+        assert mutated : "Valid unloaded chunk mutation must succeed";
+        Chunk distantChunk = manager.getChunk(10, 10);
+        assert distantChunk != null : "Mutated chunk must be instantiated";
+        assert distantChunk.getBlockState(5, 75, 5).is(Blocks.DIAMOND_ORE) : "Voxel state must match mutated block";
+        assert distantChunk.isDirty() : "Chunk must be marked dirty";
+
+        // 3. Repeated mutation must reuse existing instance without duplicate objects
+        int countBeforeSecondEdit = manager.getLoadedChunkCount();
+        manager.setBlockStateAt(distantWx, 76, distantWz, Blocks.COBBLESTONE.getDefaultState());
+        assert manager.getLoadedChunkCount() == countBeforeSecondEdit : "Repeated edit must not duplicate chunk instance";
+        assert manager.getChunk(10, 10) == distantChunk : "Must reuse identical chunk reference";
+
+        // 4. Repeated edits across 20 distant chunks must not bypass streaming memory limits
+        for (int i = 0; i < 20; i++) {
+            manager.setBlockStateAt(i * 16 + 2, 70, 2 * 16 + 2, Blocks.SAND.getDefaultState());
+        }
+        assert manager.getLoadedChunkCount() > initialLoaded : "Distant chunks instantiated in memory";
+
+        // When streaming updates around spawn, excess distant chunks must be queued for unload
+        manager.updatePlayerPosition(spawnCx, spawnCz);
+        int unloadsProcessed = manager.processGpuUnloads(null);
+        assert unloadsProcessed >= 20 : "Distant chunks must be unloaded by streaming";
+        assert manager.getLoadedChunkCount() <= initialLoaded : "Active chunks in memory must return to bounded streaming footprint";
+
+        // Verify the unloaded mutations were persisted to disk
+        manager.shutdown();
+
+        // Reload world and verify distant block states persisted on disk
+        ChunkManager reloaded = new ChunkManager(2, 424242L, worldDir, WorldBounds.DEFAULT);
+        Chunk loadedDistant = reloaded.getChunkGenerator().generateChunk(new ChunkPos(10, 10));
+        assert loadedDistant.getBlockState(5, 75, 5).is(Blocks.DIAMOND_ORE) : "Mutated block 1 must persist across save/reload";
+        assert loadedDistant.getBlockState(5, 76, 5).is(Blocks.COBBLESTONE) : "Mutated block 2 must persist across save/reload";
+        for (int i = 0; i < 20; i++) {
+            Chunk c = reloaded.getChunkGenerator().generateChunk(new ChunkPos(i, 2));
+            assert c.getBlockState(2, 70, 2).is(Blocks.SAND) : "Batch mutated chunk " + i + " must persist on disk";
+        }
+        reloaded.shutdown();
+
+        System.out.println("PASSED");
+    }
+
+    private static void testItemEntityDimensionsAndContainmentPrecision() {
+        System.out.print("[Phase 7.1] ItemEntity dimensions (0.28), AABB containment & velocity zeroing... ");
+        assert ItemEntity.SIZE == 0.28f : "ItemEntity.SIZE must be strictly 0.28f";
+        float halfSize = ItemEntity.SIZE / 2.0f;
+        assert Math.abs(halfSize - 0.14f) < 1e-6f : "Half size must be strictly 0.14f";
+
+        WorldBounds bounds = WorldBounds.DEFAULT;
+        ChunkManager world = new ChunkManager(123456L);
+
+        // Ceiling test: item propelled upward into ceiling
+        ItemEntity ceilingItem = new ItemEntity((byte) 1, 1, 100.0f, 255.5f, 100.0f, 0.0f, 15.0f, 0.0f, 0.0f);
+        ceilingItem.update(0.05f, world, null);
+        assert ceilingItem.pos.y <= 256.0f - ItemEntity.SIZE : "Item top must not exceed 256.0f";
+        assert ceilingItem.velocity.y == 0.0f : "Ceiling collision must zero vertical velocity";
+
+        // Floor test: item falling below Y=0
+        ItemEntity floorItem = new ItemEntity((byte) 1, 1, 100.0f, 0.1f, 100.0f, 0.0f, -10.0f, 0.0f, 0.0f);
+        floorItem.update(0.05f, world, null);
+        assert floorItem.pos.y >= 0.0f : "Item bottom must not penetrate below 0.0f";
+        assert floorItem.velocity.y == 0.0f : "Floor collision must zero vertical velocity";
+        assert floorItem.onGround : "Item on floor must have onGround = true";
+
+        // Horizontal boundary tests
+        ItemEntity westItem = new ItemEntity((byte) 1, 1, 0.2f, 64.0f, 100.0f, -10.0f, 0.0f, 0.0f, 0.0f);
+        westItem.update(0.05f, world, null);
+        assert westItem.pos.x >= halfSize : "West item must be clamped to halfSize";
+        assert westItem.velocity.x == 0.0f : "West boundary collision must zero velocity";
+
+        ItemEntity eastItem = new ItemEntity((byte) 1, 1, 2499.8f, 64.0f, 100.0f, 10.0f, 0.0f, 0.0f, 0.0f);
+        eastItem.update(0.05f, world, null);
+        assert eastItem.pos.x <= 2500.0f - halfSize : "East item must be clamped to width - halfSize";
+        assert eastItem.velocity.x == 0.0f : "East boundary collision must zero velocity";
+
+        System.out.println("PASSED");
+    }
+
+    private static void testHeadlessGpuUnloadResourceRelease() {
+        System.out.print("[Phase 7.1] Headless GPU unload draining & CPU resource release... ");
+        ChunkManager manager = new ChunkManager(2, 55555L, null, WorldBounds.DEFAULT);
+        manager.waitForInitialChunks(10, 10, 1);
+        int initialCount = manager.getLoadedChunkCount();
+        assert initialCount > 0 : "Initial chunks must be generated";
+
+        // Queue all initial chunks for unload
+        for (ChunkPos pos : new ArrayList<>(manager.getAllChunks().stream().map(c -> new ChunkPos(c.getCx(), c.getCz())).toList())) {
+            manager.getUploadQueue().queueUnload(pos);
+        }
+
+        assert manager.getUploadQueue().hasPendingUnloads() : "Unload queue must have pending items";
+
+        // In headless mode (renderer == null), processGpuUnloads must drain safely and release CPU references
+        int unloads = manager.processGpuUnloads(null);
+        assert unloads == initialCount : "All pending unloads must be processed";
+        assert !manager.getUploadQueue().hasPendingUnloads() : "Upload queue must be empty";
+        assert manager.getLoadedChunkCount() == 0 : "All CPU chunk references must be released";
+        assert manager.getAllMeshes().isEmpty() : "All CPU mesh references must be released";
+
+        manager.shutdown();
+        System.out.println("PASSED");
     }
 
     private static void cleanupDir(File dir) {

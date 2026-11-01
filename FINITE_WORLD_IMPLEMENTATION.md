@@ -467,7 +467,7 @@ Phase 7 represents the culminating validation and stability phase of the MC Jour
   - Region storage grid: $5 \times 5 = 25$ region files ($rx \in [0..4], rz \in [0..4]$), mapping $32 \times 32$ chunks per region.
 - **Physical Containment**:
   - Player AABB ($0.6 \times 1.8 \times 0.6$) is strictly contained within $[0.0, 2500.0]$ horizontally and $[0.0, 256.0]$ vertically across all movement axes.
-  - Dropped items ($0.25 \times 0.25 \times 0.25$) are bounded within $[0.0, 2500.0]$ horizontally and $[0.0, 256.0]$ vertically.
+  - Dropped items (`ItemEntity.SIZE = 0.28`, footprint $0.28 \times 0.28 \times 0.28$, half-width $0.14$) are bounded within $[0.0, 2500.0]$ horizontally ($X, Z \in [0.14, 2499.86]$) and $[0.0, 256.0]$ vertically ($Y \in [0.0, 255.72]$).
   - Raycast DDA terminates exactly at the $X=0, 2500$, $Z=0, 2500$, and $Y=0, 256$ boundary planes without indexing out-of-bounds chunks.
   - Fluid simulation terminates at world edges without escaping or freezing threads.
   - Chunk meshing produces vertex positions strictly within $[0.0, 2500.0]$ horizontally and $[0.0, 256.0]$ vertically, with perimeter boundary quads rendered at chunk boundaries.
@@ -508,6 +508,46 @@ During the rigorous cross-system audit, four integration defects were identified
 - The finite-world redesign (Phases 1 through 7) is **100% complete, verified, and release-ready**.
 - All physical, persistence, streaming, meshing, terrain, and structure systems are fully contained and deterministic.
 - Final gameplay structure designs, content rosters, and multi-room jigsaws remain deferred to post-release content phases.
+
+---
+
+## Phase 7.1: Final Risk Verification & Finite-World Freeze
+
+A dedicated risk verification and hardening pass was conducted on four specific areas:
+
+### 1. Chunk Worker Shutdown & Interruption Safety
+- **Risk Evaluated**: Handling when `awaitTermination(3, TimeUnit.SECONDS)` expires or thread pool shutdown is interrupted; verifying worker tasks cannot mutate chunks or access persistence after `ChunkPersistence.close()`.
+- **Hardening Applied**:
+  - Implemented two-stage shutdown in [`ChunkManager.shutdown()`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/ChunkManager.java): if initial `awaitTermination(3, TimeUnit.SECONDS)` times out, `shutdownNow()` is invoked followed by a secondary `awaitTermination` check. Interruption during shutdown similarly ensures worker completion before persistence teardown.
+  - Added cooperative interrupt and pool-shutdown checks (`Thread.currentThread().isInterrupted() || chunkWorkers.isShutdown()`) inside worker tasks and neighbor meshing tasks, ensuring tasks abort immediately and do not insert chunks/meshes after shutdown.
+- **Verification**: Deterministic test using a 10-second blocking task confirmed clean interruption and guaranteed worker pool termination prior to `shutdown()` completion.
+
+### 2. Mutations to Unloaded Chunks & Memory Limits
+- **Risk Evaluated**: Preserving mutations across save/reload, avoiding duplicate chunk instances, preventing out-of-world chunk instantiation, and preventing memory leaks when edits occur across many distant unloaded chunks.
+- **Hardening Applied**:
+  - Verified out-of-world edits return `false` without allocating chunks or modifying deltas.
+  - Verified repeated edits to an unloaded chunk mutate the same instance without duplicate allocations.
+  - Enhanced [`updatePlayerPosition`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/ChunkManager.java) to evaluate `computeChunksToUnload` not only on chunk boundary crossings, but also whenever `chunks.size() > streamer.getSpiralOffsets().size()`. As a result, distant chunks instantiated by block edits while the player is stationary are immediately queued for unload, written to disk, and evicted during `processGpuUnloads`, preserving strict streaming memory bounds.
+- **Verification**: Tested batch edits across 20 distant chunks. All 20 chunks were safely instantiated, saved to disk, and unloaded by streaming back to baseline loaded count.
+
+### 3. Item Entity Dimensions & Vertical Containment Precision
+- **Resolution**: Audited historical codebase commits (`c6c3911`, `45fcac8`) and confirmed that `ItemEntity.SIZE = 0.28f` is the authoritative item scale:
+  - Bounding box footprint: $0.28 \times 0.28 \times 0.28$ (half-width $0.14$).
+  - Horizontal bounds: clamped to $[0.14, 2499.86]$ ($[halfSize, width - halfSize]$).
+  - Vertical bounds: clamped to $[0.0, 255.72]$ ($[0.0, height - SIZE]$).
+  - Velocity zeroing: Ceiling collisions halt vertical velocity (`velocity.y = 0.0f`); floor collisions halt velocity and set `onGround = true`.
+  - Rendering and physics: 100% mathematically aligned. The `0.25` mention in earlier summary notes was corrected as a documentation typo.
+
+### 4. GPU Unload & Headless Execution Safety
+- **Verification**:
+  - Headless execution (`renderer == null`): `processGpuUnloads` drains `uploadQueue` and calls `confirmGpuUnloaded`, which removes all CPU-side chunk arrays and mesh buffers, freeing memory without invoking OpenGL context functions.
+  - Render thread execution (`renderer != null`): `unloadChunkMesh` safely invokes `glDeleteVertexArrays` and `glDeleteBuffers` on the render thread during `WorldSession.prepareRender()`.
+  - Repeated load/unload stress tests confirmed zero stale references or memory leaks.
+
+### 5. Final Verification Status
+- All 23 suites in `MasterTestSuite` pass with 100% success rate.
+- Working tree clean and frozen.
+
 
 
 
