@@ -36,7 +36,7 @@ engine/scratch/
 .gradle/
 build/
 
-# Heavy Video Binaries (Frames are committed in engine/resources/backgrounds)
+# Media Binaries
 *.mp4
 
 # User Runtime Saves & Options
