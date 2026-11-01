@@ -147,7 +147,7 @@ public class ChunkStreamingTest {
 
     private static void testChunkStreaming() {
         System.out.print("Testing ChunkManager streaming...");
-        ChunkManager manager = new ChunkManager(4, 4242L); // Render distance 4
+        ChunkManager manager = new ChunkManager(4, 4242L, null, com.mcjournal.world.WorldBounds.UNBOUNDED); // Render distance 4
         try {
             // Initial spawn wait (radius 2 -> 5x5 = 25 chunks)
             manager.waitForInitialChunks(0, 0, 2);
@@ -202,7 +202,7 @@ public class ChunkStreamingTest {
 
     private static void testDeltasOnUnloadedChunks() {
         System.out.print("Testing voxel deltas on unloaded chunks...");
-        ChunkManager manager = new ChunkManager(4, 9999L);
+        ChunkManager manager = new ChunkManager(4, 9999L, null, com.mcjournal.world.WorldBounds.UNBOUNDED);
         try {
             // Player starts at (0,0)
             manager.waitForInitialChunks(0, 0, 1);

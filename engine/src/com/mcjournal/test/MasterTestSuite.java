@@ -21,6 +21,27 @@ public class MasterTestSuite {
 
         long suiteStartTime = System.currentTimeMillis();
 
+        // Phase 1: Finite World Configuration & Bounds
+        runSuite("Phase 1: Finite World Configuration & Bounds", () -> FiniteWorldBoundsTest.main(new String[0]));
+
+        // Phase 2: Finite Chunk System, Streaming & Partial Edge Chunks
+        runSuite("Phase 2: Finite Chunk System, Streaming & Partial Edge Chunks", () -> FiniteChunkSystemTest.main(new String[0]));
+
+        // Phase 3: Physical World Containment, Raycasting & Boundary Systems
+        runSuite("Phase 3: Physical World Containment, Raycasting & Boundary Systems", () -> FiniteBoundaryPhysicsTest.main(new String[0]));
+
+        // Phase 4: World Metadata V4, Persistence & Legacy Save Compatibility
+        runSuite("Phase 4: World Metadata V4, Persistence & Legacy Save Compatibility", () -> FiniteWorldPersistenceTest.main(new String[0]));
+
+        // Phase 5: Terrain & Biome Architecture
+        runSuite("Phase 5: Terrain & Biome Architecture", () -> FiniteTerrainGenerationTest.main(new String[0]));
+
+        // Phase 6: Structure Generation & POI Framework
+        runSuite("Phase 6: Structure Generation & POI Framework", () -> FiniteStructureGenerationTest.main(new String[0]));
+
+        // Phase 7: Finite World Final Integration & Stability
+        runSuite("Phase 7: Finite World Final Integration & Stability", () -> FiniteWorldIntegrationAndStabilityTest.main(new String[0]));
+
         // P12 & P13 Performance Instrumentation & Constants
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
 

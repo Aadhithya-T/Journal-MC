@@ -36,7 +36,7 @@ public class ChunkMeshingTest {
         south.setBlockState(5, 64, 15, Blocks.BEDROCK.getDefaultState());
         northEast.setBlockState(0, 64, 0, Blocks.DIAMOND_ORE.getDefaultState());
 
-        ChunkManager mockManager = new ChunkManager(2, 42L);
+        ChunkManager mockManager = new ChunkManager(2, 42L, null, com.mcjournal.world.WorldBounds.UNBOUNDED);
         mockManager.setChunk(new ChunkPos(0, 0), center);
         mockManager.setChunk(new ChunkPos(1, 0), east);
         mockManager.setChunk(new ChunkPos(-1, 0), west);
@@ -80,7 +80,7 @@ public class ChunkMeshingTest {
             }
         }
 
-        ChunkManager mockManager = new ChunkManager(2, 42L);
+        ChunkManager mockManager = new ChunkManager(2, 42L, null, com.mcjournal.world.WorldBounds.UNBOUNDED);
         mockManager.setChunk(new ChunkPos(0, 0), chunk);
 
         ChunkNeighborhood neighborhood = ChunkNeighborhood.of(chunk, mockManager);
@@ -115,7 +115,7 @@ public class ChunkMeshingTest {
         // Place an obstacle block at (8, 65, 8) sitting on top of the floor
         chunk.setBlockState(8, 65, 8, Blocks.COBBLESTONE.getDefaultState());
 
-        ChunkManager mockManager = new ChunkManager(2, 42L);
+        ChunkManager mockManager = new ChunkManager(2, 42L, null, com.mcjournal.world.WorldBounds.UNBOUNDED);
         mockManager.setChunk(new ChunkPos(0, 0), chunk);
 
         ChunkNeighborhood neighborhood = ChunkNeighborhood.of(chunk, mockManager);
@@ -156,7 +156,7 @@ public class ChunkMeshingTest {
         // 4. Fluid: Water at (11, 64, 11)
         chunk.setBlockState(11, 64, 11, Blocks.WATER.getDefaultState());
 
-        ChunkManager mockManager = new ChunkManager(2, 42L);
+        ChunkManager mockManager = new ChunkManager(2, 42L, null, com.mcjournal.world.WorldBounds.UNBOUNDED);
         mockManager.setChunk(new ChunkPos(0, 0), chunk);
 
         ChunkNeighborhood neighborhood = ChunkNeighborhood.of(chunk, mockManager);

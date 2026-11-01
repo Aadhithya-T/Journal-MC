@@ -58,6 +58,14 @@ public class Raycast {
         int y = (int) Math.floor(origin.y);
         int z = (int) Math.floor(origin.z);
 
+        boolean isBounded = (world.getWorldBounds() != null && world.getWorldBounds().isBounded());
+        if (isBounded) {
+            // If the ray begins outside the world, return a safe miss result
+            if (!world.getWorldBounds().isValidBlock(x, y, z)) {
+                return null;
+            }
+        }
+
         // Immediate check: is the ray origin already inside a solid block?
         BlockState startState = world.getBlockStateAt(x, y, z);
         if (!startState.isAir() && !startState.isWater()) {
@@ -122,6 +130,13 @@ public class Raycast {
             }
 
             if (dist > maxDistance) break;
+
+            if (isBounded) {
+                // Terminate traversal if ray reaches or crosses outside the finite horizontal or vertical boundary
+                if (!world.getWorldBounds().isValidBlock(x, y, z)) {
+                    break;
+                }
+            }
 
             BlockState state = world.getBlockStateAt(x, y, z);
             if (!state.isAir() && !state.isWater()) {

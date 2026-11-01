@@ -139,12 +139,14 @@ public class ChunkMeshBuilder {
         // 2. CUTOUT & FLUID PASS — Foliage Cross-Quads, Leaves & Water Surfaces
         int cx = neighborhood.getCenterCx();
         int cz = neighborhood.getCenterCz();
+        int maxLx = neighborhood.getMaxLx();
+        int maxLz = neighborhood.getMaxLz();
         int worldOriginX = cx * Chunk.SIZE;
         int worldOriginZ = cz * Chunk.SIZE;
 
         for (int y = 0; y < Chunk.HEIGHT; y++) {
-            for (int z = 0; z < Chunk.SIZE; z++) {
-                for (int x = 0; x < Chunk.SIZE; x++) {
+            for (int z = 0; z < maxLz; z++) {
+                for (int x = 0; x < maxLx; x++) {
                     int stateId = neighborhood.getStateId(x, y, z);
                     if (stateId == 0) continue;
 

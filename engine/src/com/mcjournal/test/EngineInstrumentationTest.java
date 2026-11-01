@@ -45,6 +45,7 @@ public class EngineInstrumentationTest {
         System.out.print("[P12] EngineMetrics telemetry capture and latching... ");
 
         EngineMetrics metrics = EngineMetrics.getInstance();
+        metrics.endFrame();
         metrics.updateRates(144, 20);
         assert metrics.getFps() == 144 : "FPS should be 144";
         assert metrics.getTps() == 20 : "TPS should be 20";

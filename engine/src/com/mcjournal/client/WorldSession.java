@@ -94,9 +94,17 @@ public class WorldSession {
         this.currentWorldName = worldName;
         this.currentSeed = seed;
 
-        System.out.println("[WorldSession] Initializing infinite streamed Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
+        com.mcjournal.world.WorldConfiguration worldConfig;
+        if (existingSave != null && !existingSave.isLegacy()) {
+            worldConfig = existingSave.toWorldConfiguration();
+        } else {
+            worldConfig = com.mcjournal.world.WorldConfiguration.createDefault(seed);
+        }
+        com.mcjournal.world.WorldBounds worldBounds = new com.mcjournal.world.WorldBounds(worldConfig);
+
+        System.out.println("[WorldSession] Initializing finite world: '" + worldName + "' (" + worldConfig.width() + "x" + worldConfig.depth() + "x" + worldConfig.height() + ", Seed: " + seed + ")...");
         File worldDir = new File("saves/" + worldName.toLowerCase().replaceAll("[^a-z0-9_-]", "_"));
-        this.chunkManager = new ChunkManager(settings.renderDistance, seed, worldDir);
+        this.chunkManager = new ChunkManager(settings.renderDistance, seed, worldDir, worldBounds);
 
         // 1. If loading an existing save, apply all persisted voxel block changes
         if (existingSave != null) {
@@ -111,8 +119,32 @@ public class WorldSession {
         if (chunkRenderer != null) {
             chunkRenderer.cleanup();
         }
-        int spawnCx = Math.floorDiv((int) (existingSave != null ? existingSave.playerX : 8), 16);
-        int spawnCz = Math.floorDiv((int) (existingSave != null ? existingSave.playerZ : 8), 16);
+        int defaultSpawnX = worldConfig.spawnX();
+        int defaultSpawnY = worldConfig.spawnY();
+        int defaultSpawnZ = worldConfig.spawnZ();
+
+        // Terrain-aware safe spawn resolution for fresh world initialization
+        if (existingSave == null) {
+            com.mcjournal.world.terrain.SpawnLocator.SpawnPosition safeSpawn =
+                com.mcjournal.world.terrain.SpawnLocator.findSafeSpawn(chunkManager.getGenerator(), worldBounds);
+            defaultSpawnX = safeSpawn.x();
+            defaultSpawnY = safeSpawn.y();
+            defaultSpawnZ = safeSpawn.z();
+        }
+
+        float targetPlayerX = (existingSave != null ? existingSave.playerX : defaultSpawnX + 0.5f);
+        float targetPlayerY = (existingSave != null ? existingSave.playerY : (float) defaultSpawnY);
+        float targetPlayerZ = (existingSave != null ? existingSave.playerZ : defaultSpawnZ + 0.5f);
+
+        // Validate spawn coordinates against world bounds using complete player AABB
+        if (!worldBounds.isPlayerAABBInsideWorld(targetPlayerX, targetPlayerY, targetPlayerZ)) {
+            targetPlayerX = defaultSpawnX;
+            targetPlayerY = defaultSpawnY;
+            targetPlayerZ = defaultSpawnZ;
+        }
+
+        int spawnCx = Math.floorDiv((int) targetPlayerX, 16);
+        int spawnCz = Math.floorDiv((int) targetPlayerZ, 16);
         chunkManager.waitForInitialChunks(spawnCx, spawnCz, 3); // 7x7 core chunks generated & meshed
 
         // Upload initial spawn meshes to GPU
@@ -132,8 +164,20 @@ public class WorldSession {
             if (atmosphericSystem != null) {
                 atmosphericSystem.setWorldTimeTicks(existingSave.worldTime);
             }
-            player.pos.set(existingSave.playerX, existingSave.playerY, existingSave.playerZ);
-            player.prevPos.set(existingSave.playerX, existingSave.playerY, existingSave.playerZ);
+            float px = existingSave.playerX;
+            float py = existingSave.playerY;
+            float pz = existingSave.playerZ;
+
+            // Validate complete player AABB against loaded world configuration
+            if (!worldBounds.isPlayerAABBInsideWorld(px, py, pz)) {
+                System.out.println("[WorldSession] Saved player AABB at (" + px + ", " + py + ", " + pz + ") extends outside world bounds! Relocating to spawn (" + defaultSpawnX + ", " + defaultSpawnY + ", " + defaultSpawnZ + ")...");
+                px = defaultSpawnX;
+                py = (float) defaultSpawnY;
+                pz = defaultSpawnZ;
+            }
+
+            player.pos.set(px, py, pz);
+            player.prevPos.set(px, py, pz);
             player.yaw = existingSave.playerYaw;
             player.pitch = existingSave.playerPitch;
             player.health = existingSave.health;
@@ -169,16 +213,10 @@ public class WorldSession {
                 atmosphericSystem.setWorldTimeTicks(6000.0); // Day 1 baseline
             }
 
-            // Safe surface spawn scan for new world
-            int spawnX = 8;
-            int spawnZ = 8;
-            int spawnY = 66;
-            for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
-                if (chunkManager.getBlockStateAt(spawnX, y, spawnZ).isSolid()) {
-                    spawnY = y + 2;
-                    break;
-                }
-            }
+            // Terrain-aware safe surface spawn for new world
+            float spawnX = defaultSpawnX + 0.5f;
+            float spawnY = (float) defaultSpawnY;
+            float spawnZ = defaultSpawnZ + 0.5f;
 
             player.pos.set(spawnX, spawnY, spawnZ);
             player.prevPos.set(spawnX, spawnY, spawnZ);

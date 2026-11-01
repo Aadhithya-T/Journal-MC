@@ -46,7 +46,7 @@ public class PhysicsAndFluidTest {
     }
 
     private static ChunkManager createTestManager() {
-        return new ChunkManager(12345L);
+        return new ChunkManager(4, 12345L, null, com.mcjournal.world.WorldBounds.UNBOUNDED);
     }
 
     // =========================================================================

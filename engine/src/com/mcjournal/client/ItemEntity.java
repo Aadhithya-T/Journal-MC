@@ -102,9 +102,18 @@ public class ItemEntity {
             }
         }
 
-        // Step Y physics & voxel terrain floor collision
+        // Step Y physics & voxel terrain floor / ceiling & world boundary collision
         float nextY = pos.y + velocity.y * dt;
-        if (velocity.y < 0.0f) {
+        boolean isBounded = (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded());
+
+        if (isBounded && nextY + SIZE > (float) world.getWorldBounds().getHeight()) {
+            pos.y = (float) world.getWorldBounds().getHeight() - SIZE;
+            velocity.y = 0.0f;
+        } else if (isBounded && nextY < 0.0f) {
+            pos.y = 0.0f;
+            velocity.y = 0.0f;
+            onGround = true;
+        } else if (velocity.y < 0.0f) {
             int floorX = (int) Math.floor(pos.x);
             int floorY = (int) Math.floor(nextY);
             int floorZ = (int) Math.floor(pos.z);
@@ -129,25 +138,70 @@ public class ItemEntity {
             }
         }
 
-        // Step X physics & voxel terrain wall collision
+        // Step X physics & voxel terrain wall / world boundary collision
         float nextX = pos.x + velocity.x * dt;
-        int checkX = (int) Math.floor(nextX + Math.signum(velocity.x) * (SIZE / 2.0f));
-        int checkY = (int) Math.floor(pos.y + 0.05f);
-        int checkZ = (int) Math.floor(pos.z);
-        if (world != null && world.getBlockStateAt(checkX, checkY, checkZ).isSolid()) {
-            velocity.x = 0.0f;
+        float halfSize = SIZE / 2.0f;
+
+        if (isBounded) {
+            float minX = halfSize;
+            float maxX = (float) world.getWorldBounds().getWidth() - halfSize;
+            if (nextX < minX) {
+                pos.x = minX;
+                velocity.x = 0.0f;
+            } else if (nextX > maxX) {
+                pos.x = maxX;
+                velocity.x = 0.0f;
+            } else {
+                int checkX = (int) Math.floor(nextX + Math.signum(velocity.x) * halfSize);
+                int checkY = (int) Math.floor(pos.y + 0.05f);
+                int checkZ = (int) Math.floor(pos.z);
+                if (world.getBlockStateAt(checkX, checkY, checkZ).isSolid()) {
+                    velocity.x = 0.0f;
+                } else {
+                    pos.x = nextX;
+                }
+            }
         } else {
-            pos.x = nextX;
+            int checkX = (int) Math.floor(nextX + Math.signum(velocity.x) * halfSize);
+            int checkY = (int) Math.floor(pos.y + 0.05f);
+            int checkZ = (int) Math.floor(pos.z);
+            if (world != null && world.getBlockStateAt(checkX, checkY, checkZ).isSolid()) {
+                velocity.x = 0.0f;
+            } else {
+                pos.x = nextX;
+            }
         }
 
-        // Step Z physics & voxel terrain wall collision
+        // Step Z physics & voxel terrain wall / world boundary collision
         float nextZ = pos.z + velocity.z * dt;
-        checkX = (int) Math.floor(pos.x);
-        checkZ = (int) Math.floor(nextZ + Math.signum(velocity.z) * (SIZE / 2.0f));
-        if (world != null && world.getBlockStateAt(checkX, checkY, checkZ).isSolid()) {
-            velocity.z = 0.0f;
+        if (isBounded) {
+            float minZ = halfSize;
+            float maxZ = (float) world.getWorldBounds().getDepth() - halfSize;
+            if (nextZ < minZ) {
+                pos.z = minZ;
+                velocity.z = 0.0f;
+            } else if (nextZ > maxZ) {
+                pos.z = maxZ;
+                velocity.z = 0.0f;
+            } else {
+                int checkX = (int) Math.floor(pos.x);
+                int checkY = (int) Math.floor(pos.y + 0.05f);
+                int checkZ = (int) Math.floor(nextZ + Math.signum(velocity.z) * halfSize);
+                if (world.getBlockStateAt(checkX, checkY, checkZ).isSolid()) {
+                    velocity.z = 0.0f;
+                } else {
+                    pos.z = nextZ;
+                }
+            }
         } else {
-            pos.z = nextZ;
+            int checkX = (int) Math.floor(pos.x);
+            int checkY = (int) Math.floor(pos.y + 0.05f);
+            int checkZ = (int) Math.floor(nextZ + Math.signum(velocity.z) * halfSize);
+            if (world != null && world.getBlockStateAt(checkX, checkY, checkZ).isSolid()) {
+                velocity.z = 0.0f;
+            } else {
+                pos.z = nextZ;
+            }
         }
 
         // Ground friction

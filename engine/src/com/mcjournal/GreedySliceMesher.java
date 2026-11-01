@@ -8,6 +8,11 @@ import com.mcjournal.block.Blocks;
  * 2D Slice-based Greedy Mesher with per-corner Ambient Occlusion compatibility.
  * Emits indexed geometry (4 unique vertices per quad and 6 indices) with interleaved
  * vertex attributes (stride 13 floats = 52 bytes).
+ *
+ * Fully bounds-aware for partial edge chunks:
+ * - Only iterates valid local ranges (0..maxLx-1, 0..maxLz-1).
+ * - Greedy quad merging is bounded by partial chunk limits.
+ * - Quads on the finite world boundary render exposed faces to out-of-world air.
  */
 public class GreedySliceMesher {
 
@@ -155,31 +160,36 @@ public class GreedySliceMesher {
     ) {
         int cx = neighborhood.getCenterCx();
         int cz = neighborhood.getCenterCz();
+        int maxLx = neighborhood.getMaxLx();
+        int maxLz = neighborhood.getMaxLz();
+        if (maxLx <= 0 || maxLz <= 0) return;
+
         int worldOriginX = cx * Chunk.SIZE;
         int worldOriginZ = cz * Chunk.SIZE;
 
         // 1. TOP (+Y, Face 2) & BOTTOM (-Y, Face 3) SLICES
         for (int y = 0; y < Chunk.HEIGHT; y++) {
-            meshYSlice(neighborhood, y, 2, worldOriginX, worldOriginZ, cx, cz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
-            meshYSlice(neighborhood, y, 3, worldOriginX, worldOriginZ, cx, cz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
+            meshYSlice(neighborhood, y, 2, worldOriginX, worldOriginZ, cx, cz, maxLx, maxLz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
+            meshYSlice(neighborhood, y, 3, worldOriginX, worldOriginZ, cx, cz, maxLx, maxLz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
         }
 
         // 2. RIGHT (+X, Face 0) & LEFT (-X, Face 1) SLICES
-        for (int x = 0; x < Chunk.SIZE; x++) {
-            meshXSlice(neighborhood, x, 0, worldOriginX, worldOriginZ, cx, cz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
-            meshXSlice(neighborhood, x, 1, worldOriginX, worldOriginZ, cx, cz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
+        for (int x = 0; x < maxLx; x++) {
+            meshXSlice(neighborhood, x, 0, worldOriginX, worldOriginZ, cx, cz, maxLx, maxLz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
+            meshXSlice(neighborhood, x, 1, worldOriginX, worldOriginZ, cx, cz, maxLx, maxLz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
         }
 
         // 3. FRONT (+Z, Face 4) & BACK (-Z, Face 5) SLICES
-        for (int z = 0; z < Chunk.SIZE; z++) {
-            meshZSlice(neighborhood, z, 4, worldOriginX, worldOriginZ, cx, cz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
-            meshZSlice(neighborhood, z, 5, worldOriginX, worldOriginZ, cx, cz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
+        for (int z = 0; z < maxLz; z++) {
+            meshZSlice(neighborhood, z, 4, worldOriginX, worldOriginZ, cx, cz, maxLx, maxLz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
+            meshZSlice(neighborhood, z, 5, worldOriginX, worldOriginZ, cx, cz, maxLx, maxLz, vertexList, indexList, legacyPosList, legacyUvList, legacyNormList, legacyColList);
         }
     }
 
     private void meshYSlice(
         ChunkNeighborhood neighborhood, int y, int faceIdx,
         int worldOriginX, int worldOriginZ, int cx, int cz,
+        int maxLx, int maxLz,
         ChunkMeshBuilder.FloatArrayList vertexList,
         ChunkMeshBuilder.IntArrayList indexList,
         ChunkMeshBuilder.FloatArrayList legacyPosList,
@@ -190,9 +200,9 @@ public class GreedySliceMesher {
         FaceDef face = FACES[faceIdx];
         int dy = face.dir[1];
 
-        // Fill 16x16 mask
-        for (int z = 0; z < 16; z++) {
-            for (int x = 0; x < 16; x++) {
+        // Fill maxLx x maxLz mask
+        for (int z = 0; z < maxLz; z++) {
+            for (int x = 0; x < maxLx; x++) {
                 int idx = z * 16 + x;
                 int stateId = neighborhood.getStateId(x, y, z);
                 if (stateId == 0) {
@@ -222,20 +232,20 @@ public class GreedySliceMesher {
             }
         }
 
-        // Greedy 2D quad merge on 16x16 grid
-        for (int z = 0; z < 16; z++) {
-            for (int x = 0; x < 16; x++) {
+        // Greedy 2D quad merge on maxLx x maxLz grid
+        for (int z = 0; z < maxLz; z++) {
+            for (int x = 0; x < maxLx; x++) {
                 long key = mask[z * 16 + x];
                 if (key == 0) continue;
 
                 int w = 1;
-                while (x + w < 16 && mask[z * 16 + x + w] == key) {
+                while (x + w < maxLx && mask[z * 16 + x + w] == key) {
                     w++;
                 }
 
                 int h = 1;
                 boolean canExtend = true;
-                while (z + h < 16 && canExtend) {
+                while (z + h < maxLz && canExtend) {
                     for (int k = 0; k < w; k++) {
                         if (mask[(z + h) * 16 + x + k] != key) {
                             canExtend = false;
@@ -264,6 +274,7 @@ public class GreedySliceMesher {
     private void meshXSlice(
         ChunkNeighborhood neighborhood, int x, int faceIdx,
         int worldOriginX, int worldOriginZ, int cx, int cz,
+        int maxLx, int maxLz,
         ChunkMeshBuilder.FloatArrayList vertexList,
         ChunkMeshBuilder.IntArrayList indexList,
         ChunkMeshBuilder.FloatArrayList legacyPosList,
@@ -274,9 +285,9 @@ public class GreedySliceMesher {
         FaceDef face = FACES[faceIdx];
         int dx = face.dir[0];
 
-        // 2D grid in (z, y): width is z in [0..15], height is y in [0..255]
+        // 2D grid in (z, y): width is z in [0..maxLz-1], height is y in [0..255]
         for (int y = 0; y < Chunk.HEIGHT; y++) {
-            for (int z = 0; z < 16; z++) {
+            for (int z = 0; z < maxLz; z++) {
                 int idx = y * 16 + z;
                 int stateId = neighborhood.getStateId(x, y, z);
                 if (stateId == 0) {
@@ -304,14 +315,14 @@ public class GreedySliceMesher {
             }
         }
 
-        // Greedy 2D quad merge on 16x256 grid
+        // Greedy 2D quad merge on maxLz x 256 grid
         for (int y = 0; y < Chunk.HEIGHT; y++) {
-            for (int z = 0; z < 16; z++) {
+            for (int z = 0; z < maxLz; z++) {
                 long key = mask[y * 16 + z];
                 if (key == 0) continue;
 
                 int w = 1;
-                while (z + w < 16 && mask[y * 16 + z + w] == key) {
+                while (z + w < maxLz && mask[y * 16 + z + w] == key) {
                     w++;
                 }
 
@@ -346,6 +357,7 @@ public class GreedySliceMesher {
     private void meshZSlice(
         ChunkNeighborhood neighborhood, int z, int faceIdx,
         int worldOriginX, int worldOriginZ, int cx, int cz,
+        int maxLx, int maxLz,
         ChunkMeshBuilder.FloatArrayList vertexList,
         ChunkMeshBuilder.IntArrayList indexList,
         ChunkMeshBuilder.FloatArrayList legacyPosList,
@@ -356,9 +368,9 @@ public class GreedySliceMesher {
         FaceDef face = FACES[faceIdx];
         int dz = face.dir[2];
 
-        // 2D grid in (x, y): width is x in [0..15], height is y in [0..255]
+        // 2D grid in (x, y): width is x in [0..maxLx-1], height is y in [0..255]
         for (int y = 0; y < Chunk.HEIGHT; y++) {
-            for (int x = 0; x < 16; x++) {
+            for (int x = 0; x < maxLx; x++) {
                 int idx = y * 16 + x;
                 int stateId = neighborhood.getStateId(x, y, z);
                 if (stateId == 0) {
@@ -386,14 +398,14 @@ public class GreedySliceMesher {
             }
         }
 
-        // Greedy 2D quad merge on 16x256 grid
+        // Greedy 2D quad merge on maxLx x 256 grid
         for (int y = 0; y < Chunk.HEIGHT; y++) {
-            for (int x = 0; x < 16; x++) {
+            for (int x = 0; x < maxLx; x++) {
                 long key = mask[y * 16 + x];
                 if (key == 0) continue;
 
                 int w = 1;
-                while (x + w < 16 && mask[y * 16 + x + w] == key) {
+                while (x + w < maxLx && mask[y * 16 + x + w] == key) {
                     w++;
                 }
 

@@ -104,7 +104,7 @@ public class TerrainGenerationTest {
     private static void testTerrainHeightBoundsAndBedrock() {
         System.out.print("[P11 - Terrain] Height bounds, sea level, and bedrock floor... ");
 
-        TerrainGenerator gen = new TerrainGenerator(424242L);
+        TerrainGenerator gen = new TerrainGenerator(424242L, com.mcjournal.world.WorldBounds.UNBOUNDED);
         Chunk chunk = gen.generateChunk(2, -3);
 
         int bedrockId = Blocks.BEDROCK.getDefaultState().getStateId();

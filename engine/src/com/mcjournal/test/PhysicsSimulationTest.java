@@ -33,7 +33,7 @@ public class PhysicsSimulationTest {
     }
 
     private static ChunkManager createTestWorld() {
-        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_physics_p11"));
+        ChunkManager cm = new ChunkManager(2, 42L, new File("saves/test_physics_p11"), com.mcjournal.world.WorldBounds.UNBOUNDED);
         Chunk c = new Chunk(0, 0);
 
         // Solid floor at Y=64

@@ -1,5 +1,7 @@
 package com.mcjournal;
 
+import com.mcjournal.world.WorldBounds;
+
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -9,18 +11,30 @@ import java.util.concurrent.ConcurrentHashMap;
  * Tracks chunks whose voxel meshes need rebuilding following block mutations or fluid simulation ticks.
  * Deduplicates multiple modifications to the same chunk and automatically flags neighboring chunks
  * when boundary voxels (lx = 0, 15 or lz = 0, 15) are modified.
+ * Enforces world bounds so out-of-world coordinates are never tracked.
  */
 public class DirtyChunkSet {
     private final Set<ChunkPos> dirtyChunks = ConcurrentHashMap.newKeySet();
+    private final WorldBounds bounds;
+
+    public DirtyChunkSet() {
+        this(WorldBounds.DEFAULT);
+    }
+
+    public DirtyChunkSet(WorldBounds bounds) {
+        this.bounds = bounds;
+    }
 
     public void markDirty(ChunkPos pos) {
-        if (pos != null) {
+        if (pos != null && (bounds == null || bounds.isValidChunk(pos))) {
             dirtyChunks.add(pos);
         }
     }
 
     public void markDirty(int cx, int cz) {
-        dirtyChunks.add(new ChunkPos(cx, cz));
+        if (bounds == null || bounds.isValidChunk(cx, cz)) {
+            dirtyChunks.add(new ChunkPos(cx, cz));
+        }
     }
 
     /**
@@ -28,10 +42,18 @@ public class DirtyChunkSet {
      * neighbor chunks if the modified block lies on a chunk boundary or corner.
      */
     public void markBlockModified(int wx, int wy, int wz) {
+        if (bounds != null && !bounds.isValidBlock(wx, wy, wz)) {
+            return;
+        }
+
         int cx = Math.floorDiv(wx, Chunk.SIZE);
         int cz = Math.floorDiv(wz, Chunk.SIZE);
         int lx = Math.floorMod(wx, Chunk.SIZE);
         int lz = Math.floorMod(wz, Chunk.SIZE);
+
+        if (bounds != null && !bounds.isLocalBlockValid(cx, cz, lx, wy, lz)) {
+            return;
+        }
 
         markDirty(cx, cz);
 

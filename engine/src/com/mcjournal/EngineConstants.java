@@ -7,6 +7,17 @@ public final class EngineConstants {
 
     private EngineConstants() {}
 
+    // Finite World Dimensions (2500 x 2500 x 256)
+    public static final int WORLD_WIDTH = 2500;
+    public static final int WORLD_DEPTH = 2500;
+    public static final int WORLD_HEIGHT = 256;
+    public static final int WORLD_CHUNKS_X = 157; // ceil(2500 / 16) = 157 (cx: 0..156)
+    public static final int WORLD_CHUNKS_Z = 157; // ceil(2500 / 16) = 157 (cz: 0..156)
+    public static final int WORLD_TOTAL_CHUNKS = WORLD_CHUNKS_X * WORLD_CHUNKS_Z; // 24,649
+    public static final int DEFAULT_SPAWN_X = 1250;
+    public static final int DEFAULT_SPAWN_Y = 66;
+    public static final int DEFAULT_SPAWN_Z = 1250;
+
     // Chunk Geometry & Spatial Dimensions
     public static final int CHUNK_SIZE = 16;
     public static final int CHUNK_HEIGHT = 256;
