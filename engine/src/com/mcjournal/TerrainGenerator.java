@@ -8,6 +8,8 @@ import com.mcjournal.world.biome.Biome;
 import com.mcjournal.world.biome.BiomeRegistry;
 import com.mcjournal.world.biome.BiomeSampler;
 import com.mcjournal.world.biome.ClimateSampler;
+import com.mcjournal.world.structure.StructurePlacementManager;
+import com.mcjournal.world.structure.StructureRegistry;
 import com.mcjournal.world.terrain.TerrainModifierPipeline;
 
 /**
@@ -30,6 +32,7 @@ public class TerrainGenerator {
     private final ClimateSampler climateSampler;
     private final BiomeSampler biomeSampler;
     private final TerrainModifierPipeline modifierPipeline;
+    private final StructurePlacementManager structureManager;
 
     // Multi-octave terrain and feature noise generators
     private final SimplexNoise baseNoise;
@@ -56,20 +59,27 @@ public class TerrainGenerator {
     public record POI(String id, String name, String subtitle, String icon, int x, int z, String excerpt) {}
 
     public TerrainGenerator(long seed) {
-        this(seed, WorldBounds.DEFAULT, BiomeRegistry.createDefaultRegistry(), TerrainModifierPipeline.empty());
+        this(seed, WorldBounds.DEFAULT, BiomeRegistry.createDefaultRegistry(), TerrainModifierPipeline.empty(), new StructureRegistry());
     }
 
     public TerrainGenerator(long seed, WorldBounds bounds) {
-        this(seed, bounds, BiomeRegistry.createDefaultRegistry(), TerrainModifierPipeline.empty());
+        this(seed, bounds, BiomeRegistry.createDefaultRegistry(), TerrainModifierPipeline.empty(), new StructureRegistry());
     }
 
     public TerrainGenerator(long seed, WorldBounds bounds, BiomeRegistry biomeRegistry, TerrainModifierPipeline pipeline) {
+        this(seed, bounds, biomeRegistry, pipeline, new StructureRegistry());
+    }
+
+    public TerrainGenerator(long seed, WorldBounds bounds, BiomeRegistry biomeRegistry,
+                            TerrainModifierPipeline pipeline, StructureRegistry structureRegistry) {
         this.seed = seed;
         this.bounds = (bounds != null) ? bounds : WorldBounds.DEFAULT;
         this.biomeRegistry = (biomeRegistry != null) ? biomeRegistry : BiomeRegistry.createDefaultRegistry();
         this.climateSampler = new ClimateSampler(seed);
         this.biomeSampler = new BiomeSampler(this.biomeRegistry, this.climateSampler);
         this.modifierPipeline = (pipeline != null) ? pipeline : TerrainModifierPipeline.empty();
+        StructureRegistry structReg = (structureRegistry != null) ? structureRegistry : new StructureRegistry();
+        this.structureManager = new StructurePlacementManager(seed, this.bounds, this, structReg);
 
         this.baseNoise = new SimplexNoise(seed);
         this.detailNoise = new SimplexNoise(seed + 1337L);
@@ -103,6 +113,10 @@ public class TerrainGenerator {
 
     public TerrainModifierPipeline getModifierPipeline() {
         return modifierPipeline;
+    }
+
+    public StructurePlacementManager getStructureManager() {
+        return structureManager;
     }
 
     private void initPOIs() {
@@ -331,6 +345,9 @@ public class TerrainGenerator {
                 plantTree(chunk, cx, cz, t2x, t2z, seedHash % 4 == 0, maxLx, maxLz);
             }
         }
+
+        // 6. Deterministic Structure Block Generation (clipping to requested chunk)
+        structureManager.generateStructureBlocks(chunk, cx, cz);
 
         return chunk;
     }

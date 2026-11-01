@@ -325,7 +325,80 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
   - **21/21 test suites passed with 0 errors** (9390 ms total execution time).
 
 ### 3. Known Limitations & Deferred Items
-- Final 10-biome roster and final authored biome distribution are intentionally not locked in (Phase 6 POI / structure integration).
+- Final 10-biome roster and final authored biome distribution are intentionally not locked in.
 - Deep cave expansion and multi-tier subterranean caverns deferred to future phases.
+
+---
+
+## Phase 6: Deterministic Structure Generation & POI Framework
+
+> [!IMPORTANT]
+> The final production structure roster has not yet been decided. Phase 6 implements infrastructure only; temporary templates are automated test fixtures. No permanent gameplay structures (villages, dungeons, watchtowers, etc.) were registered.
+
+### 1. Architectural Changes & Key Decisions
+- **`StructureTemplate` & Transformations (`com.mcjournal.world.structure`)**:
+  - Compact, immutable 3D block template representation backed by paletted `short[]` indices:
+    - 0 represents `null` / pass-through (preserves underlying procedural terrain/air).
+    - Explicit `Blocks.AIR` carves out room interiors and doorways.
+    - Discrete 90-degree rotations (`Rotation.NONE`, `CLOCKWISE_90`, `CLOCKWISE_180`, `COUNTERCLOCKWISE_90`) with automatic directional block property transformations (e.g. `Axis.X` $\leftrightarrow$ `Axis.Z` for logs).
+    - Horizontal mirroring (`Mirror.NONE`, `LEFT_RIGHT`, `FRONT_BACK`).
+    - Internal transformation cache (`transformedCache`) guarantees zero runtime allocation on repeated chunk queries.
+- **`PlacementConstraints` & `StructureDefinition` (`com.mcjournal.world.structure`)**:
+  - Data-driven environmental and spatial rules:
+    - Biome restrictions (`allowedBiomes`, `disallowedBiomes`).
+    - Vertical elevation bounds (`minElevation`, `maxElevation`).
+    - Maximum terrain slope delta across structure footprint.
+    - Minimum distance to world borders (`minBoundaryDistance`).
+    - Minimum spacing between structures (`minSpacing`).
+    - Water placement permissions (`allowWater`).
+    - Spawn exclusion zone around $(1250, 1250)$ (`spawnExclusionRadius`, default 64).
+    - Relative priority for conflict arbitration.
+- **`StructureRegistry` (`com.mcjournal.world.structure`)**:
+  - Thread-safe, extensible registry enforcing unique IDs and parameter validation.
+  - Defaults to empty in production worlds until content is explicitly registered.
+- **`StructurePlacementManager` (`com.mcjournal.world.structure`)**:
+  - Seed-driven, grid-partitioned deterministic candidate evaluator:
+    - Pure 64-bit coordinate hash (`hashCell`) deterministically selects candidate anchors, rotations, and mirrors from world seed.
+    - Querying a chunk only evaluates adjacent cells; never scans the 2500x2500 world.
+    - Evaluates terrain elevation and slope via `TerrainGenerator.computeHeight` without loading any chunks.
+    - Conflict resolution sorts candidates by priority (descending) and deterministic hash, guaranteeing identical accepted/rejected decisions in all chunks.
+- **Chunk-Independent Multi-Chunk Generation**:
+  - Bounding boxes are clipped on-the-fly to the requested chunk's valid footprint $[chunkMinX..chunkMaxX] \times [chunkMinZ..chunkMaxZ]$.
+  - Generates identically whether chunks load forward, reverse, randomly, or concurrently across multiple threads.
+  - Zero requirement to load neighboring chunks.
+  - Strict partial chunk footprint compliance: out-of-world columns in chunk 156 ($lx \ge 4$ or $lz \ge 4$) strictly remain `AIR`.
+- **Persistence & Player Modification Safety**:
+  - Structure generation occurs strictly during initial procedural chunk generation.
+  - When saved to disk via `RegionManager` / `ChunkPersistence`, structure blocks are persisted into chunk region files.
+  - When reloaded, `persistence.loadFromDisk` restores the saved chunk directly; structure templates are **never** reapplied over saved chunks.
+  - Player broken blocks remain broken; player-placed blocks remain intact.
+- **Authored Terrain Foundation Support (`PlateauModifier`)**:
+  - Reusable deterministic modifier for `TerrainModifierPipeline` enabling ground leveling and foundation plateaus for authored POIs with smooth Hermite blending.
+
+### 2. Automated Test Fixtures (Test Code Only)
+- **Fixture A**: Small Test Building ($5 \times 4 \times 5$, cobblestone walls, oak log corners, doorway).
+- **Fixture B**: Vertical Test Tower ($4 \times 30 \times 4$, stone tower testing vertical clearance).
+- **Fixture C**: Multi-Chunk Complex ($36 \times 6 \times 36$, spans $2 \times 2$ to $3 \times 3$ chunks with center diamond marker).
+- **Fixture D**: Boundary Test Structure ($20 \times 8 \times 20$, tests edge clipping near corner chunk 156, 156).
+
+### 3. Verification & Automated Test Results
+- **Dedicated Test Suite**: [`FiniteStructureGenerationTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteStructureGenerationTest.java) added with 10 comprehensive test suites:
+  1. Structure registry, duplicate rejection & validation: **PASSED**
+  2. Template rotations (0, 90, 180, 270), mirroring & axis states: **PASSED**
+  3. Placement determinism, seed divergence & restart-safety: **PASSED**
+  4. Conflict resolution, priority arbitration & spawn exclusion: **PASSED**
+  5. Biome filtering, elevation bounds & slope limits: **PASSED**
+  6. Multi-chunk structure independent generation & order-safety (spanning 9 chunks identically across forward/reverse orders): **PASSED**
+  7. World bounds containment & partial chunk 156 clipping: **PASSED**
+  8. Persistence fidelity & player modification preservation: **PASSED**
+  9. Concurrency thread-safety (8 worker threads vs sequential): **PASSED** (100% bit-for-bit identical)
+  10. Performance benchmark: Query: **27.9 µs/chunk**, Transformation: **2.5 µs**, Chunk Generation: **3.15 ms/chunk** (**317 chunks/s**): **PASSED**
+- **Master Test Suite Execution**:
+  - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to include `FiniteStructureGenerationTest`.
+  - **22/22 test suites passed with 0 errors** (14,858 ms total execution time).
+
+### 4. Known Limitations & Deferred Items
+- Actual gameplay structures and POI definitions are deferred to future content-creation phases.
+- Multi-room jigsaw/procedural assembly deferred until structure content requirements are finalized.
 
 
