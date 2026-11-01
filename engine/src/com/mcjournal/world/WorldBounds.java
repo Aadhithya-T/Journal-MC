@@ -132,6 +132,39 @@ public final class WorldBounds {
         return isValidHorizontal(x, z) && isValidVertical(y);
     }
 
+    // --- Entity & Player AABB Validation ---
+
+    /**
+     * Validates whether an entity with horizontal width and vertical height
+     * centered at (px, pz) with base at py has its complete AABB strictly inside world boundaries.
+     * Horizontal valid range: [0.0, config.width()].
+     * Vertical valid range: [0.0, config.height()].
+     */
+    public boolean isEntityAABBInsideWorld(float px, float py, float pz, float width, float height) {
+        if (!bounded) return true;
+        float halfW = width / 2.0f;
+        float minX = px - halfW;
+        float maxX = px + halfW;
+        float minZ = pz - halfW;
+        float maxZ = pz + halfW;
+        float minY = py;
+        float maxY = py + height;
+
+        return minX >= 0.0f && maxX <= (float) config.width()
+            && minZ >= 0.0f && maxZ <= (float) config.depth()
+            && minY >= 0.0f && maxY <= (float) config.height();
+    }
+
+    /**
+     * Validates whether the standard player AABB (width=0.6, height=1.8)
+     * at (px, py, pz) is completely contained within the world bounds.
+     * Allowed player center horizontal range: [0.3, width - 0.3].
+     * Allowed player base vertical range: [0.0, height - 1.8].
+     */
+    public boolean isPlayerAABBInsideWorld(float px, float py, float pz) {
+        return isEntityAABBInsideWorld(px, py, pz, EngineConstants.PLAYER_WIDTH, EngineConstants.PLAYER_HEIGHT);
+    }
+
     // --- Chunk Coordinate Validation ---
 
     /**

@@ -221,7 +221,7 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
       - Valid chunks within $[0, 156] \times [0, 156]$ are copied to the destination region storage.
       - Partial edge chunks ($cx=156, cz=156$) are sanitized to ensure out-of-world columns ($lx \ge 4, lz \ge 4$) are strictly AIR.
       - Out-of-bounds chunks ($cx < 0, cz < 0, cx > 156, cz > 156$) are skipped, counted, and recorded in the report.
-    - Validates player coordinates: if inside $[0, 2500] \times [0, 256] \times [0, 2500]$, preserved as-is; if out-of-bounds, safely relocated to target spawn $(1250, 66, 1250)$ while fully preserving player health, hunger, inventory, hotbar, selected slot, and world time.
+    - Validates complete player AABB: uses `targetBounds.isPlayerAABBInsideWorld(px, py, pz)` ($px, pz \in [0.3f, 2499.7f], py \in [0.0f, 254.2f]$). If the player's full collision box is inside the world, preserved as-is; if any part of the AABB exceeds boundary planes (e.g., $X=2500$ or center inside but bounding box extending outside), the player is safely relocated to target spawn $(1250, 66, 1250)$ while fully preserving player health, hunger, inventory, hotbar, selected slot, and world time.
     - Generates detailed `MigrationReport` documenting imported chunks, skipped chunks, player relocation status, warnings, and success flag.
 - **`RegionManager` & `ChunkPersistence` (`com.mcjournal.RegionManager`, `com.mcjournal.ChunkPersistence`)**:
   - Injected with `WorldBounds` to guard region storage:
@@ -232,22 +232,30 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
 - **`WorldSession` (`com.mcjournal.client.WorldSession`)**:
   - Extracts and applies `WorldConfiguration` from loaded V4 save before initializing `ChunkManager`.
   - Passes configuration-derived `WorldBounds` directly into `ChunkManager`.
-  - Validates player position against loaded world configuration upon entry: safely relocates out-of-bounds coordinates to default spawn with explicit log notice while preserving all player inventory and stats.
+  - Validates full player AABB against loaded world bounds upon entry via `worldBounds.isPlayerAABBInsideWorld(px, py, pz)`: safely relocates players with partial or complete out-of-bounds coordinates to default spawn with explicit log warning while preserving all player inventory and stats.
+  - Initial spawn neighborhood targeting explicitly checks player containment before falling back to default spawn coordinates.
   - Save operations capture active `WorldConfiguration` from `ChunkManager.getWorldBounds().getConfig()` into V4 metadata snapshot.
+- **`WorldBounds` Player AABB Containment (`com.mcjournal.world.WorldBounds`)**:
+  - Added `isPlayerAABBInsideWorld(double px, double py, double pz)` and `isEntityAABBInsideWorld(double px, double py, double pz, double width, double height)`:
+    - Validates against player collision geometry ($WIDTH = 0.6f$, $HEIGHT = 1.8f$) where $(px, pz)$ is horizontal center and $py$ is feet bottom.
+    - Enforces horizontal center limits $[0.3f, 2499.7f]$ and vertical feet limits $[0.0f, 254.2f]$.
+    - Rejects boundary borders ($X=0, X=2500, Z=0, Z=2500$) and edge overflows ($X=0.2, X=2499.8, Y=255.0$).
 
 ### 2. Verification & Automated Test Results
-- **Dedicated Test Suite**: [`FiniteWorldPersistenceTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteWorldPersistenceTest.java) added with 9 comprehensive test suites:
+- **Dedicated Test Suite**: [`FiniteWorldPersistenceTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteWorldPersistenceTest.java) updated with 11 comprehensive test suites:
   1. Metadata V4 serialization, WorldConfiguration fields preservation, and validation: verifies dimensions, height rejection ($384 \ne 256$), and future version rejection ($99 > 4$).
   2. Atomic save replacement & write failure preservation: verify atomic temp move and original save preservation.
   3. Chunk persistence round-trip for 4 corners $(0,0), (156,0), (0,156), (156,156)$ and spawn center $(78,78)$: verified bit-for-bit block state restoration across Bedrock, Stone, Diamond Ore, and Water.
   4. Partial edge chunk invalid column isolation: invalid voxels ($lx \ge 4, lz \ge 4$) in $(156, 156)$ remain strictly AIR.
   5. 5x5 Region grid mapping & boundary write rejection: verifies $rx, rz \in [0, 4]$ and strict rejection of out-of-world chunk writes ($cx=-1, cx=157$).
   6. `ChunkSerializer` V1, V2, and V3 backward compatibility: verifies chunk deserialization across all historical serializer versions.
-  7. Legacy V3 save migration to V4 finite world: in-bounds chunks imported, out-of-bounds chunks skipped and reported, out-of-bounds player relocated to spawn while preserving health/hunger/inventory.
-  8. Migration repeat-safety & source file immutability: verifies source `world.jmc` remains bit-for-bit identical after repeat migration.
+  7. Legacy V3 save migration to V4 finite world: in-bounds chunks imported and verified for block content, partial edge chunk columns sanitized to AIR, out-of-bounds chunks skipped and reported, out-of-bounds player relocated to spawn while preserving health/hunger/inventory.
+  8. Migration repeat-safety & source file immutability: verifies source `world.jmc` and region files remain bit-for-bit identical after repeat migration, and re-running migration yields identical destination chunks.
   9. Truncated metadata & corrupted region error handling: verifies safe `IOException` handling without JVM crash.
+  10. Full player AABB boundary validation: validates exact 0, 2500, flush inside ($0.3, 2499.7$), partial AABB overflows ($0.2, 2499.8$), and vertical ceiling overflow ($Y=255.0$).
+  11. `WorldSession` player restoration AABB containment: verifies players with out-of-bounds or edge-overflow AABBs are relocated to $(1250, 66, 1250)$ while valid in-bounds positions are preserved.
 - **Master Test Suite Execution**:
-  - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to include `FiniteWorldPersistenceTest`.
-  - **20/20 test suites passed with 0 errors** (4473 ms total execution time).
+  - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) contains `FiniteWorldPersistenceTest`.
+  - **20/20 test suites passed with 0 errors** (7352 ms total execution time).
 
 

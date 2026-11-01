@@ -191,13 +191,13 @@ public class SaveMigrationManager {
             float py = sourceSave.playerY;
             float pz = sourceSave.playerZ;
 
-            if (px < 0.0f || px >= targetConfig.width() || pz < 0.0f || pz >= targetConfig.depth() || py < 0.0f || py >= targetConfig.height()) {
+            if (!targetBounds.isPlayerAABBInsideWorld(px, py, pz)) {
                 playerCompatible = false;
                 playerRelocated = true;
                 px = targetConfig.spawnX();
-                py = targetConfig.spawnY();
+                py = (float) targetConfig.spawnY();
                 pz = targetConfig.spawnZ();
-                warnings.add("Source player position (" + sourceSave.playerX + ", " + sourceSave.playerZ + ") outside target bounds; relocated to spawn (" + px + ", " + pz + ")");
+                warnings.add("Source player AABB at (" + sourceSave.playerX + ", " + sourceSave.playerY + ", " + sourceSave.playerZ + ") extends outside target bounds; relocated to spawn (" + px + ", " + py + ", " + pz + ")");
             }
 
             // 5. Construct and write destination V4 metadata
@@ -263,3 +263,4 @@ public class SaveMigrationManager {
         }
     }
 }
+

@@ -120,13 +120,16 @@ public class WorldSession {
             chunkRenderer.cleanup();
         }
         int defaultSpawnX = worldConfig.spawnX();
+        int defaultSpawnY = worldConfig.spawnY();
         int defaultSpawnZ = worldConfig.spawnZ();
         float targetPlayerX = (existingSave != null ? existingSave.playerX : defaultSpawnX);
+        float targetPlayerY = (existingSave != null ? existingSave.playerY : defaultSpawnY);
         float targetPlayerZ = (existingSave != null ? existingSave.playerZ : defaultSpawnZ);
 
-        // Validate spawn coordinates against world bounds
-        if (targetPlayerX < 0.0f || targetPlayerX >= worldConfig.width() || targetPlayerZ < 0.0f || targetPlayerZ >= worldConfig.depth()) {
+        // Validate spawn coordinates against world bounds using complete player AABB
+        if (!worldBounds.isPlayerAABBInsideWorld(targetPlayerX, targetPlayerY, targetPlayerZ)) {
             targetPlayerX = defaultSpawnX;
+            targetPlayerY = defaultSpawnY;
             targetPlayerZ = defaultSpawnZ;
         }
 
@@ -155,11 +158,11 @@ public class WorldSession {
             float py = existingSave.playerY;
             float pz = existingSave.playerZ;
 
-            // Validate player coordinates against loaded world configuration
-            if (px < 0.0f || px >= worldConfig.width() || pz < 0.0f || pz >= worldConfig.depth() || py < 0.0f || py >= worldConfig.height()) {
-                System.out.println("[WorldSession] Saved player position (" + px + ", " + py + ", " + pz + ") is outside world bounds! Relocating to spawn (" + defaultSpawnX + ", " + worldConfig.spawnY() + ", " + defaultSpawnZ + ")...");
+            // Validate complete player AABB against loaded world configuration
+            if (!worldBounds.isPlayerAABBInsideWorld(px, py, pz)) {
+                System.out.println("[WorldSession] Saved player AABB at (" + px + ", " + py + ", " + pz + ") extends outside world bounds! Relocating to spawn (" + defaultSpawnX + ", " + defaultSpawnY + ", " + defaultSpawnZ + ")...");
                 px = defaultSpawnX;
-                py = (float) worldConfig.spawnY();
+                py = (float) defaultSpawnY;
                 pz = defaultSpawnZ;
             }
 
