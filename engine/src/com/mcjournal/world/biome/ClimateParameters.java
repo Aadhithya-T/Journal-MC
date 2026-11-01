@@ -23,3 +23,4 @@ public record ClimateParameters(double temperature, double moisture, double cont
         return dt * dt * 1.0 + dm * dm * 1.0 + dc * dc * 1.5;
     }
 }
+

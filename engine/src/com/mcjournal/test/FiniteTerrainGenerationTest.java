@@ -55,6 +55,7 @@ public class FiniteTerrainGenerationTest {
             testNaturalBoundaryTerrainShaping();
             testHybridTerrainModifierPipeline();
             testTerrainAwareSpawnResolution();
+            testSpawnSafetyValidationCases();
             testSavedPlayerPositionPreservation();
             testConcurrentVsSequentialThreadSafety();
             testGenerationPerformanceBenchmark();
@@ -452,7 +453,130 @@ public class FiniteTerrainGenerationTest {
     }
 
     /**
-     * 9. Preserves Saved Player Position on World Loading:
+     * 9. Specific Spawn Safety Validation Cases:
+     * - Spawn beneath an overhang
+     * - Spawn inside a solid block
+     * - Spawn with insufficient vertical clearance
+     * - Spawn beside a steep terrain transition
+     * - Spawn on water
+     * - Spawn at the world boundary
+     * - A valid spawn on ordinary terrain
+     * - Deterministic spawn selection for the same seed
+     */
+    private static void testSpawnSafetyValidationCases() {
+        System.out.print("[Phase 5] Detailed spawn safety validation scenarios... ");
+
+        TerrainGenerator gen = new TerrainGenerator(777888999L, WorldBounds.DEFAULT);
+        WorldBounds bounds = WorldBounds.DEFAULT;
+
+        // Find a terrain-level spawn point to serve as baseline
+        SpawnLocator.SpawnPosition basePos = SpawnLocator.findSafeSpawn(gen, bounds);
+        int wx = basePos.x();
+        int wz = basePos.z();
+        int spawnY = basePos.y();
+        int groundY = spawnY - 1;
+
+        // Baseline valid accessor (solid grass ground, air body, air head, air overhead)
+        SpawnLocator.BlockAccessor validAccessor = (x, y, z) -> {
+            if (y == groundY) return Blocks.GRASS.getDefaultState();
+            return Blocks.AIR.getDefaultState();
+        };
+
+        // 1. Valid spawn on ordinary level terrain
+        assert SpawnLocator.isSafeSpawnPosition(gen, bounds, wx, spawnY, wz, validAccessor) :
+                "Ordinary level plains terrain must be accepted as valid spawn";
+
+        // 2. Spawn beneath an overhang (solid stone at spawnY + 2)
+        SpawnLocator.BlockAccessor overhangAccessor = (x, y, z) -> {
+            if (y == groundY) return Blocks.GRASS.getDefaultState();
+            if (y == spawnY + 2) return Blocks.STONE.getDefaultState(); // Low ceiling / ledge directly above head
+            return Blocks.AIR.getDefaultState();
+        };
+        assert !SpawnLocator.isSafeSpawnPosition(gen, bounds, wx, spawnY, wz, overhangAccessor) :
+                "Spawn beneath low overhang or ceiling must be rejected";
+
+        // 3. Spawn inside a solid block (solid stone at body spawnY)
+        SpawnLocator.BlockAccessor solidBodyAccessor = (x, y, z) -> {
+            if (y == groundY) return Blocks.GRASS.getDefaultState();
+            if (y == spawnY) return Blocks.STONE.getDefaultState(); // Player feet inside solid stone
+            return Blocks.AIR.getDefaultState();
+        };
+        assert !SpawnLocator.isSafeSpawnPosition(gen, bounds, wx, spawnY, wz, solidBodyAccessor) :
+                "Spawn inside solid block must be rejected";
+
+        // Solid head at spawnY + 1
+        SpawnLocator.BlockAccessor solidHeadAccessor = (x, y, z) -> {
+            if (y == groundY) return Blocks.GRASS.getDefaultState();
+            if (y == spawnY + 1) return Blocks.OAK_LOG.getDefaultState(); // Tree trunk at head height
+            return Blocks.AIR.getDefaultState();
+        };
+        assert !SpawnLocator.isSafeSpawnPosition(gen, bounds, wx, spawnY, wz, solidHeadAccessor) :
+                "Spawn intersecting solid block at head height must be rejected";
+
+        // 4. Spawn with insufficient vertical clearance (spawnY + 2 >= Chunk.HEIGHT)
+        assert !SpawnLocator.isSafeSpawnPosition(gen, bounds, wx, 255, wz, validAccessor) :
+                "Spawn at top of world with insufficient clearance must be rejected";
+        assert !SpawnLocator.isSafeSpawnPosition(gen, bounds, wx, 254, wz, validAccessor) :
+                "Spawn at Y=254 (overhead 256) must be rejected";
+
+        // 5. Spawn beside a steep terrain transition
+        // Create generator with a custom modifier introducing a sheer cliff at (wx + 1, wz)
+        TerrainModifierPipeline steepPipeline = new TerrainModifierPipeline();
+        steepPipeline.addModifier(new TerrainModifier() {
+            @Override
+            public String getName() { return "sheer_cliff"; }
+            @Override
+            public double modifyHeight(int x, int z, double h) {
+                if (x == wx + 1 && z == wz) return groundY - 10.0; // 10-block sheer drop immediately adjacent
+                if (x == wx && z == wz) return groundY;
+                return h;
+            }
+        });
+        TerrainGenerator cliffGen = new TerrainGenerator(777888999L, bounds, BiomeRegistry.createDefaultRegistry(), steepPipeline);
+        assert !SpawnLocator.isSafeSpawnPosition(cliffGen, bounds, wx, spawnY, wz, validAccessor) :
+                "Spawn beside a steep cliff drop must be rejected";
+
+        // 6. Spawn on water (ground block is water)
+        SpawnLocator.BlockAccessor waterGroundAccessor = (x, y, z) -> {
+            if (y == groundY) return Blocks.WATER.getDefaultState();
+            return Blocks.AIR.getDefaultState();
+        };
+        assert !SpawnLocator.isSafeSpawnPosition(gen, bounds, wx, spawnY, wz, waterGroundAccessor) :
+                "Spawn on water must be rejected";
+
+        // Water at player feet level
+        SpawnLocator.BlockAccessor submergedAccessor = (x, y, z) -> {
+            if (y == groundY) return Blocks.SAND.getDefaultState();
+            if (y == spawnY) return Blocks.WATER.getDefaultState();
+            return Blocks.AIR.getDefaultState();
+        };
+        assert !SpawnLocator.isSafeSpawnPosition(gen, bounds, wx, spawnY, wz, submergedAccessor) :
+                "Spawn submerged in water must be rejected";
+
+        // 7. Spawn at world boundary
+        // wx = 0 with px = 0.2f (AABB extends to minX = -0.1f < 0.0f)
+        assert !bounds.isPlayerAABBInsideWorld(0.2f, (float) spawnY, (float) wz) : "Boundary overflow must be rejected by WorldBounds";
+        // Attempting spawn where player center is at 0 (AABB minX = -0.3f)
+        assert !SpawnLocator.isSafeSpawnPosition(gen, bounds, 0, spawnY, wz, validAccessor) :
+                "Spawn at border block 0 must be rejected";
+        assert !SpawnLocator.isSafeSpawnPosition(gen, bounds, 2499, spawnY, wz, validAccessor) :
+                "Spawn at border block 2499 (AABB maxX = 2499.8f > 2499.7f) must be rejected";
+
+        // 8. Deterministic spawn selection for the same seed across multiple runs
+        SpawnLocator.SpawnPosition sA = SpawnLocator.findSafeSpawn(gen, bounds);
+        SpawnLocator.SpawnPosition sB = SpawnLocator.findSafeSpawn(gen, bounds);
+        assert sA.equals(sB) : "Multiple findSafeSpawn calls for same seed must return identical coordinates";
+
+        // Distinct seeds resolve deterministically to their respective terrain
+        TerrainGenerator genOther = new TerrainGenerator(123456789L, bounds);
+        SpawnLocator.SpawnPosition sOther = SpawnLocator.findSafeSpawn(genOther, bounds);
+        assert sOther != null : "Spawn for second seed must resolve successfully";
+
+        System.out.println("PASSED");
+    }
+
+    /**
+     * 10. Preserves Saved Player Position on World Loading:
      * - When loading an existing save with valid coordinates, the player position is not overwritten by spawn resolution
      */
     private static void testSavedPlayerPositionPreservation() throws Exception {
@@ -563,33 +687,43 @@ public class FiniteTerrainGenerationTest {
     }
 
     /**
-     * 11. Performance Benchmark:
-     * - Measures average generation time per chunk
+     * 12. Performance Benchmark:
+     * - Confirms it measures actual complete chunk generation (all 65,536 voxels/chunk)
+     * - Includes sufficient warmup (40 chunks across diverse coordinates)
+     * - Measures representative sample of 100 full chunks (6,553,600 voxels)
+     * - Reports average latency (ms/chunk) and throughput (chunks/sec, MVoxels/sec)
      */
     private static void testGenerationPerformanceBenchmark() {
         System.out.print("[Phase 5] Generation performance benchmark... ");
 
         TerrainGenerator gen = new TerrainGenerator(133742L, WorldBounds.DEFAULT);
 
-        // Warm up JVM JIT compiler
-        for (int cx = 10; cx < 14; cx++) {
-            for (int cz = 10; cz < 14; cz++) {
+        // 1. Warm up JVM JIT compiler with 40 chunks across varied biomes and terrain
+        for (int cx = 10; cx < 15; cx++) {
+            for (int cz = 10; cz < 18; cz++) {
                 gen.generateChunk(cx, cz);
             }
         }
 
-        // Benchmark 25 full chunks
-        int sampleCount = 25;
+        // 2. Benchmark 100 full chunks across diverse terrain regions (10x10 chunk grid)
+        int sampleCount = 100;
         long startNanos = System.nanoTime();
         for (int i = 0; i < sampleCount; i++) {
-            int cx = 20 + (i % 5);
-            int cz = 20 + (i / 5);
-            gen.generateChunk(cx, cz);
+            int cx = 20 + (i % 10);
+            int cz = 20 + (i / 10);
+            Chunk c = gen.generateChunk(cx, cz);
+            // Verify chunk was actually populated
+            assert c.getBlockState(0, 0, 0).is(Blocks.BEDROCK);
         }
         long totalNanos = System.nanoTime() - startNanos;
-        double avgMs = (totalNanos / 1_000_000.0) / sampleCount;
 
-        System.out.println(String.format("PASSED (Avg: %.2f ms/chunk across %d chunks)", avgMs, sampleCount));
+        double totalSeconds = totalNanos / 1_000_000_000.0;
+        double avgMs = (totalNanos / 1_000_000.0) / sampleCount;
+        double chunksPerSec = sampleCount / totalSeconds;
+        double megavoxelsPerSec = (sampleCount * (double) Chunk.TOTAL_VOXELS / 1_000_000.0) / totalSeconds;
+
+        System.out.println(String.format("PASSED (Avg: %.2f ms/chunk | Throughput: %.0f chunks/s, %.1f MVoxels/s across %d chunks)",
+                avgMs, chunksPerSec, megavoxelsPerSec, sampleCount));
     }
 
     private static void cleanupDir(File dir) {

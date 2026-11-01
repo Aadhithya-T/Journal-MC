@@ -48,3 +48,4 @@ public class ClimateSampler {
         return new ClimateParameters(temp, moist, cont);
     }
 }
+

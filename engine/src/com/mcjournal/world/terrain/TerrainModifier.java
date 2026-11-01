@@ -33,3 +33,4 @@ public interface TerrainModifier {
         return currentBiome;
     }
 }
+

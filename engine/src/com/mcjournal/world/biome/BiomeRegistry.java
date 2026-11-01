@@ -135,3 +135,4 @@ public class BiomeRegistry {
         return registry;
     }
 }
+

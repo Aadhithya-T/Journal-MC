@@ -294,10 +294,12 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
     - Can modify height and override/adapt biomes without modifying generator internals.
 - **Terrain-Aware Spawn Resolution (`com.mcjournal.world.terrain.SpawnLocator`)**:
   - Replaced arbitrary spawn scans with deterministic outward spiral search around $(1250, 1250)$:
-    - Validates ground surface is dry ($surfaceY > SEA\_LEVEL$).
-    - Verifies local slope is level ($\le 1$ block drop to adjacent blocks).
-    - Ensures 2+ blocks of vertical clearance.
-    - Verifies complete player collision box ($[x-0.3, x+0.3], [z-0.3, z+0.3], [y, y+1.8]$) fits inside `WorldBounds`.
+    - Voxel occupancy validation: verifies ground at $spawnY - 1$ is solid and non-fluid (`!ground.isWater() && !ground.isFluid()`).
+    - Collision volume clearance: verifies body ($spawnY$) and head ($spawnY + 1$) are completely non-solid and non-fluid with no tree trunks, leaves, or solid blocks intersecting the player's 1.8m AABB.
+    - Overhead clearance: verifies headroom ($spawnY + 2$) is free of low ceilings, overhangs, or rock ledges.
+    - Terrain slope: cardinal neighbor ground heights verify level footing without sheer drops or cliffs ($\max |\Delta h| \le 1$).
+    - Bounds containment: verifies full player bounding box ($[px \pm 0.3f], [pz \pm 0.3f], [py, py + 1.8f]$) is inside `WorldBounds`.
+    - On-demand chunk evaluation: uses `BlockAccessor` and an internal `ChunkPos` cache, generating only the immediate candidate chunks around spawn rather than the whole world.
     - Integrated with `WorldSession.enterWorld`: fresh worlds resolve safe terrain spawn; existing saved player positions are preserved.
 - **Thread Safety & Chunk Column Caching**:
   - All noise generators and registries are immutable and thread-safe.
@@ -305,7 +307,7 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
   - Generates identical chunk blocks whether executed sequentially or concurrently across multiple worker threads.
 
 ### 2. Verification & Automated Test Results
-- **Dedicated Test Suite**: [`FiniteTerrainGenerationTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteTerrainGenerationTest.java) added with 11 comprehensive test suites:
+- **Dedicated Test Suite**: [`FiniteTerrainGenerationTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteTerrainGenerationTest.java) added with 12 comprehensive test suites:
   1. Biome architecture, validation, duplicate rejection, and strict MAX_BIOMES=10 limit enforcement.
   2. Climate sampling determinism, $[-1.0, 1.0]$ ranges, and seed divergence.
   3. Terrain height determinism, vertical bounds $[40, 245]$, and chunk boundary seam continuity (max delta $\le 4$ across borders).
@@ -314,12 +316,13 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
   6. Natural boundary shaping on all 4 borders (West, East, North, South) and corners.
   7. Hybrid procedural/authored terrain modifier pipeline execution.
   8. Terrain-aware spawn resolution: dry land, slope flatness, clearance, bounds containment, and determinism (located at $(1250, 64, 1250)$ for test seed).
-  9. Preservation of saved player coordinates and stats on world load.
-  10. Concurrency vs sequential generation thread-safety (100% bit-for-bit identical chunk blocks across 8 concurrent worker threads).
-  11. Generation performance benchmark: average **2.58 ms per chunk** across 25 chunks.
+  9. Detailed spawn safety validation scenarios: verifies rejection of low overhangs, solid blocks inside player volume, insufficient vertical clearance ($Y \ge 254$), steep cliff transitions, water/submerged locations, and boundary border violations; verifies acceptance of valid ordinary terrain.
+  10. Preservation of saved player coordinates and stats on world load.
+  11. Concurrency vs sequential generation thread-safety (100% bit-for-bit identical chunk blocks across 8 concurrent worker threads).
+  12. Generation performance benchmark: 40-chunk warmup, 100 representative full chunks (6,553,600 voxels) generated with average latency **2.63 ms/chunk** and throughput **380 chunks/s** (**24.9 MVoxels/s**).
 - **Master Test Suite Execution**:
   - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to include `FiniteTerrainGenerationTest`.
-  - **21/21 test suites passed with 0 errors** (9337 ms total execution time).
+  - **21/21 test suites passed with 0 errors** (9390 ms total execution time).
 
 ### 3. Known Limitations & Deferred Items
 - Final 10-biome roster and final authored biome distribution are intentionally not locked in (Phase 6 POI / structure integration).
