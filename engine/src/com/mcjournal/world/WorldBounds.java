@@ -278,7 +278,30 @@ public final class WorldBounds {
         return cz * EngineConstants.CHUNK_SIZE + lz;
     }
 
-    // --- Distance to World Edges ---
+    // --- Distance to World Edges & Natural Boundary Presentation Hooks ---
+
+    /**
+     * Edge zone classification for future natural boundary presentation.
+     * Can be queried by terrain/biome generators, atmospheric distance fog, and ambient audio.
+     */
+    public enum EdgeZone {
+        CORE,           // Far from any boundary (> 200 blocks)
+        APPROACH,       // Transitioning towards edge (64 to 200 blocks)
+        PERIMETER,      // Near boundary cliffs/ocean (16 to 64 blocks)
+        BORDER          // Immediately on the boundary (0 to 16 blocks)
+    }
+
+    /**
+     * Categorizes an (X, Z) coordinate into an EdgeZone for boundary visual transitions.
+     */
+    public EdgeZone getEdgeZone(int wx, int wz) {
+        if (!bounded) return EdgeZone.CORE;
+        int dist = distanceToEdge(wx, wz);
+        if (dist <= 16) return EdgeZone.BORDER;
+        if (dist <= 64) return EdgeZone.PERIMETER;
+        if (dist <= 200) return EdgeZone.APPROACH;
+        return EdgeZone.CORE;
+    }
 
     /**
      * Calculates the minimum block distance to any of the four world borders.

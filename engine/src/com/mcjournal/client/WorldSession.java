@@ -111,8 +111,10 @@ public class WorldSession {
         if (chunkRenderer != null) {
             chunkRenderer.cleanup();
         }
-        int spawnCx = Math.floorDiv((int) (existingSave != null ? existingSave.playerX : 8), 16);
-        int spawnCz = Math.floorDiv((int) (existingSave != null ? existingSave.playerZ : 8), 16);
+        int defaultSpawnX = com.mcjournal.EngineConstants.DEFAULT_SPAWN_X;
+        int defaultSpawnZ = com.mcjournal.EngineConstants.DEFAULT_SPAWN_Z;
+        int spawnCx = Math.floorDiv((int) (existingSave != null ? existingSave.playerX : defaultSpawnX), 16);
+        int spawnCz = Math.floorDiv((int) (existingSave != null ? existingSave.playerZ : defaultSpawnZ), 16);
         chunkManager.waitForInitialChunks(spawnCx, spawnCz, 3); // 7x7 core chunks generated & meshed
 
         // Upload initial spawn meshes to GPU
@@ -170,8 +172,8 @@ public class WorldSession {
             }
 
             // Safe surface spawn scan for new world
-            int spawnX = 8;
-            int spawnZ = 8;
+            int spawnX = com.mcjournal.EngineConstants.DEFAULT_SPAWN_X;
+            int spawnZ = com.mcjournal.EngineConstants.DEFAULT_SPAWN_Z;
             int spawnY = 66;
             for (int y = Chunk.HEIGHT - 1; y >= 0; y--) {
                 if (chunkManager.getBlockStateAt(spawnX, y, spawnZ).isSolid()) {

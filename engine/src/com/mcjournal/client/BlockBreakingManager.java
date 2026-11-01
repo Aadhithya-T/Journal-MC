@@ -128,13 +128,14 @@ public class BlockBreakingManager {
                                 stateToPlace = stateToPlace.with(BlockProperties.AXIS, axis);
                             }
 
-                            world.setBlockStateAt(placeX, placeY, placeZ, stateToPlace);
-                            player.consumeSelected();
-                            reuploadChunkMeshes(world, renderer, placeX, placeZ);
-                            if (fluidPhysics != null) {
-                                fluidPhysics.onBlockChanged(world, renderer, particles, placeX, placeY, placeZ);
+                            if (world.setBlockStateAt(placeX, placeY, placeZ, stateToPlace)) {
+                                player.consumeSelected();
+                                reuploadChunkMeshes(world, renderer, placeX, placeZ);
+                                if (fluidPhysics != null) {
+                                    fluidPhysics.onBlockChanged(world, renderer, particles, placeX, placeY, placeZ);
+                                }
+                                System.out.println("[Building] 🧱 Placed " + stateToPlace.getSerializedName() + " at (" + placeX + ", " + placeY + ", " + placeZ + ")");
                             }
-                            System.out.println("[Building] 🧱 Placed " + stateToPlace.getSerializedName() + " at (" + placeX + ", " + placeY + ", " + placeZ + ")");
                         }
                     }
                 }

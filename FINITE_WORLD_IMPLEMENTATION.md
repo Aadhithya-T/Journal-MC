@@ -144,6 +144,61 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
   5. `ChunkNeighborhood` boundary transparency & AO solid isolation: out-of-world neighbors treated as transparent Air without AO darkening.
   6. Partial chunk meshing & perimeter wall quad generation: $(156,156)$ produces $+X$ face at $X=2500$ and $+Z$ face at $Z=2500$, with no vertex coordinates $> 2500$.
   7. Block mutations and delta overlay rejection: setting/breaking blocks outside $[0..2499]$ or in invalid partial columns is rejected.
+
+---
+
+## Phase 3: Physical World Containment, Raycasting & Boundary Systems
+
+### 1. Architectural Changes & Key Decisions
+- **`CollisionDetector` (`com.mcjournal.physics.CollisionDetector`)**:
+  - Direct physical containment integration in `resolveMovement`:
+    - Evaluates `WorldBounds` of active `ChunkManager` (if bounded).
+    - Dynamic horizontal bounding box limits: $minAllowedX = width / 2$, $maxAllowedX = bounds.getWidth() - (width / 2)$, $minAllowedZ = width / 2$, $maxAllowedZ = bounds.getDepth() - (width / 2)$.
+    - Player dimensions ($width = 0.6f$, half-width $0.3f$) constrain horizontal position to $[0.3f, 2499.7f]$.
+    - Initial position containment check: if position is outside bounds, clamps to allowed volume without jitter.
+    - Movement step containment: horizontal velocity along $X$ or $Z$ is clamped to boundary planes if movement would cross boundary, setting velocity to $0.0f$ and flagging collision (`collidedX = true` or `collidedZ = true`).
+    - Smooth wall sliding: allows unconstrained movement parallel to the boundary plane (e.g., sliding along $Z$ while pressing into $X=0$ boundary) and unconstrained departure when moving inward away from the wall.
+    - Extreme velocity containment: bullet-speed velocities ($v = 500f, 5000f$) are safely clamped to the boundary plane without tunneling or bypassing collision.
+- **`ItemEntity` (`com.mcjournal.client.ItemEntity`)**:
+  - Physical boundary containment for dropped items:
+    - Item AABB ($SIZE = 0.28f$, half-size $0.14f$) is constrained within $[0.14f, 2499.86f]$ in both $X$ and $Z$.
+    - Velocity on the colliding axis is zeroed upon contact with boundary walls.
+- **`Raycast` (`com.mcjournal.client.Raycast`)**:
+  - Amanatides & Woo DDA boundary termination:
+    - Immediate origin validation: rays starting outside $[0, 2499] \times [0, 255] \times [0, 2499]$ return `null` immediately without accessing or queueing chunks.
+    - DDA loop boundary check: each step of the ray traversal verifies `world.getWorldBounds().isValidBlock(x, y, z)`. If the ray reaches or steps across the world perimeter, traversal terminates immediately and returns `null`.
+    - Raycast queries never probe out-of-world coordinates or crash when crossing boundaries.
+- **`BlockBreakingManager` (`com.mcjournal.client.BlockBreakingManager`)**:
+  - Block placement & interaction protection:
+    - Wrapped `player.consumeSelected()`, mesh rebuilds, and fluid events in `if (world.setBlockStateAt(...))` condition.
+    - If block placement is attempted out-of-bounds or at invalid partial chunk coordinates, `setBlockStateAt` returns `false`, preventing item consumption from the player's inventory.
+- **`FluidPhysicsManager` (`com.mcjournal.FluidPhysicsManager`)**:
+  - Fluid simulation containment:
+    - Added boundary and partial chunk validity checks in `onBlockChanged`, update processing loop, downward vertical flow, and horizontal spreading.
+    - Prevents fluid from cascading or spreading past $X=0, X=2499, Z=0, Z=2499$ or into invalid local voxels ($4..15$) of edge chunks ($cx=156, cz=156$).
+    - Valid interior edge flow and parallel flows along perimeter walls operate normally.
+- **`WorldBounds` Presentation Hooks (`com.mcjournal.world.WorldBounds`)**:
+  - Added `EdgeZone` classification enum:
+    - `CORE`: Distance $> 200$ blocks from any boundary.
+    - `APPROACH`: Distance $64$ to $200$ blocks (transitioning towards edge).
+    - `PERIMETER`: Distance $16$ to $64$ blocks (near cliffs/ocean perimeters).
+    - `BORDER`: Distance $0$ to $16$ blocks (immediately on boundary).
+  - Provides foundation for future natural boundary presentation (fog density, atmospheric audio, and procedural cliffs).
+- **`WorldSession` Spawn Coordinates**:
+  - Spawn coordinates updated to use `EngineConstants.DEFAULT_SPAWN_X` ($1250$) and `EngineConstants.DEFAULT_SPAWN_Z` ($1250$).
+
+### 2. Verification & Automated Test Results
+- **Dedicated Test Suite**: [`FiniteBoundaryPhysicsTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteBoundaryPhysicsTest.java) added with 9 comprehensive test suites:
+  1. Player AABB physical containment on all 4 boundaries ($X=0, X=2500, Z=0, Z=2500$): center clamped to $0.3f$ and $2499.7f$, velocity zeroed, collision flagged.
+  2. Wall sliding along boundary planes and unconstrained departure: sliding parallel to wall unobstructed, moving inward away from wall unobstructed.
+  3. Player corner containment at all 4 corners: $(0,0)$, $(2500,0)$, $(0,2500)$, $(2500,2500)$ safely clamped with dual-axis collision reports.
+  4. Anti-tunneling at extreme velocities ($v = 500f, 5000f$): no penetration through boundary planes.
+  5. Dropped item entity physical containment: items constrained to $[0.14f, 2499.86f]$, velocity zeroed on border impact.
+  6. Raycast DDA boundary termination: out-of-world origins return null immediately, rays shooting into border blocks register hits, rays stepping out-of-world terminate safely without querying out-of-bounds chunks.
+  7. Block interaction and inventory preservation: placement/break out of bounds rejected without consuming player inventory items.
+  8. Fluid simulation containment at world edges and partial chunk limits: water spreads along valid perimeter blocks, never flows into out-of-world coordinates or partial edge invalid columns.
+  9. `EdgeZone` classification and boundary hooks: center $(1250, 1250)$ is `CORE`, distance 150 is `APPROACH`, distance 49 is `PERIMETER`, distance $\le 16$ is `BORDER`.
 - **Master Test Suite Execution**:
-  - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to include `FiniteChunkSystemTest`.
-  - **18/18 test suites passed with 0 errors** (2565 ms total execution time).
+  - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to include `FiniteBoundaryPhysicsTest`.
+  - **19/19 test suites passed with 0 errors** (2852 ms total execution time).
+

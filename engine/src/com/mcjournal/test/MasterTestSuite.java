@@ -27,6 +27,9 @@ public class MasterTestSuite {
         // Phase 2: Finite Chunk System, Streaming & Partial Edge Chunks
         runSuite("Phase 2: Finite Chunk System, Streaming & Partial Edge Chunks", () -> FiniteChunkSystemTest.main(new String[0]));
 
+        // Phase 3: Physical World Containment, Raycasting & Boundary Systems
+        runSuite("Phase 3: Physical World Containment, Raycasting & Boundary Systems", () -> FiniteBoundaryPhysicsTest.main(new String[0]));
+
         // P12 & P13 Performance Instrumentation & Constants
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
 

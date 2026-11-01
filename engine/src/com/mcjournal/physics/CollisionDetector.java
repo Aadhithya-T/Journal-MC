@@ -8,6 +8,12 @@ import org.joml.Vector3f;
  * Dedicated collision detection and movement resolution subsystem (P7.1 & P7.2).
  * Implements bounding box broad-phase voxel extraction and multi-axis movement resolution
  * with auto step-up over obstacles.
+ *
+ * Integrated with WorldBounds to enforce finite-world physical boundary containment:
+ * - Entire entity collision volume remains inside [0..width, 0..depth].
+ * - Resolves axis-separated movement allowing sliding along boundaries.
+ * - Prevents tunneling even at high velocities.
+ * - Leaves vertical and block step-up dynamics intact.
  */
 public class CollisionDetector {
 
@@ -53,7 +59,7 @@ public class CollisionDetector {
     }
 
     /**
-     * Resolves continuous movement against voxel obstacles.
+     * Resolves continuous movement against voxel obstacles and physical world boundaries.
      * Evaluates vertical axis first (to resolve steps/slopes/landings) followed by horizontal axes with step-up.
      */
     public MovementResult resolveMovement(
@@ -68,6 +74,26 @@ public class CollisionDetector {
     ) {
         Vector3f resPos = new Vector3f(pos);
         Vector3f resVel = new Vector3f(vel);
+
+        boolean isBounded = (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded());
+        float minAllowedX = Float.NEGATIVE_INFINITY;
+        float maxAllowedX = Float.POSITIVE_INFINITY;
+        float minAllowedZ = Float.NEGATIVE_INFINITY;
+        float maxAllowedZ = Float.POSITIVE_INFINITY;
+
+        if (isBounded) {
+            float halfW = width / 2.0f;
+            minAllowedX = halfW;
+            maxAllowedX = (float) world.getWorldBounds().getWidth() - halfW;
+            minAllowedZ = halfW;
+            maxAllowedZ = (float) world.getWorldBounds().getDepth() - halfW;
+
+            // Initial containment clamp to ensure AABB never penetrates outside bounds
+            if (resPos.x < minAllowedX) resPos.x = minAllowedX;
+            if (resPos.x > maxAllowedX) resPos.x = maxAllowedX;
+            if (resPos.z < minAllowedZ) resPos.z = minAllowedZ;
+            if (resPos.z > maxAllowedZ) resPos.z = maxAllowedZ;
+        }
 
         boolean ground = onGround;
         boolean colX = false;
@@ -101,10 +127,18 @@ public class CollisionDetector {
             }
         }
 
-        // Step 2: Move X (Horizontal with 0.6-block step-up)
+        // Step 2: Move X (Horizontal with boundary containment & 0.6-block step-up)
         if (resVel.x != 0) {
             float targetX = resPos.x + resVel.x;
-            if (!hasBlockCollisionAt(world, targetX, resPos.y, resPos.z, width, height)) {
+            if (isBounded && targetX < minAllowedX) {
+                resPos.x = minAllowedX;
+                resVel.x = 0;
+                colX = true;
+            } else if (isBounded && targetX > maxAllowedX) {
+                resPos.x = maxAllowedX;
+                resVel.x = 0;
+                colX = true;
+            } else if (!hasBlockCollisionAt(world, targetX, resPos.y, resPos.z, width, height)) {
                 resPos.x = targetX;
             } else {
                 // Auto Step-Up 0.6-block ledge
@@ -123,10 +157,18 @@ public class CollisionDetector {
             }
         }
 
-        // Step 3: Move Z (Horizontal with 0.6-block step-up)
+        // Step 3: Move Z (Horizontal with boundary containment & 0.6-block step-up)
         if (resVel.z != 0) {
             float targetZ = resPos.z + resVel.z;
-            if (!hasBlockCollisionAt(world, resPos.x, resPos.y, targetZ, width, height)) {
+            if (isBounded && targetZ < minAllowedZ) {
+                resPos.z = minAllowedZ;
+                resVel.z = 0;
+                colZ = true;
+            } else if (isBounded && targetZ > maxAllowedZ) {
+                resPos.z = maxAllowedZ;
+                resVel.z = 0;
+                colZ = true;
+            } else if (!hasBlockCollisionAt(world, resPos.x, resPos.y, targetZ, width, height)) {
                 resPos.z = targetZ;
             } else {
                 // Auto Step-Up 0.6-block ledge

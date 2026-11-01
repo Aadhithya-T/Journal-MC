@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * - Batches fluid mutations into an atomic mutationBuffer before applying to chunks (P6.2)
  * - Uses a deduplicated scheduled update queue (P6.3)
  * - Chunk-aware: prevents synchronous blocking or generation at chunk boundaries (P6.4)
+ * - Finite world contained: prevents water from flowing past world bounds or into invalid partial edge chunks (Phase 3)
  */
 public class FluidPhysicsManager {
     public static final int MAX_FLUID_LEVEL = 7; // Level 0 = source, 1..7 = flowing decay
@@ -33,6 +34,15 @@ public class FluidPhysicsManager {
      * Checks if adjacent water should rush in and fill the cavity.
      */
     public void onBlockChanged(ChunkManager world, ChunkRenderer renderer, ParticleManager particles, int wx, int wy, int wz) {
+        if (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded()) {
+            if (!world.getWorldBounds().isValidBlock(wx, wy, wz)) return;
+            int cx = Math.floorDiv(wx, 16);
+            int cz = Math.floorDiv(wz, 16);
+            int lx = Math.floorMod(wx, 16);
+            int lz = Math.floorMod(wz, 16);
+            if (!world.getWorldBounds().isLocalBlockValid(cx, cz, lx, wy, lz)) return;
+        }
+
         if (!isChunkReady(world, wx, wz)) return;
 
         int[][] neighbors = {
@@ -50,6 +60,15 @@ public class FluidPhysicsManager {
             int nx = wx + offset[0];
             int ny = wy + offset[1];
             int nz = wz + offset[2];
+
+            if (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded()) {
+                if (!world.getWorldBounds().isValidBlock(nx, ny, nz)) continue;
+                int ncx = Math.floorDiv(nx, 16);
+                int ncz = Math.floorDiv(nz, 16);
+                int nlx = Math.floorMod(nx, 16);
+                int nlz = Math.floorMod(nz, 16);
+                if (!world.getWorldBounds().isLocalBlockValid(ncx, ncz, nlx, ny, nlz)) continue;
+            }
 
             if (!isChunkReady(world, nx, nz)) continue;
 
@@ -109,6 +128,16 @@ public class FluidPhysicsManager {
             int z = update.z();
             int level = update.level();
 
+            // World boundary and partial chunk isolation check
+            if (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded()) {
+                if (!world.getWorldBounds().isValidBlock(x, y, z)) continue;
+                int cx = Math.floorDiv(x, 16);
+                int cz = Math.floorDiv(z, 16);
+                int lx = Math.floorMod(x, 16);
+                int lz = Math.floorMod(z, 16);
+                if (!world.getWorldBounds().isLocalBlockValid(cx, cz, lx, y, lz)) continue;
+            }
+
             // P6.4: Chunk-aware simulation — skip if chunk is not loaded
             if (!isChunkReady(world, x, z)) continue;
 
@@ -128,12 +157,17 @@ public class FluidPhysicsManager {
 
             // 1. Downward Flow (Vertical cascade has highest priority)
             int belowY = y - 1;
-            if (belowY >= 0 && isChunkReady(world, x, z)) {
-                BlockState below = world.getBlockStateAt(x, belowY, z);
-                if (below.isAir() || below.isPlant()) {
-                    // Downward flow resets decay level to 1 (full vertical stream)
-                    queueFluidUpdate(x, belowY, z, 1);
-                    continue; // Skip horizontal spreading while falling
+            if (belowY >= 0) {
+                if (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded()) {
+                    if (!world.getWorldBounds().isValidBlock(x, belowY, z)) continue;
+                }
+                if (isChunkReady(world, x, z)) {
+                    BlockState below = world.getBlockStateAt(x, belowY, z);
+                    if (below.isAir() || below.isPlant()) {
+                        // Downward flow resets decay level to 1 (full vertical stream)
+                        queueFluidUpdate(x, belowY, z, 1);
+                        continue; // Skip horizontal spreading while falling
+                    }
                 }
             }
 
@@ -143,6 +177,15 @@ public class FluidPhysicsManager {
                 for (int[] dir : horizontalDirs) {
                     int nx = x + dir[0];
                     int nz = z + dir[1];
+
+                    if (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded()) {
+                        if (!world.getWorldBounds().isValidHorizontal(nx, nz)) continue;
+                        int ncx = Math.floorDiv(nx, 16);
+                        int ncz = Math.floorDiv(nz, 16);
+                        int nlx = Math.floorMod(nx, 16);
+                        int nlz = Math.floorMod(nz, 16);
+                        if (!world.getWorldBounds().isLocalBlockValid(ncx, ncz, nlx, y, nlz)) continue;
+                    }
 
                     if (!isChunkReady(world, nx, nz)) continue;
 
