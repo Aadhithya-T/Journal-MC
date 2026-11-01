@@ -515,9 +515,12 @@ public class ChunkManager {
         modifiedBlockStates.put(new WorldBlockPos(wx, wy, wz), state);
 
         Chunk chunk = getChunk(cx, cz);
-        if (chunk != null) {
-            chunk.setBlockState(lx, wy, lz, state);
+        if (chunk == null) {
+            chunk = generator.generateChunk(cpos);
+            chunks.put(cpos, chunk);
+            chunkStatuses.put(cpos, ChunkStatus.GENERATED);
         }
+        chunk.setBlockState(lx, wy, lz, state);
 
         // Track dirty chunk and boundary neighbors for asynchronous deduplicated meshing
         dirtyChunks.markBlockModified(wx, wy, wz);
@@ -592,15 +595,14 @@ public class ChunkManager {
      * Drains pending GPU uploads with strict per-frame upload count and byte budgets.
      */
     public int processGpuUploads(com.mcjournal.client.ChunkRenderer renderer) {
-        if (renderer == null) return 0;
         int uploads = 0;
         int bytesUploaded = 0;
         int maxUploads = uploadQueue.getMaxUploadsPerFrame();
         int maxBytes = uploadQueue.getMaxBytesPerFrame();
 
         while (uploadQueue.hasPendingUploads()) {
-            if (uploads >= maxUploads) break;
-            if (uploads > 0 && bytesUploaded >= maxBytes) break;
+            if (renderer != null && uploads >= maxUploads) break;
+            if (renderer != null && uploads > 0 && bytesUploaded >= maxBytes) break;
 
             ChunkUploadQueue.UploadTask task = uploadQueue.pollUploadTask();
             if (task == null) break;
@@ -608,7 +610,9 @@ public class ChunkManager {
             ChunkPos pos = task.pos();
             ChunkMeshBuilder.MeshData mesh = meshes.get(pos);
             if (mesh != null) {
-                renderer.uploadChunkMesh(pos, mesh);
+                if (renderer != null) {
+                    renderer.uploadChunkMesh(pos, mesh);
+                }
                 markGpuLoaded(pos);
                 bytesUploaded += mesh.getTotalBytes();
                 uploads++;
@@ -618,14 +622,16 @@ public class ChunkManager {
     }
 
     /**
-     * Drains and confirms all pending GPU unloads.
+     * Drains and confirms all pending chunk unloads.
+     * Safely unloads chunk voxel data and meshes whether running with a GPU renderer or in headless mode.
      */
     public int processGpuUnloads(com.mcjournal.client.ChunkRenderer renderer) {
-        if (renderer == null) return 0;
         int unloads = 0;
         ChunkPos unloadPos;
         while ((unloadPos = uploadQueue.pollUnload()) != null) {
-            renderer.unloadChunkMesh(unloadPos);
+            if (renderer != null) {
+                renderer.unloadChunkMesh(unloadPos);
+            }
             confirmGpuUnloaded(unloadPos);
             unloads++;
         }
@@ -690,8 +696,16 @@ public class ChunkManager {
     }
 
     public void shutdown() {
+        chunkWorkers.shutdown();
+        try {
+            if (!chunkWorkers.awaitTermination(3, TimeUnit.SECONDS)) {
+                chunkWorkers.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            chunkWorkers.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         saveAllModifiedChunks();
-        chunkWorkers.shutdownNow();
         persistence.close();
     }
 }

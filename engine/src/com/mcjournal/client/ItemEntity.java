@@ -102,9 +102,18 @@ public class ItemEntity {
             }
         }
 
-        // Step Y physics & voxel terrain floor collision
+        // Step Y physics & voxel terrain floor / ceiling & world boundary collision
         float nextY = pos.y + velocity.y * dt;
-        if (velocity.y < 0.0f) {
+        boolean isBounded = (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded());
+
+        if (isBounded && nextY + SIZE > (float) world.getWorldBounds().getHeight()) {
+            pos.y = (float) world.getWorldBounds().getHeight() - SIZE;
+            velocity.y = 0.0f;
+        } else if (isBounded && nextY < 0.0f) {
+            pos.y = 0.0f;
+            velocity.y = 0.0f;
+            onGround = true;
+        } else if (velocity.y < 0.0f) {
             int floorX = (int) Math.floor(pos.x);
             int floorY = (int) Math.floor(nextY);
             int floorZ = (int) Math.floor(pos.z);
@@ -132,7 +141,6 @@ public class ItemEntity {
         // Step X physics & voxel terrain wall / world boundary collision
         float nextX = pos.x + velocity.x * dt;
         float halfSize = SIZE / 2.0f;
-        boolean isBounded = (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded());
 
         if (isBounded) {
             float minX = halfSize;

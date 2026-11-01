@@ -22,7 +22,7 @@ public class RegionManager implements AutoCloseable {
 
     public RegionManager(File worldDirectory, WorldBounds bounds) {
         this.regionDir = new File(worldDirectory, "regions");
-        this.bounds = (bounds != null) ? bounds : WorldBounds.UNBOUNDED;
+        this.bounds = (bounds != null) ? bounds : WorldBounds.DEFAULT;
         this.regionDir.mkdirs();
     }
 

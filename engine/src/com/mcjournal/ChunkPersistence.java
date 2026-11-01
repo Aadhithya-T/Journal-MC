@@ -20,7 +20,7 @@ public class ChunkPersistence {
     }
 
     public ChunkPersistence(File worldDir, WorldBounds bounds) {
-        this.bounds = (bounds != null) ? bounds : WorldBounds.UNBOUNDED;
+        this.bounds = (bounds != null) ? bounds : WorldBounds.DEFAULT;
         this.regionManager = (worldDir != null) ? new RegionManager(worldDir, this.bounds) : null;
         this.saveExecutor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "ChunkPersistence-Worker");

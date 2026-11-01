@@ -78,6 +78,8 @@ public class CollisionDetector {
         boolean isBounded = (world != null && world.getWorldBounds() != null && world.getWorldBounds().isBounded());
         float minAllowedX = Float.NEGATIVE_INFINITY;
         float maxAllowedX = Float.POSITIVE_INFINITY;
+        float minAllowedY = Float.NEGATIVE_INFINITY;
+        float maxAllowedY = Float.POSITIVE_INFINITY;
         float minAllowedZ = Float.NEGATIVE_INFINITY;
         float maxAllowedZ = Float.POSITIVE_INFINITY;
 
@@ -85,12 +87,16 @@ public class CollisionDetector {
             float halfW = width / 2.0f;
             minAllowedX = halfW;
             maxAllowedX = (float) world.getWorldBounds().getWidth() - halfW;
+            minAllowedY = 0.0f;
+            maxAllowedY = (float) world.getWorldBounds().getHeight() - height;
             minAllowedZ = halfW;
             maxAllowedZ = (float) world.getWorldBounds().getDepth() - halfW;
 
             // Initial containment clamp to ensure AABB never penetrates outside bounds
             if (resPos.x < minAllowedX) resPos.x = minAllowedX;
             if (resPos.x > maxAllowedX) resPos.x = maxAllowedX;
+            if (resPos.y < minAllowedY) resPos.y = minAllowedY;
+            if (resPos.y > maxAllowedY) resPos.y = maxAllowedY;
             if (resPos.z < minAllowedZ) resPos.z = minAllowedZ;
             if (resPos.z > maxAllowedZ) resPos.z = maxAllowedZ;
         }
@@ -100,10 +106,19 @@ public class CollisionDetector {
         boolean colY = false;
         boolean colZ = false;
 
-        // Step 1: Move Y (Vertical) FIRST
+        // Step 1: Move Y (Vertical) FIRST (with ceiling and void containment)
         if (resVel.y != 0) {
             float targetY = resPos.y + resVel.y;
-            if (resVel.y < 0) {
+            if (isBounded && targetY > maxAllowedY) {
+                resPos.y = maxAllowedY;
+                resVel.y = 0;
+                colY = true;
+            } else if (isBounded && targetY < minAllowedY) {
+                resPos.y = minAllowedY;
+                resVel.y = 0;
+                ground = true;
+                colY = true;
+            } else if (resVel.y < 0) {
                 // Falling down
                 if (!hasBlockCollisionAt(world, resPos.x, targetY, resPos.z, width, height)) {
                     resPos.y = targetY;

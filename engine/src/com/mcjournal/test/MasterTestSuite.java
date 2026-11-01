@@ -39,6 +39,9 @@ public class MasterTestSuite {
         // Phase 6: Structure Generation & POI Framework
         runSuite("Phase 6: Structure Generation & POI Framework", () -> FiniteStructureGenerationTest.main(new String[0]));
 
+        // Phase 7: Finite World Final Integration & Stability
+        runSuite("Phase 7: Finite World Final Integration & Stability", () -> FiniteWorldIntegrationAndStabilityTest.main(new String[0]));
+
         // P12 & P13 Performance Instrumentation & Constants
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
 
