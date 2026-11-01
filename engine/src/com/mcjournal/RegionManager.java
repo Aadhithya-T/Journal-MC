@@ -1,21 +1,37 @@
 package com.mcjournal;
 
+import com.mcjournal.world.WorldBounds;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Manages open RegionFile handles across infinite chunk space.
- * Provides thread-safe chunk loading, saving, and cache management.
+ * Manages open RegionFile handles across chunk space.
+ * Provides thread-safe chunk loading, saving, and cache management with bounds validation.
  */
 public class RegionManager implements AutoCloseable {
     private final File regionDir;
+    private final WorldBounds bounds;
     private final Map<RegionPos, RegionFile> openRegions = new ConcurrentHashMap<>();
 
     public RegionManager(File worldDirectory) {
+        this(worldDirectory, WorldBounds.UNBOUNDED);
+    }
+
+    public RegionManager(File worldDirectory, WorldBounds bounds) {
         this.regionDir = new File(worldDirectory, "regions");
+        this.bounds = (bounds != null) ? bounds : WorldBounds.UNBOUNDED;
         this.regionDir.mkdirs();
+    }
+
+    public WorldBounds getWorldBounds() {
+        return bounds;
+    }
+
+    public File getRegionDir() {
+        return regionDir;
     }
 
     private synchronized RegionFile getRegionFile(RegionPos pos) {
@@ -31,6 +47,9 @@ public class RegionManager implements AutoCloseable {
     }
 
     public Chunk loadChunk(int cx, int cz) {
+        if (bounds != null && bounds.isBounded() && !bounds.isValidChunk(cx, cz)) {
+            return null;
+        }
         RegionPos rpos = RegionPos.fromChunkCoords(cx, cz);
         RegionFile region = getRegionFile(rpos);
         if (region == null) return null;
@@ -46,6 +65,9 @@ public class RegionManager implements AutoCloseable {
     }
 
     public boolean hasSavedChunk(int cx, int cz) {
+        if (bounds != null && bounds.isBounded() && !bounds.isValidChunk(cx, cz)) {
+            return false;
+        }
         RegionPos rpos = RegionPos.fromChunkCoords(cx, cz);
         RegionFile region = getRegionFile(rpos);
         if (region == null) return false;
@@ -54,6 +76,10 @@ public class RegionManager implements AutoCloseable {
 
     public void saveChunk(Chunk chunk) {
         if (chunk == null) return;
+        if (bounds != null && bounds.isBounded() && !bounds.isValidChunk(chunk.getCx(), chunk.getCz())) {
+            System.err.println("[RegionManager] Rejected save of out-of-world chunk: (" + chunk.getCx() + ", " + chunk.getCz() + ")");
+            return;
+        }
         RegionPos rpos = RegionPos.fromChunkCoords(chunk.getCx(), chunk.getCz());
         RegionFile region = getRegionFile(rpos);
         if (region == null) return;

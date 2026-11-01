@@ -30,6 +30,9 @@ public class MasterTestSuite {
         // Phase 3: Physical World Containment, Raycasting & Boundary Systems
         runSuite("Phase 3: Physical World Containment, Raycasting & Boundary Systems", () -> FiniteBoundaryPhysicsTest.main(new String[0]));
 
+        // Phase 4: World Metadata V4, Persistence & Legacy Save Compatibility
+        runSuite("Phase 4: World Metadata V4, Persistence & Legacy Save Compatibility", () -> FiniteWorldPersistenceTest.main(new String[0]));
+
         // P12 & P13 Performance Instrumentation & Constants
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
 

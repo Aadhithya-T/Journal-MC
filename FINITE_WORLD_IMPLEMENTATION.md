@@ -202,3 +202,52 @@ UNLOADED → QUEUED → GENERATING → GENERATED → MESHING → MESHED → GPU_
   - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to include `FiniteBoundaryPhysicsTest`.
   - **19/19 test suites passed with 0 errors** (2852 ms total execution time).
 
+---
+
+## Phase 4: World Metadata V4, Persistence & Legacy Save Compatibility
+
+### 1. Architectural Changes & Key Decisions
+- **`WorldSaveManager` (`com.mcjournal.client.WorldSaveManager`)**:
+  - Upgraded binary metadata schema to `FORMAT_VERSION = 4`:
+    - Persists core `WorldConfiguration`: `worldWidth` (2500), `worldDepth` (2500), `worldHeight` (256), `generationVersion` (1), `boundaryType` (`NATURAL`), and spawn coordinates (`spawnX=1250, spawnY=66, spawnZ=1250`).
+    - Validates V4 constraints on load: strictly positive dimensions, height $= 256$, generationVersion $\ge 1$, valid `BoundaryType` enum.
+    - Full backward compatibility for V3 binary saves: reads V3 fields, flags `isLegacy = true`, and sets legacy dimensions.
+    - Preserves format version on save: if `world.formatVersion == 3`, saves as V3; otherwise saves as modern V4.
+    - Atomic write replacement: writes metadata payload to `.tmp` file before calling `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)` with fallback to standard replace. Ensures existing valid save is never corrupted if writing is interrupted.
+- **`SaveMigrationManager` (`com.mcjournal.client.SaveMigrationManager`)**:
+  - Explicit, repeat-safe migration engine converting legacy unbounded saves (V3 binary or JSON) to separate finite V4 worlds:
+    - Never overwrites the source save directory; source region files and metadata remain 100% untouched.
+    - Scans source region files (`r.rx.rz.jmc`) across all 1024 local chunks:
+      - Valid chunks within $[0, 156] \times [0, 156]$ are copied to the destination region storage.
+      - Partial edge chunks ($cx=156, cz=156$) are sanitized to ensure out-of-world columns ($lx \ge 4, lz \ge 4$) are strictly AIR.
+      - Out-of-bounds chunks ($cx < 0, cz < 0, cx > 156, cz > 156$) are skipped, counted, and recorded in the report.
+    - Validates player coordinates: if inside $[0, 2500] \times [0, 256] \times [0, 2500]$, preserved as-is; if out-of-bounds, safely relocated to target spawn $(1250, 66, 1250)$ while fully preserving player health, hunger, inventory, hotbar, selected slot, and world time.
+    - Generates detailed `MigrationReport` documenting imported chunks, skipped chunks, player relocation status, warnings, and success flag.
+- **`RegionManager` & `ChunkPersistence` (`com.mcjournal.RegionManager`, `com.mcjournal.ChunkPersistence`)**:
+  - Injected with `WorldBounds` to guard region storage:
+    - Rejects `saveChunk` requests for out-of-world coordinates in bounded configurations.
+    - Rejects `loadChunk` / `hasSavedChunk` queries for invalid coordinates.
+    - Default constructor uses `WorldBounds.UNBOUNDED` for raw standalone region tests, while `ChunkManager` supplies authoritative `WorldBounds.DEFAULT` (finite $157 \times 157$ chunks).
+    - Finite world region grid: exactly 25 region files ($5 \times 5$, `r.0.0.jmc` through `r.4.4.jmc`).
+- **`WorldSession` (`com.mcjournal.client.WorldSession`)**:
+  - Extracts and applies `WorldConfiguration` from loaded V4 save before initializing `ChunkManager`.
+  - Passes configuration-derived `WorldBounds` directly into `ChunkManager`.
+  - Validates player position against loaded world configuration upon entry: safely relocates out-of-bounds coordinates to default spawn with explicit log notice while preserving all player inventory and stats.
+  - Save operations capture active `WorldConfiguration` from `ChunkManager.getWorldBounds().getConfig()` into V4 metadata snapshot.
+
+### 2. Verification & Automated Test Results
+- **Dedicated Test Suite**: [`FiniteWorldPersistenceTest.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/FiniteWorldPersistenceTest.java) added with 9 comprehensive test suites:
+  1. Metadata V4 serialization, WorldConfiguration fields preservation, and validation: verifies dimensions, height rejection ($384 \ne 256$), and future version rejection ($99 > 4$).
+  2. Atomic save replacement & write failure preservation: verify atomic temp move and original save preservation.
+  3. Chunk persistence round-trip for 4 corners $(0,0), (156,0), (0,156), (156,156)$ and spawn center $(78,78)$: verified bit-for-bit block state restoration across Bedrock, Stone, Diamond Ore, and Water.
+  4. Partial edge chunk invalid column isolation: invalid voxels ($lx \ge 4, lz \ge 4$) in $(156, 156)$ remain strictly AIR.
+  5. 5x5 Region grid mapping & boundary write rejection: verifies $rx, rz \in [0, 4]$ and strict rejection of out-of-world chunk writes ($cx=-1, cx=157$).
+  6. `ChunkSerializer` V1, V2, and V3 backward compatibility: verifies chunk deserialization across all historical serializer versions.
+  7. Legacy V3 save migration to V4 finite world: in-bounds chunks imported, out-of-bounds chunks skipped and reported, out-of-bounds player relocated to spawn while preserving health/hunger/inventory.
+  8. Migration repeat-safety & source file immutability: verifies source `world.jmc` remains bit-for-bit identical after repeat migration.
+  9. Truncated metadata & corrupted region error handling: verifies safe `IOException` handling without JVM crash.
+- **Master Test Suite Execution**:
+  - [`MasterTestSuite.java`](file:///c:/Users/aadhi/OneDrive/Desktop/mc-journal/engine/src/com/mcjournal/test/MasterTestSuite.java) updated to include `FiniteWorldPersistenceTest`.
+  - **20/20 test suites passed with 0 errors** (4473 ms total execution time).
+
+

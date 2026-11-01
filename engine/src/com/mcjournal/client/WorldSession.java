@@ -94,9 +94,17 @@ public class WorldSession {
         this.currentWorldName = worldName;
         this.currentSeed = seed;
 
-        System.out.println("[WorldSession] Initializing infinite streamed Hardcore world: '" + worldName + "' (Seed: " + seed + ")...");
+        com.mcjournal.world.WorldConfiguration worldConfig;
+        if (existingSave != null && !existingSave.isLegacy()) {
+            worldConfig = existingSave.toWorldConfiguration();
+        } else {
+            worldConfig = com.mcjournal.world.WorldConfiguration.createDefault(seed);
+        }
+        com.mcjournal.world.WorldBounds worldBounds = new com.mcjournal.world.WorldBounds(worldConfig);
+
+        System.out.println("[WorldSession] Initializing finite world: '" + worldName + "' (" + worldConfig.width() + "x" + worldConfig.depth() + "x" + worldConfig.height() + ", Seed: " + seed + ")...");
         File worldDir = new File("saves/" + worldName.toLowerCase().replaceAll("[^a-z0-9_-]", "_"));
-        this.chunkManager = new ChunkManager(settings.renderDistance, seed, worldDir);
+        this.chunkManager = new ChunkManager(settings.renderDistance, seed, worldDir, worldBounds);
 
         // 1. If loading an existing save, apply all persisted voxel block changes
         if (existingSave != null) {
@@ -111,10 +119,19 @@ public class WorldSession {
         if (chunkRenderer != null) {
             chunkRenderer.cleanup();
         }
-        int defaultSpawnX = com.mcjournal.EngineConstants.DEFAULT_SPAWN_X;
-        int defaultSpawnZ = com.mcjournal.EngineConstants.DEFAULT_SPAWN_Z;
-        int spawnCx = Math.floorDiv((int) (existingSave != null ? existingSave.playerX : defaultSpawnX), 16);
-        int spawnCz = Math.floorDiv((int) (existingSave != null ? existingSave.playerZ : defaultSpawnZ), 16);
+        int defaultSpawnX = worldConfig.spawnX();
+        int defaultSpawnZ = worldConfig.spawnZ();
+        float targetPlayerX = (existingSave != null ? existingSave.playerX : defaultSpawnX);
+        float targetPlayerZ = (existingSave != null ? existingSave.playerZ : defaultSpawnZ);
+
+        // Validate spawn coordinates against world bounds
+        if (targetPlayerX < 0.0f || targetPlayerX >= worldConfig.width() || targetPlayerZ < 0.0f || targetPlayerZ >= worldConfig.depth()) {
+            targetPlayerX = defaultSpawnX;
+            targetPlayerZ = defaultSpawnZ;
+        }
+
+        int spawnCx = Math.floorDiv((int) targetPlayerX, 16);
+        int spawnCz = Math.floorDiv((int) targetPlayerZ, 16);
         chunkManager.waitForInitialChunks(spawnCx, spawnCz, 3); // 7x7 core chunks generated & meshed
 
         // Upload initial spawn meshes to GPU
@@ -134,8 +151,20 @@ public class WorldSession {
             if (atmosphericSystem != null) {
                 atmosphericSystem.setWorldTimeTicks(existingSave.worldTime);
             }
-            player.pos.set(existingSave.playerX, existingSave.playerY, existingSave.playerZ);
-            player.prevPos.set(existingSave.playerX, existingSave.playerY, existingSave.playerZ);
+            float px = existingSave.playerX;
+            float py = existingSave.playerY;
+            float pz = existingSave.playerZ;
+
+            // Validate player coordinates against loaded world configuration
+            if (px < 0.0f || px >= worldConfig.width() || pz < 0.0f || pz >= worldConfig.depth() || py < 0.0f || py >= worldConfig.height()) {
+                System.out.println("[WorldSession] Saved player position (" + px + ", " + py + ", " + pz + ") is outside world bounds! Relocating to spawn (" + defaultSpawnX + ", " + worldConfig.spawnY() + ", " + defaultSpawnZ + ")...");
+                px = defaultSpawnX;
+                py = (float) worldConfig.spawnY();
+                pz = defaultSpawnZ;
+            }
+
+            player.pos.set(px, py, pz);
+            player.prevPos.set(px, py, pz);
             player.yaw = existingSave.playerYaw;
             player.pitch = existingSave.playerPitch;
             player.health = existingSave.health;

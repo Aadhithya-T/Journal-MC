@@ -5,8 +5,11 @@ import com.google.gson.GsonBuilder;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.block.BlockState;
 import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.world.WorldBounds;
+import com.mcjournal.world.WorldConfiguration;
 
 import java.io.*;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
@@ -16,13 +19,13 @@ import java.util.Map;
 import java.util.concurrent.*;
 
 /**
- * Unified binary world persistence manager (.jmc) with asynchronous save support (P9.1 - P9.4).
- * Stores world metadata and player state in versioned binary format (formatVersion = 3),
+ * Unified binary world persistence manager (.jmc) with asynchronous save support (P9.1 - P9.4, Phase 4).
+ * Stores world metadata, finite world configuration, and player state in versioned binary format (formatVersion = 4),
  * relying on RegionManager (.jmc) for all voxel block persistence.
  */
 public class WorldSaveManager {
     public static final int MAGIC = 0x4A4D4357; // "JMCW" (Journal-MC World)
-    public static final int FORMAT_VERSION = 3;
+    public static final int FORMAT_VERSION = 4;
 
     private static final File SAVE_FILE_JMC = new File("saves/world.jmc");
     private static final File SAVE_FILE_LEGACY_JSON = new File("saves/hardcore_world.json");
@@ -57,10 +60,44 @@ public class WorldSaveManager {
         // Continuous World Time (24,000 tick solar cycle: 6000 = Day Mid-Morning/Noon)
         public double worldTime = 6000.0;
 
+        // Phase 4: World Configuration V4 Fields
+        public int worldWidth = WorldConfiguration.DEFAULT_WIDTH;
+        public int worldDepth = WorldConfiguration.DEFAULT_DEPTH;
+        public int worldHeight = WorldConfiguration.DEFAULT_HEIGHT;
+        public int generationVersion = WorldConfiguration.DEFAULT_GENERATION_VERSION;
+        public String boundaryType = WorldConfiguration.BoundaryType.NATURAL.name();
+        public int spawnX = WorldConfiguration.DEFAULT_SPAWN_X;
+        public int spawnY = WorldConfiguration.DEFAULT_SPAWN_Y;
+        public int spawnZ = WorldConfiguration.DEFAULT_SPAWN_Z;
+        public boolean isLegacy = false;
+
         // Legacy delta map for migrating pre-v3 worlds (populated only during migration)
         public Map<String, String> modifiedBlockStates = new HashMap<>();
 
         public SavedWorld() {}
+
+        public boolean isLegacy() {
+            return isLegacy || formatVersion < FORMAT_VERSION;
+        }
+
+        public WorldConfiguration toWorldConfiguration() {
+            WorldConfiguration.BoundaryType bType = WorldConfiguration.BoundaryType.NATURAL;
+            try {
+                if (boundaryType != null) {
+                    bType = WorldConfiguration.BoundaryType.valueOf(boundaryType.toUpperCase());
+                }
+            } catch (IllegalArgumentException ignored) {}
+
+            int w = (worldWidth > 0) ? worldWidth : WorldConfiguration.DEFAULT_WIDTH;
+            int d = (worldDepth > 0) ? worldDepth : WorldConfiguration.DEFAULT_DEPTH;
+            int h = (worldHeight > 0) ? worldHeight : WorldConfiguration.DEFAULT_HEIGHT;
+            int gv = (generationVersion > 0) ? generationVersion : WorldConfiguration.DEFAULT_GENERATION_VERSION;
+            int sx = (spawnX != 0 || spawnZ != 0) ? spawnX : WorldConfiguration.DEFAULT_SPAWN_X;
+            int sy = (spawnY > 0) ? spawnY : WorldConfiguration.DEFAULT_SPAWN_Y;
+            int sz = (spawnX != 0 || spawnZ != 0) ? spawnZ : WorldConfiguration.DEFAULT_SPAWN_Z;
+
+            return new WorldConfiguration(w, d, h, seed, gv, bType, sx, sy, sz);
+        }
 
         public Map<String, BlockState> getBlockStateDeltas() {
             Map<String, BlockState> result = new HashMap<>();
@@ -102,7 +139,17 @@ public class WorldSaveManager {
         return null;
     }
 
-    private static SavedWorld loadBinarySave(File file) throws IOException {
+    public static SavedWorld loadWorld(File file) {
+        if (file == null || !file.exists() || file.length() == 0) return null;
+        try {
+            return loadBinarySave(file);
+        } catch (Exception e) {
+            System.err.println("[WorldSaveManager] Failed to load binary file " + file.getName() + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    public static SavedWorld loadBinarySave(File file) throws IOException {
         try (DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(file)))) {
             int magic = dis.readInt();
             if (magic != MAGIC) {
@@ -112,6 +159,9 @@ public class WorldSaveManager {
             int version = dis.readInt();
             if (version > FORMAT_VERSION) {
                 throw new IOException("Unsupported world save version: " + version + " (max supported: " + FORMAT_VERSION + ")");
+            }
+            if (version < 3) {
+                throw new IOException("Unsupported ancient world save version: " + version + " (min supported: 3)");
             }
 
             SavedWorld world = new SavedWorld();
@@ -144,6 +194,44 @@ public class WorldSaveManager {
             world.createdAt = dis.readUTF();
             world.savedAt = dis.readUTF();
 
+            if (version >= 4) {
+                world.worldWidth = dis.readInt();
+                world.worldDepth = dis.readInt();
+                world.worldHeight = dis.readInt();
+                world.generationVersion = dis.readInt();
+                world.boundaryType = dis.readUTF();
+                world.spawnX = dis.readInt();
+                world.spawnY = dis.readInt();
+                world.spawnZ = dis.readInt();
+
+                // Validate V4 constraints
+                if (world.worldWidth <= 0 || world.worldDepth <= 0 || world.worldHeight <= 0) {
+                    throw new IOException("Invalid world dimensions in metadata: " + world.worldWidth + "x" + world.worldDepth + "x" + world.worldHeight);
+                }
+                if (world.worldHeight != 256) {
+                    throw new IOException("Unsupported world vertical height: " + world.worldHeight + " (engine requires 256)");
+                }
+                if (world.generationVersion < 1) {
+                    throw new IOException("Invalid generation version: " + world.generationVersion);
+                }
+                try {
+                    WorldConfiguration.BoundaryType.valueOf(world.boundaryType.toUpperCase());
+                } catch (Exception e) {
+                    throw new IOException("Invalid boundary type: " + world.boundaryType);
+                }
+            } else {
+                // V3 Legacy Save - unconfigured dimensions
+                world.isLegacy = true;
+                world.worldWidth = -1;
+                world.worldDepth = -1;
+                world.worldHeight = 256;
+                world.generationVersion = 0;
+                world.boundaryType = "UNBOUNDED";
+                world.spawnX = (int) world.playerX;
+                world.spawnY = (int) world.playerY;
+                world.spawnZ = (int) world.playerZ;
+            }
+
             return world;
         }
     }
@@ -156,6 +244,8 @@ public class WorldSaveManager {
                 if (world.hotbarBlocks == null) world.hotbarBlocks = new byte[9];
                 if (world.hotbarCounts == null) world.hotbarCounts = new int[9];
                 if (world.worldTime <= 0.0 && world.createdAt == null) world.worldTime = 6000.0;
+                world.formatVersion = 3; // Legacy JSON maps to format version 3
+                world.isLegacy = true;
             }
             return world;
         } catch (Exception e) {
@@ -167,6 +257,7 @@ public class WorldSaveManager {
     private static void migrateLegacyToBinary(SavedWorld legacy) {
         try {
             System.out.println("[WorldSaveManager] Migrating legacy JSON world save to version 3 binary .jmc format...");
+            legacy.formatVersion = 3;
             saveBinaryDirect(legacy, SAVE_FILE_JMC);
 
             File backup = new File(SAVE_FILE_LEGACY_JSON.getParentFile(), "hardcore_world.json.migrated");
@@ -177,42 +268,67 @@ public class WorldSaveManager {
         }
     }
 
-    private static void saveBinaryDirect(SavedWorld world, File targetFile) throws IOException {
+    public static void saveBinaryDirect(SavedWorld world, File targetFile) throws IOException {
         targetFile.getParentFile().mkdirs();
         File tempFile = new File(targetFile.getParentFile(), targetFile.getName() + ".tmp");
 
-        try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tempFile)))) {
-            dos.writeInt(MAGIC);
-            dos.writeInt(FORMAT_VERSION);
+        int version = (world.formatVersion != 0) ? world.formatVersion : FORMAT_VERSION;
 
-            dos.writeUTF(world.name != null ? world.name : "Hardcore World");
-            dos.writeUTF(world.biome != null ? world.biome : "Plains");
-            dos.writeLong(world.seed);
-            dos.writeDouble(world.worldTime);
+        try {
+            try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tempFile)))) {
+                dos.writeInt(MAGIC);
+                dos.writeInt(version);
 
-            dos.writeFloat(world.playerX);
-            dos.writeFloat(world.playerY);
-            dos.writeFloat(world.playerZ);
-            dos.writeFloat(world.playerYaw);
-            dos.writeFloat(world.playerPitch);
+                dos.writeUTF(world.name != null ? world.name : "Hardcore World");
+                dos.writeUTF(world.biome != null ? world.biome : "Plains");
+                dos.writeLong(world.seed);
+                dos.writeDouble(world.worldTime);
 
-            dos.writeInt(world.health);
-            dos.writeInt(world.hunger);
-            dos.writeInt(world.selectedSlot);
+                dos.writeFloat(world.playerX);
+                dos.writeFloat(world.playerY);
+                dos.writeFloat(world.playerZ);
+                dos.writeFloat(world.playerYaw);
+                dos.writeFloat(world.playerPitch);
 
-            for (int i = 0; i < 9; i++) {
-                dos.writeByte(world.hotbarBlocks != null && i < world.hotbarBlocks.length ? world.hotbarBlocks[i] : 0);
+                dos.writeInt(world.health);
+                dos.writeInt(world.hunger);
+                dos.writeInt(world.selectedSlot);
+
+                for (int i = 0; i < 9; i++) {
+                    dos.writeByte(world.hotbarBlocks != null && i < world.hotbarBlocks.length ? world.hotbarBlocks[i] : 0);
+                }
+                for (int i = 0; i < 9; i++) {
+                    dos.writeInt(world.hotbarCounts != null && i < world.hotbarCounts.length ? world.hotbarCounts[i] : 0);
+                }
+
+                dos.writeUTF(world.createdAt != null && !world.createdAt.isEmpty() ? world.createdAt : LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+                dos.writeUTF(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+
+                if (version >= 4) {
+                    dos.writeInt(world.worldWidth);
+                    dos.writeInt(world.worldDepth);
+                    dos.writeInt(world.worldHeight);
+                    dos.writeInt(world.generationVersion);
+                    dos.writeUTF(world.boundaryType != null ? world.boundaryType : WorldConfiguration.BoundaryType.NATURAL.name());
+                    dos.writeInt(world.spawnX);
+                    dos.writeInt(world.spawnY);
+                    dos.writeInt(world.spawnZ);
+                }
+
+                dos.flush();
             }
-            for (int i = 0; i < 9; i++) {
-                dos.writeInt(world.hotbarCounts != null && i < world.hotbarCounts.length ? world.hotbarCounts[i] : 0);
-            }
 
-            dos.writeUTF(world.createdAt != null ? world.createdAt : LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-            dos.writeUTF(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-            dos.flush();
+            try {
+                Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            if (tempFile.exists()) {
+                tempFile.delete();
+            }
+            throw e;
         }
-
-        Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     /**
@@ -223,6 +339,7 @@ public class WorldSaveManager {
 
         // 1. Snapshot metadata and player state immediately on calling thread
         SavedWorld snapshot = new SavedWorld();
+        snapshot.formatVersion = FORMAT_VERSION;
         snapshot.name = name;
         snapshot.biome = biome;
         snapshot.seed = seed;
@@ -238,6 +355,27 @@ public class WorldSaveManager {
             snapshot.selectedSlot = player.selectedSlot;
             snapshot.hotbarBlocks = player.hotbarBlocks.clone();
             snapshot.hotbarCounts = player.hotbarCounts.clone();
+        }
+
+        if (chunkManager != null && chunkManager.getWorldBounds() != null) {
+            WorldConfiguration cfg = chunkManager.getWorldBounds().getConfig();
+            snapshot.worldWidth = cfg.width();
+            snapshot.worldDepth = cfg.depth();
+            snapshot.worldHeight = cfg.height();
+            snapshot.generationVersion = cfg.generationVersion();
+            snapshot.boundaryType = cfg.boundaryType().name();
+            snapshot.spawnX = cfg.spawnX();
+            snapshot.spawnY = cfg.spawnY();
+            snapshot.spawnZ = cfg.spawnZ();
+        } else {
+            snapshot.worldWidth = WorldConfiguration.DEFAULT_WIDTH;
+            snapshot.worldDepth = WorldConfiguration.DEFAULT_DEPTH;
+            snapshot.worldHeight = WorldConfiguration.DEFAULT_HEIGHT;
+            snapshot.generationVersion = WorldConfiguration.DEFAULT_GENERATION_VERSION;
+            snapshot.boundaryType = WorldConfiguration.BoundaryType.NATURAL.name();
+            snapshot.spawnX = WorldConfiguration.DEFAULT_SPAWN_X;
+            snapshot.spawnY = WorldConfiguration.DEFAULT_SPAWN_Y;
+            snapshot.spawnZ = WorldConfiguration.DEFAULT_SPAWN_Z;
         }
 
         // 2. Snapshot and trigger asynchronous chunk save

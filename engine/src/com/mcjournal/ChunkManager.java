@@ -55,7 +55,7 @@ public class ChunkManager {
     public ChunkManager(int renderDistance, long seed, File worldDir, WorldBounds bounds) {
         this.bounds = (bounds != null) ? bounds : WorldBounds.DEFAULT;
         this.streamer = new ChunkStreamer(renderDistance, this.bounds);
-        this.persistence = new ChunkPersistence(worldDir);
+        this.persistence = new ChunkPersistence(worldDir, this.bounds);
         this.generator = new ChunkGenerator(seed, this.persistence, this.bounds);
         this.uploadQueue = new ChunkUploadQueue();
         this.mesher = new ChunkMesher(this.chunks, this.meshes, this.chunkStatuses, this.uploadQueue);
