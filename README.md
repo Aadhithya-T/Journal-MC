@@ -150,6 +150,14 @@ mc-journal/
 
 ---
 
+## Typography & Third-Party Font Credits
+
+The GUI subsystem utilizes open-source pixel typefaces under the [SIL Open Font License 1.1](http://scripts.sil.org/OFL):
+- **Monocraft**: Created by [Idrees Hassan (IdreesInc)](https://github.com/IdreesInc/Monocraft). Used as the primary pixel typeface across Journal-MC menus, HUD, buttons, and world listings.
+- **Minecraft-Font**: Created by [Idrees Hassan (IdreesInc)](https://github.com/IdreesInc/Minecraft-Font). Proportional pixel typeface available as an alternate profile via FontRenderer.FontConfig.
+
+---
+
 ## License
 
 This project is open-source and available under the [MIT License](LICENSE).

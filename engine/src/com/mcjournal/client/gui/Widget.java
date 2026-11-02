@@ -98,7 +98,7 @@ public abstract class Widget {
             return;
         }
 
-        float textW = font.getStringWidth(tooltipText, 0.50f);
+        float textW = font.getStringWidth(tooltipText, 1.0f);
         float boxW = textW + 10;
         float boxH = 15;
 
@@ -114,7 +114,7 @@ public abstract class Widget {
 
         // Minecraft style purple bevel tooltip box
         gui.drawBevelBox(tipX, tipY, boxW, boxH, 0x100010, 0x5000ff, 0x28007f);
-        font.drawString(gui, tooltipText, tipX + 5, tipY + 3, 0.50f, 0xFFFFFF, true);
+        font.drawString(gui, tooltipText, tipX + 5, tipY + 3, 1.0f, 0xFFFFFF, true);
     }
 
     // --- Getters & Setters ---

@@ -78,12 +78,12 @@ public class GameOverScreen extends Screen {
             }
         }
         String score = "Days Survived: " + daysSurvived;
-        float scoreScale = 0.65f;
+        float scoreScale = 1.0f;
         float scoreW = font.getStringWidth(score, scoreScale);
         font.drawString(gui, score, GuiLayout.centerX(width, (int) scoreW), height / 4 + 36, scoreScale, 0xffffff, true);
 
         String notice = "Hardcore Mode: One Life. Permadeath.";
-        float noticeScale = 0.52f;
+        float noticeScale = 1.0f;
         float noticeW = font.getStringWidth(notice, noticeScale);
         font.drawString(gui, notice, GuiLayout.centerX(width, (int) noticeW), height / 4 + 52, noticeScale, 0xddaaaa, true);
 

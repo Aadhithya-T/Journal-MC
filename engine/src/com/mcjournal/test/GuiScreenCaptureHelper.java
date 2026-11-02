@@ -6,6 +6,7 @@ import org.lwjgl.opengl.GL;
 import org.lwjgl.system.MemoryUtil;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -16,13 +17,17 @@ import static org.lwjgl.opengl.GL30.*;
 
 /**
  * Headless test harness to capture high-fidelity offscreen screenshots of
- * screens across multiple resolutions and GUI scale settings.
+ * screens across multiple resolutions, GUI scale settings, and font profiles.
  */
 public class GuiScreenCaptureHelper {
 
     public static void main(String[] args) {
-        String phaseDir = args.length > 0 ? args[0] : "phase1";
-        captureScreens(phaseDir);
+        String mode = args.length > 0 ? args[0] : "phase3";
+        if ("ab".equalsIgnoreCase(mode)) {
+            runFontAbTest();
+        } else {
+            captureScreens(mode);
+        }
     }
 
     public static void captureScreens(String subDir) {
@@ -62,8 +67,6 @@ public class GuiScreenCaptureHelper {
 
             GuiRenderer gui = new GuiRenderer();
             FontRenderer font = new FontRenderer();
-            font.init();
-
             GuiScaleManager scaleManager = new GuiScaleManager();
 
             for (int[] res : resolutions) {
@@ -102,59 +105,195 @@ public class GuiScreenCaptureHelper {
         }
     }
 
-    private static void captureScreen(GuiRenderer gui, FontRenderer font, Screen screen,
-                                      GuiScaleManager scale, int fbW, int fbH, int guiW, int guiH, File outFile) {
+    public static void runFontAbTest() {
+        File outDir = new File("docs/screenshots/font-ab");
+        if (!outDir.exists()) {
+            outDir.mkdirs();
+        }
+
+        int resW = 1280;
+        int resH = 720;
+
+        long window = 0;
+        try {
+            if (!glfwInit()) {
+                System.err.println("[FontAbTest] GLFW init failed");
+                return;
+            }
+
+            glfwDefaultWindowHints();
+            glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+
+            window = glfwCreateWindow(800, 600, "HeadlessCapture", 0, 0);
+            if (window == 0) {
+                System.err.println("[FontAbTest] Failed to create GLFW window");
+                return;
+            }
+
+            glfwMakeContextCurrent(window);
+            GL.createCapabilities();
+
+            GuiRenderer gui = new GuiRenderer();
+            GuiScaleManager scaleManager = new GuiScaleManager();
+            scaleManager.setRequestedScale(0); // Auto scale
+            scaleManager.update(resW, resH, resW, resH);
+            int guiW = scaleManager.getGuiWidth();
+            int guiH = scaleManager.getGuiHeight();
+
+            // --- Candidate A: Monocraft ---
+            FontRenderer fontMono = new FontRenderer(FontRenderer.MONOCRAFT);
+
+            WorldSelectScreen selectMono = new WorldSelectScreen(null);
+            selectMono.init(guiW, guiH);
+            BufferedImage imgSelectMono = renderToImage(gui, fontMono, selectMono, scaleManager, resW, resH, guiW, guiH);
+            ImageIO.write(imgSelectMono, "png", new File(outDir, "world_select_monocraft.png"));
+
+            WorldCreateScreen createMono = new WorldCreateScreen(null);
+            createMono.init(guiW, guiH);
+            BufferedImage imgCreateMono = renderToImage(gui, fontMono, createMono, scaleManager, resW, resH, guiW, guiH);
+            ImageIO.write(imgCreateMono, "png", new File(outDir, "world_create_monocraft.png"));
+
+            fontMono.cleanup();
+
+            // --- Candidate B: Minecraft-Font (Proportional) ---
+            FontRenderer fontProp = new FontRenderer(FontRenderer.MINECRAFT_PROPORTIONAL);
+
+            WorldSelectScreen selectProp = new WorldSelectScreen(null);
+            selectProp.init(guiW, guiH);
+            BufferedImage imgSelectProp = renderToImage(gui, fontProp, selectProp, scaleManager, resW, resH, guiW, guiH);
+            ImageIO.write(imgSelectProp, "png", new File(outDir, "world_select_proportional.png"));
+
+            WorldCreateScreen createProp = new WorldCreateScreen(null);
+            createProp.init(guiW, guiH);
+            BufferedImage imgCreateProp = renderToImage(gui, fontProp, createProp, scaleManager, resW, resH, guiW, guiH);
+            ImageIO.write(imgCreateProp, "png", new File(outDir, "world_create_proportional.png"));
+
+            fontProp.cleanup();
+            gui.cleanup();
+
+            // --- Create Side-by-Side Composite Images ---
+            BufferedImage compSelect = createSideBySideComposite(
+                    imgSelectMono, "A: Monocraft (OFL 1.1) - Monospaced Pixel Grid",
+                    imgSelectProp, "B: Minecraft-Font by IdreesInc - Proportional Grid"
+            );
+            ImageIO.write(compSelect, "png", new File(outDir, "world_select_ab_comparison.png"));
+
+            BufferedImage compCreate = createSideBySideComposite(
+                    imgCreateMono, "A: Monocraft (OFL 1.1) - Monospaced Pixel Grid",
+                    imgCreateProp, "B: Minecraft-Font by IdreesInc - Proportional Grid"
+            );
+            ImageIO.write(compCreate, "png", new File(outDir, "world_create_ab_comparison.png"));
+
+            System.out.println("[FontAbTest] Successfully generated A/B test comparisons in " + outDir.getPath());
+        } catch (Throwable t) {
+            System.err.println("[FontAbTest] Error: " + t.getMessage());
+            t.printStackTrace();
+        } finally {
+            if (window != 0) {
+                glfwDestroyWindow(window);
+                glfwTerminate();
+            }
+        }
+    }
+
+    private static BufferedImage createSideBySideComposite(BufferedImage left, String leftTitle, BufferedImage right, String rightTitle) {
+        int w = left.getWidth();
+        int h = left.getHeight();
+        int headerH = 40;
+        int gutter = 8;
+
+        BufferedImage composite = new BufferedImage(w * 2 + gutter, h + headerH, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = composite.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        // Header Background
+        g.setColor(new Color(0x18, 0x18, 0x1C));
+        g.fillRect(0, 0, composite.getWidth(), headerH);
+
+        // Dividing gutter
+        g.setColor(new Color(0x30, 0x30, 0x38));
+        g.fillRect(w, 0, gutter, composite.getHeight());
+
+        // Header Labels
+        g.setFont(new Font("SansSerif", Font.BOLD, 16));
+        g.setColor(new Color(0x55, 0xFF, 0x55));
+        g.drawString(leftTitle, 16, 26);
+
+        g.setColor(new Color(0x55, 0xDD, 0xFF));
+        g.drawString(rightTitle, w + gutter + 16, 26);
+
+        // Images
+        g.drawImage(left, 0, headerH, null);
+        g.drawImage(right, w + gutter, headerH, null);
+
+        g.dispose();
+        return composite;
+    }
+
+    public static BufferedImage renderToImage(GuiRenderer gui, FontRenderer font, Screen screen,
+                                              GuiScaleManager scaleManager, int resW, int resH, int guiW, int guiH) {
         int fbo = glGenFramebuffers();
         int colorTex = glGenTextures();
-
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
         glBindTexture(GL_TEXTURE_2D, colorTex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fbW, fbH, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, resW, resH, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
 
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            System.err.println("Incomplete FBO for " + outFile.getName());
-            return;
+            throw new RuntimeException("Framebuffer incomplete!");
         }
 
-        glViewport(0, 0, fbW, fbH);
-        glClearColor(0.12f, 0.12f, 0.15f, 1.0f);
+        glViewport(0, 0, resW, resH);
+        glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        gui.begin(guiW, guiH, scale.getViewportX(), scale.getViewportY(),
-                scale.getViewportWidth(), scale.getViewportHeight());
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_DEPTH_TEST);
 
+        gui.begin(guiW, guiH, 0, 0, resW, resH);
         screen.render(gui, font, -1, -1, 0.016f);
-
         gui.end();
 
-        ByteBuffer pixels = MemoryUtil.memAlloc(fbW * fbH * 4);
-        glReadPixels(0, 0, fbW, fbH, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        ByteBuffer pixelBuffer = MemoryUtil.memAlloc(resW * resH * 4);
+        glReadPixels(0, 0, resW, resH, GL_RGBA, GL_UNSIGNED_BYTE, pixelBuffer);
 
-        BufferedImage image = new BufferedImage(fbW, fbH, BufferedImage.TYPE_INT_ARGB);
-        for (int y = 0; y < fbH; y++) {
-            for (int x = 0; x < fbW; x++) {
-                int srcIndex = ((fbH - 1 - y) * fbW + x) * 4;
-                int r = pixels.get(srcIndex) & 0xFF;
-                int g = pixels.get(srcIndex + 1) & 0xFF;
-                int b = pixels.get(srcIndex + 2) & 0xFF;
-                int a = pixels.get(srcIndex + 3) & 0xFF;
-                int argb = (a << 24) | (r << 16) | (g << 8) | b;
-                image.setRGB(x, y, argb);
+        BufferedImage img = new BufferedImage(resW, resH, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < resH; y++) {
+            for (int x = 0; x < resW; x++) {
+                int srcY = (resH - 1 - y);
+                int idx = (srcY * resW + x) * 4;
+                int r = pixelBuffer.get(idx) & 0xFF;
+                int gCol = pixelBuffer.get(idx + 1) & 0xFF;
+                int b = pixelBuffer.get(idx + 2) & 0xFF;
+                int rgb = (r << 16) | (gCol << 8) | b;
+                img.setRGB(x, y, rgb);
             }
         }
-        MemoryUtil.memFree(pixels);
 
-        try {
-            ImageIO.write(image, "PNG", outFile);
-        } catch (Exception e) {
-            System.err.println("Failed to write " + outFile + ": " + e.getMessage());
-        }
-
+        MemoryUtil.memFree(pixelBuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glDeleteTextures(colorTex);
         glDeleteFramebuffers(fbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        return img;
+    }
+
+    public static void captureScreen(GuiRenderer gui, FontRenderer font, Screen screen,
+                                     GuiScaleManager scaleManager, int resW, int resH, int guiW, int guiH,
+                                     File outFile) {
+        try {
+            BufferedImage img = renderToImage(gui, font, screen, scaleManager, resW, resH, guiW, guiH);
+            ImageIO.write(img, "png", outFile);
+        } catch (Exception e) {
+            System.err.println("Failed to write screenshot " + outFile.getName() + ": " + e.getMessage());
+        }
     }
 }

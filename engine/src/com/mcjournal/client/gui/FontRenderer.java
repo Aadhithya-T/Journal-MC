@@ -16,8 +16,8 @@ import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 
 /**
- * Bitmap font renderer with integer scaling, color formatting (§0-§f, §r),
- * full Latin-1 & special symbol coverage (°, ⚔, ▶, ♥), and accurate typography metrics.
+ * Bitmap font renderer with pluggable font profiles, native pixel-grid rasterization,
+ * integer scaling (1x, 2x), color formatting (§0-§f, §r), and full Latin-1 & special symbol coverage.
  */
 public class FontRenderer {
     private static final int FONT_TEX_SIZE = 512;
@@ -51,6 +51,68 @@ public class FontRenderer {
 
     private static final Set<Character> WARNED_CHARS = Collections.synchronizedSet(new HashSet<>());
 
+    /**
+     * Pluggable font configuration describing file location, native bake size,
+     * OpenType metrics, and license information.
+     */
+    public static class FontConfig {
+        private final String name;
+        private final String resourcePath;
+        private final float bakeSize;
+        private final int unitsPerEm;
+        private final boolean isMonospaced;
+        private final String license;
+        private final String author;
+
+        public FontConfig(String name, String resourcePath, float bakeSize, int unitsPerEm,
+                          boolean isMonospaced, String license, String author) {
+            this.name = name;
+            this.resourcePath = resourcePath;
+            this.bakeSize = bakeSize;
+            this.unitsPerEm = unitsPerEm;
+            this.isMonospaced = isMonospaced;
+            this.license = license;
+            this.author = author;
+        }
+
+        public String getName() { return name; }
+        public String getResourcePath() { return resourcePath; }
+        public float getBakeSize() { return bakeSize; }
+        public int getUnitsPerEm() { return unitsPerEm; }
+        public boolean isMonospaced() { return isMonospaced; }
+        public String getLicense() { return license; }
+        public String getAuthor() { return author; }
+    }
+
+    public static final FontConfig MONOCRAFT = new FontConfig(
+            "Monocraft",
+            "/fonts/minecraft.ttf",
+            9.0f,
+            1080,
+            true,
+            "SIL Open Font License 1.1",
+            "Idrees Hassan (IdreesInc)"
+    );
+
+    public static final FontConfig MINECRAFT_PROPORTIONAL = new FontConfig(
+            "Minecraft-Font",
+            "/fonts/minecraft-proportional.otf",
+            8.0f,
+            18,
+            false,
+            "SIL Open Font License 1.1",
+            "Idrees Hassan (IdreesInc)"
+    );
+
+    /**
+     * Default active font profile.
+     * To switch between fonts across the entire application, change this single configuration line:
+     * e.g., FontRenderer.ACTIVE_CONFIG = FontRenderer.MONOCRAFT;
+     *   or: FontRenderer.ACTIVE_CONFIG = FontRenderer.MINECRAFT_PROPORTIONAL;
+     */
+    public static FontConfig ACTIVE_CONFIG = MONOCRAFT;
+
+    private final FontConfig config;
     private int textureId;
     private final float[] glyphU0 = new float[GLYPH_COUNT];
     private final float[] glyphV0 = new float[GLYPH_COUNT];
@@ -59,9 +121,22 @@ public class FontRenderer {
     private final int[] glyphWidth = new int[GLYPH_COUNT];
     private final int[] glyphHeight = new int[GLYPH_COUNT];
 
-    private int baseAscent = 16;
-    private int baseCapHeight = 14;
-    private int baseLineHeight = 20;
+    private int baseAscent = 8;
+    private int baseCapHeight = 7;
+    private int baseLineHeight = 10;
+
+    public FontRenderer() {
+        this(ACTIVE_CONFIG);
+    }
+
+    public FontRenderer(FontConfig config) {
+        this.config = (config != null) ? config : ACTIVE_CONFIG;
+        init();
+    }
+
+    public FontConfig getConfig() {
+        return config;
+    }
 
     /**
      * Resolves a character to its glyph array slot index.
@@ -81,6 +156,10 @@ public class FontRenderer {
     }
 
     public void init() {
+        if (textureId != 0) {
+            glDeleteTextures(textureId);
+            textureId = 0;
+        }
         BufferedImage image = new BufferedImage(FONT_TEX_SIZE, FONT_TEX_SIZE, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics();
 
@@ -90,18 +169,20 @@ public class FontRenderer {
         g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
 
         Font font = null;
-        try (InputStream is = FontRenderer.class.getResourceAsStream("/fonts/minecraft.ttf")) {
+        try (InputStream is = FontRenderer.class.getResourceAsStream(config.getResourcePath())) {
             if (is != null) {
                 Font baseFont = Font.createFont(Font.TRUETYPE_FONT, is);
-                font = baseFont.deriveFont(Font.PLAIN, 20.0f);
-                System.out.println("[FontRenderer] Loaded TTF font: " + font.getFontName());
+                font = baseFont.deriveFont(Font.PLAIN, config.getBakeSize());
+                System.out.println("[FontRenderer] Loaded TTF font: " + font.getFontName() + " (" + config.getName() + " at " + config.getBakeSize() + "px)");
+            } else {
+                System.err.println("[FontRenderer] Warning: Font resource not found at " + config.getResourcePath() + ", using fallback");
             }
         } catch (Exception e) {
-            System.err.println("[FontRenderer] Notice: Using fallback bold font: " + e.getMessage());
+            System.err.println("[FontRenderer] Notice: Error loading font (" + e.getMessage() + "), using fallback");
         }
 
         if (font == null) {
-            font = new Font("Dialog", Font.BOLD, 18);
+            font = new Font("Monospaced", Font.PLAIN, Math.round(config.getBakeSize()));
         }
 
         g.setFont(font);
@@ -113,22 +194,22 @@ public class FontRenderer {
         try {
             GlyphVector gv = font.createGlyphVector(frc, "H");
             int ch = (int) Math.round(gv.getPixelBounds(null, 0, 0).getHeight());
-            this.baseCapHeight = (ch > 0) ? ch : Math.round(baseAscent * 0.75f);
+            this.baseCapHeight = (ch > 0) ? ch : Math.max(1, Math.round(baseAscent * 0.75f));
         } catch (Throwable t) {
-            this.baseCapHeight = Math.round(baseAscent * 0.75f);
+            this.baseCapHeight = Math.max(1, Math.round(baseAscent * 0.75f));
         }
 
         int x = 4;
         int y = fm.getAscent() + 4;
-        int rowHeight = fm.getHeight() + 6;
+        int rowHeight = fm.getHeight() + 4;
 
-        // 1. Populate ASCII and Latin-1 supplement (32..255), including degree '°' (176) and section '§' (167)
+        // 1. Populate ASCII and Latin-1 supplement (32..255)
         for (int c = 32; c < 256; c++) {
             char ch = (char) c;
             int charW = Math.max(1, fm.charWidth(ch));
             int charH = fm.getHeight();
 
-            if (x + charW + 6 >= FONT_TEX_SIZE) {
+            if (x + charW + 4 >= FONT_TEX_SIZE) {
                 x = 4;
                 y += rowHeight;
             }
@@ -143,7 +224,7 @@ public class FontRenderer {
             glyphWidth[c] = charW;
             glyphHeight[c] = charH;
 
-            x += charW + 6;
+            x += charW + 4;
         }
 
         // 2. Populate Special Symbol Slots
@@ -160,7 +241,7 @@ public class FontRenderer {
             int charW = Math.max(fm.getHeight() / 2, fm.charWidth(symbolChar));
             int charH = fm.getHeight();
 
-            if (x + charW + 6 >= FONT_TEX_SIZE) {
+            if (x + charW + 4 >= FONT_TEX_SIZE) {
                 x = 4;
                 y += rowHeight;
             }
@@ -169,7 +250,6 @@ public class FontRenderer {
             if (font.canDisplay(symbolChar)) {
                 g.drawString(String.valueOf(symbolChar), x, y);
             } else {
-                // Procedural pixel-art fallback if font does not support glyph
                 renderProceduralSymbol(g, slotIdx, x, y - fm.getAscent(), charW, charH);
             }
 
@@ -180,7 +260,7 @@ public class FontRenderer {
             glyphWidth[slotIdx] = charW;
             glyphHeight[slotIdx] = charH;
 
-            x += charW + 6;
+            x += charW + 4;
         }
 
         g.dispose();
@@ -217,24 +297,25 @@ public class FontRenderer {
 
     private void renderProceduralSymbol(Graphics2D g, int slot, int x, int y, int w, int h) {
         if (slot == SLOT_PLAY) {
-            int[] px = {x + 2, x + w - 2, x + 2};
-            int[] py = {y + 3, y + h / 2, y + h - 3};
+            int[] px = {x + 1, x + w - 1, x + 1};
+            int[] py = {y + 2, y + h / 2, y + h - 2};
             g.fillPolygon(px, py, 3);
         } else if (slot == SLOT_SWORD) {
-            g.drawLine(x + 2, y + h - 3, x + w - 3, y + 2);
-            g.drawLine(x + 3, y + h - 2, x + w - 2, y + 3);
-            g.drawLine(x + 2, y + h - 6, x + 6, y + h - 2);
+            g.drawLine(x + 1, y + h - 2, x + w - 2, y + 1);
+            g.drawLine(x + 2, y + h - 1, x + w - 1, y + 2);
+            g.drawLine(x + 1, y + h - 4, x + 4, y + h - 1);
         } else if (slot == SLOT_HEART) {
-            g.fillRect(x + 2, y + 4, w - 4, h - 8);
+            g.fillRect(x + 1, y + 2, w - 2, h - 4);
         } else {
-            g.drawRect(x + 2, y + 2, w - 4, h - 4);
+            g.drawRect(x + 1, y + 1, w - 2, h - 2);
         }
     }
 
     // --- Typography Metric Accessors ---
 
     public float getAscent(float scale) {
-        return (baseAscent > 0 ? baseAscent : 16.0f) * scale;
+        int intScale = Math.max(1, Math.round(scale));
+        return (baseAscent > 0 ? baseAscent : 8.0f) * intScale;
     }
 
     public float getAscent(TextStyle style) {
@@ -242,7 +323,8 @@ public class FontRenderer {
     }
 
     public float getCapHeight(float scale) {
-        return (baseCapHeight > 0 ? baseCapHeight : 14.0f) * scale;
+        int intScale = Math.max(1, Math.round(scale));
+        return (baseCapHeight > 0 ? baseCapHeight : 7.0f) * intScale;
     }
 
     public float getCapHeight(TextStyle style) {
@@ -250,7 +332,8 @@ public class FontRenderer {
     }
 
     public float getLineHeight(float scale) {
-        return (baseLineHeight > 0 ? baseLineHeight : 20.0f) * scale;
+        int intScale = Math.max(1, Math.round(scale));
+        return (baseLineHeight > 0 ? baseLineHeight : 10.0f) * intScale;
     }
 
     public float getLineHeight(TextStyle style) {
@@ -265,7 +348,7 @@ public class FontRenderer {
         return getLineHeight((float) scale);
     }
 
-    // --- Width Measurement (Allocation-free, without trailing space) ---
+    // --- Measurement API ---
 
     public float width(String text, TextStyle style) {
         return width(text, style != null ? style.getScale() : 1.0f);
@@ -274,8 +357,8 @@ public class FontRenderer {
     public float width(String text, float scale) {
         if (text == null || text.isEmpty()) return 0.0f;
 
-        int visibleCount = 0;
-        float glyphsWidth = 0.0f;
+        int intScale = Math.max(1, Math.round(scale));
+        int totalWidth = 0;
 
         for (int i = 0; i < text.length(); i++) {
             char ch = text.charAt(i);
@@ -287,13 +370,10 @@ public class FontRenderer {
             }
 
             int c = getGlyphIndex(ch);
-            glyphsWidth += glyphWidth[c] * scale;
-            visibleCount++;
+            totalWidth += glyphWidth[c] * intScale;
         }
 
-        if (visibleCount <= 0) return 0.0f;
-        // No trailing spacing after the final glyph
-        return glyphsWidth + (visibleCount - 1) * (1.0f * scale);
+        return (float) totalWidth;
     }
 
     public float getStringWidth(String text, float scale) {
@@ -304,7 +384,7 @@ public class FontRenderer {
         return width(text, (float) scale);
     }
 
-    // --- Drawing API ---
+    // --- Drawing API (snapped to whole integer coordinates) ---
 
     public void drawString(GuiRenderer gui, String text, float x, float y, TextStyle style) {
         if (style == null) {
@@ -324,33 +404,43 @@ public class FontRenderer {
 
     public void drawCentered(GuiRenderer gui, String text, float centerX, float y, TextStyle style) {
         if (text == null || text.isEmpty()) return;
-        float w = width(text, style);
-        drawString(gui, text, centerX - (w / 2.0f), y, style);
+        int intScale = style != null ? Math.max(1, Math.round(style.getScale())) : 1;
+        float w = width(text, intScale);
+        int drawX = Math.round(centerX - (w / 2.0f));
+        int drawY = Math.round(y);
+        drawString(gui, text, drawX, drawY, intScale, style != null ? style.getColorHex() : 0xFFFFFF, style != null && style.hasShadow());
     }
 
     public void drawCentered(GuiRenderer gui, String text, float centerX, float y, TextStyle style, int colorHex) {
         if (text == null || text.isEmpty()) return;
-        float w = width(text, style);
-        drawString(gui, text, centerX - (w / 2.0f), y, style, colorHex);
+        int intScale = style != null ? Math.max(1, Math.round(style.getScale())) : 1;
+        float w = width(text, intScale);
+        int drawX = Math.round(centerX - (w / 2.0f));
+        int drawY = Math.round(y);
+        drawString(gui, text, drawX, drawY, intScale, colorHex, style != null && style.hasShadow());
     }
 
     public void drawString(GuiRenderer gui, String text, float x, float y, float scale, int colorHex, boolean shadow) {
         if (text == null || text.isEmpty()) return;
 
+        int intScale = Math.max(1, Math.round(scale));
+        int drawX = Math.round(x);
+        int drawY = Math.round(y);
+
         if (shadow) {
-            float shadowOffset = Math.max(1.0f, Math.round(1.0f * scale));
-            renderText(gui, text, x + shadowOffset, y + shadowOffset, scale, colorHex, true);
+            int shadowOffset = intScale;
+            renderText(gui, text, drawX + shadowOffset, drawY + shadowOffset, intScale, colorHex, true);
         }
 
-        renderText(gui, text, x, y, scale, colorHex, false);
+        renderText(gui, text, drawX, drawY, intScale, colorHex, false);
     }
 
     public void drawString(GuiRenderer gui, String text, float x, float y, int scale, int colorHex, boolean shadow) {
         drawString(gui, text, x, y, (float) scale, colorHex, shadow);
     }
 
-    private void renderText(GuiRenderer gui, String text, float x, float y, float scale, int defaultColor, boolean isShadow) {
-        float curX = x;
+    private void renderText(GuiRenderer gui, String text, int x, int y, int intScale, int defaultColor, boolean isShadow) {
+        int curX = x;
         int activeColor = defaultColor;
 
         for (int i = 0; i < text.length(); i++) {
@@ -371,9 +461,8 @@ public class FontRenderer {
             }
 
             int c = getGlyphIndex(ch);
-
-            float w = glyphWidth[c] * scale;
-            float h = glyphHeight[c] * scale;
+            int w = glyphWidth[c] * intScale;
+            int h = glyphHeight[c] * intScale;
 
             int effectiveColor;
             if (isShadow) {
@@ -394,7 +483,7 @@ public class FontRenderer {
                     r, g, b, 1.0f
             );
 
-            curX += w + (1.0f * scale);
+            curX += w;
         }
     }
 
@@ -428,7 +517,7 @@ public class FontRenderer {
     }
 
     /**
-     * Strips all Minecraft color formatting codes (§.) from the string.
+     * Strips all color formatting codes (§.) from the string.
      */
     public static String stripFormatting(String text) {
         if (text == null) return null;

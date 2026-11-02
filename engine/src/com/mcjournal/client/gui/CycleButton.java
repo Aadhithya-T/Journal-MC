@@ -85,17 +85,17 @@ public class CycleButton<T> extends Widget {
 
         String label = getDisplayString();
         float maxAllowedW = width - 14.0f;
-        float desiredScale = height >= 38 ? 0.88f : (height >= 28 ? 0.65f : 0.50f);
+        float desiredScale = height >= 38 ? 2.0f : 1.0f;
         float textW = font.getStringWidth(label, desiredScale);
         float scale = desiredScale;
         if (textW > maxAllowedW && textW > 0) {
-            scale = desiredScale * (maxAllowedW / textW);
+            scale = Math.max(1.0f, desiredScale * (maxAllowedW / textW));
             textW = font.getStringWidth(label, scale);
         }
 
-        float textX = x + (width - textW) / 2.0f;
+        float textX = Math.round(x + (width - textW) / 2.0f);
         float fontH = font.getFontHeight(scale);
-        float textY = y + (height - fontH) / 2.0f;
+        float textY = Math.round(y + (height - fontH) / 2.0f);
 
         int textColor = !isEnabled ? 0xa0a0a0 : (isHovered ? 0xffffa0 : 0xe0e0e0);
         font.drawString(gui, label, textX, textY, scale, textColor, true);

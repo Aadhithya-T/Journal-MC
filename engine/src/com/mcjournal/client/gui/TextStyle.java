@@ -1,17 +1,19 @@
 package com.mcjournal.client.gui;
 
 /**
- * Standard typography styles for Journal-MC GUI screens.
- * Centralizes scale, default color, and shadow parameters, replacing ad-hoc fractional literals.
+ * Standardized typography styles for Journal-MC GUI screens.
+ * Uses integer scales (1x, 2x) on the native pixel-grid font.
  */
 public final class TextStyle {
-    // Initial mapping matching current fractional scales:
-    // TITLE: 0.80f
-    // BODY: 0.55f
-    // CAPTION: 0.48f
-    public static final TextStyle TITLE = new TextStyle(0.80f, 0xFFFFFF, true);
-    public static final TextStyle BODY = new TextStyle(0.55f, 0xFFFFFF, true);
-    public static final TextStyle CAPTION = new TextStyle(0.48f, 0x888888, false);
+
+    // TITLE: 2x scale, white, with drop shadow
+    public static final TextStyle TITLE = new TextStyle(2.0f, 0xFFFFFF, true);
+
+    // BODY: 1x scale, white, with drop shadow
+    public static final TextStyle BODY = new TextStyle(1.0f, 0xFFFFFF, true);
+
+    // CAPTION: 1x scale, muted gray (0x888888), flat (no shadow)
+    public static final TextStyle CAPTION = new TextStyle(1.0f, 0x888888, false);
 
     private final float scale;
     private final int colorHex;

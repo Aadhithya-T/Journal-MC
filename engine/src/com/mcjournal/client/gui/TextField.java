@@ -242,9 +242,9 @@ public class TextField extends Widget {
         // 2. Text layout parameters
         float paddingX = 4.0f;
         float contentW = width - paddingX * 2.0f;
-        float scale = height >= 28 ? 0.65f : 0.50f;
+        float scale = height >= 28 ? 2.0f : 1.0f;
         float fontH = font.getFontHeight(scale);
-        float textY = y + (height - fontH) / 2.0f;
+        float textY = Math.round(y + (height - fontH) / 2.0f);
 
         ensureCaretVisible(font, scale, contentW);
 
@@ -310,7 +310,7 @@ public class TextField extends Widget {
             float paddingX = 4.0f;
             double relX = mouseX - (x + paddingX);
             int targetPos = displayOffset;
-            float scale = height >= 28 ? 0.65f : 0.50f;
+            float scale = height >= 28 ? 2.0f : 1.0f;
             // Place caret at end by default or approximate
             targetPos = text.length();
             setCaretPosition(targetPos);

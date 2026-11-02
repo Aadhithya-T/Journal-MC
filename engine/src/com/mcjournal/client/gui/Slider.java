@@ -101,10 +101,10 @@ public class Slider extends Widget {
 
         // 4. Centered Display Label
         String label = prefix + formatter.apply(value);
-        float scale = height >= 28 ? 0.65f : 0.50f;
+        float scale = height >= 28 ? 2.0f : 1.0f;
         float textW = font.getStringWidth(label, scale);
-        float textX = x + (width - textW) / 2.0f;
-        float textY = y + (height - font.getFontHeight(scale)) / 2.0f;
+        float textX = Math.round(x + (width - textW) / 2.0f);
+        float textY = Math.round(y + (height - font.getFontHeight(scale)) / 2.0f);
 
         int textColor = !isEnabled ? 0xa0a0a0 : (isHovered ? 0xffffa0 : 0xe0e0e0);
         font.drawString(gui, label, textX, textY, scale, textColor, true);

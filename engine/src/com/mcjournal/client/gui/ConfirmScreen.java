@@ -141,14 +141,14 @@ public class ConfirmScreen extends Screen {
 
         // 3. Title Text
         int titleColor = dangerMode ? 0xff5555 : 0xffffff;
-        float titleScale = 0.80f;
+        float titleScale = 2.0f;
         float titleW = font.getStringWidth(title, titleScale);
         font.drawString(gui, title, GuiLayout.centerX(width, (int) titleW), dialogY + 14, titleScale, titleColor, true);
 
         // 4. Message Text (Supports multi-line \n)
         String[] lines = message.split("\n");
         float lineY = dialogY + 36;
-        float textScale = 0.58f;
+        float textScale = 1.0f;
         for (String line : lines) {
             float lineW = font.getStringWidth(line, textScale);
             font.drawString(gui, line, GuiLayout.centerX(width, (int) lineW), lineY, textScale, 0xcccccc, false);
