@@ -58,6 +58,21 @@ public class TerrainGenerator {
     private static final int ID_GRAVEL = Blocks.GRAVEL.getDefaultState().getStateId();
     private static final int ID_ANDESITE = Blocks.ANDESITE.getDefaultState().getStateId();
     private static final int ID_DIORITE = Blocks.DIORITE.getDefaultState().getStateId();
+    private static final int ID_OAK_LOG = Blocks.OAK_LOG.getDefaultState().getStateId();
+    private static final int ID_OAK_LEAVES = Blocks.OAK_LEAVES.getDefaultState().getStateId();
+    private static final int ID_BIRCH_LOG = Blocks.BIRCH_LOG.getDefaultState().getStateId();
+    private static final int ID_BIRCH_LEAVES = Blocks.BIRCH_LEAVES.getDefaultState().getStateId();
+    private static final int ID_SPRUCE_LOG = Blocks.SPRUCE_LOG.getDefaultState().getStateId();
+    private static final int ID_SPRUCE_LEAVES = Blocks.SPRUCE_LEAVES.getDefaultState().getStateId();
+    private static final int ID_DARK_OAK_LOG = Blocks.DARK_OAK_LOG.getDefaultState().getStateId();
+    private static final int ID_DARK_OAK_LEAVES = Blocks.DARK_OAK_LEAVES.getDefaultState().getStateId();
+
+    public enum TreeType {
+        OAK,
+        BIRCH,
+        DARK_OAK,
+        SPRUCE
+    }
 
     public record POI(String id, String name, String subtitle, String icon, int x, int z, String excerpt) {}
 
@@ -359,7 +374,7 @@ public class TerrainGenerator {
             }
         }
 
-        // 5. Forest Tree Generation
+        // 5. Forest & Biome Tree Generation (Oak, Birch, Dark Oak, Spruce)
         int seedHash = Math.abs((cx * 31 + cz) ^ (int) (seed & 0x7FFFFFFF));
         int sampleWx = cx * 16 + 8;
         int sampleWz = cz * 16 + 8;
@@ -368,12 +383,14 @@ public class TerrainGenerator {
         if (centerBiome.getTreeDensity() > 0.0 && seedHash % 3 <= 1) {
             int t1x = (seedHash >> 2) % 8 + 4;
             int t1z = (seedHash >> 5) % 8 + 4;
-            plantTree(chunk, cx, cz, t1x, t1z, seedHash % 2 == 0, maxLx, maxLz);
+            TreeType type1 = pickTreeType(centerBiome, cx * 16 + t1x, cz * 16 + t1z, seedHash);
+            plantTree(chunk, cx, cz, t1x, t1z, type1, seedHash, maxLx, maxLz);
 
             if (centerBiome.getTreeDensity() >= 0.50 && seedHash % 3 == 0) {
                 int t2x = ((seedHash >> 7) % 6) + 2;
                 int t2z = ((seedHash >> 9) % 6) + 8;
-                plantTree(chunk, cx, cz, t2x, t2z, seedHash % 4 == 0, maxLx, maxLz);
+                TreeType type2 = pickTreeType(centerBiome, cx * 16 + t2x, cz * 16 + t2z, seedHash ^ 0x55555555);
+                plantTree(chunk, cx, cz, t2x, t2z, type2, seedHash ^ 0xAAAAAAAA, maxLx, maxLz);
             }
         }
 
@@ -383,7 +400,31 @@ public class TerrainGenerator {
         return chunk;
     }
 
-    private void plantTree(Chunk chunk, int cx, int cz, int tx, int tz, boolean isBirch, int maxLx, int maxLz) {
+    public TreeType pickTreeType(Biome biome, int wx, int wz, int seedHash) {
+        if ("mountains".equals(biome.getId())) {
+            return TreeType.SPRUCE; // Coniferous alpine trees in cold high crags
+        }
+        if ("forest".equals(biome.getId())) {
+            double speciesNoise = detailNoise.noise2D(wx * 0.03 + 127.0, wz * 0.03 + 311.0);
+            if (speciesNoise > 0.35) {
+                return TreeType.SPRUCE; // Tall boreal spruce stands
+            } else if (speciesNoise < -0.30) {
+                return TreeType.DARK_OAK; // Dense dark oak canopy
+            } else if ((seedHash & 1) == 0) {
+                return TreeType.BIRCH;
+            } else {
+                return TreeType.OAK;
+            }
+        }
+        // Plains or other biomes:
+        int pick = Math.abs(seedHash >> 3) % 10;
+        if (pick < 5) return TreeType.OAK;
+        if (pick < 7) return TreeType.BIRCH;
+        if (pick < 9) return TreeType.SPRUCE;
+        return TreeType.DARK_OAK;
+    }
+
+    public void plantTree(Chunk chunk, int cx, int cz, int tx, int tz, TreeType type, int seedHash, int maxLx, int maxLz) {
         if (tx < 0 || tx >= maxLx || tz < 0 || tz >= maxLz) {
             return;
         }
@@ -392,48 +433,136 @@ public class TerrainGenerator {
         int wz = cz * 16 + tz;
         int ty = computeHeight(wx, wz);
 
-        if (ty >= SEA_LEVEL + 2 && ty <= 95 && chunk.getBlockState(tx, ty, tz).is(Blocks.GRASS)) {
-            BlockState logType = isBirch ? Blocks.BIRCH_LOG.getDefaultState() : Blocks.OAK_LOG.getDefaultState();
-            BlockState leafType = isBirch ? Blocks.BIRCH_LEAVES.getDefaultState() : Blocks.OAK_LEAVES.getDefaultState();
-            int trunkHeight = isBirch ? 5 : 4;
+        if (ty < SEA_LEVEL + 2 || ty > 115) {
+            return;
+        }
 
-            chunk.setBlockState(tx, ty + 1, tz, Blocks.AIR.getDefaultState());
+        // Soil requirement: grass or dirt
+        BlockState groundState = chunk.getBlockState(tx, ty, tz);
+        if (!groundState.is(Blocks.GRASS) && !groundState.is(Blocks.DIRT)) {
+            return;
+        }
 
-            // Wood Trunk
-            for (int y = 1; y <= trunkHeight; y++) {
-                if (ty + y < Chunk.HEIGHT) {
-                    chunk.setBlockState(tx, ty + y, tz, logType);
-                }
+        int logId;
+        int leafId;
+        int trunkHeight;
+
+        switch (type) {
+            case SPRUCE -> {
+                // Spruce: the tallest tree (11 to 14 blocks high!), conifer pagoda/spire structure
+                logId = ID_SPRUCE_LOG;
+                leafId = ID_SPRUCE_LEAVES;
+                trunkHeight = 11 + (Math.abs(seedHash) % 4); // 11, 12, 13, or 14 blocks tall!
             }
+            case DARK_OAK -> {
+                // Dark Oak: 6 to 8 blocks trunk with wide umbrella/mushroom canopy
+                logId = ID_DARK_OAK_LOG;
+                leafId = ID_DARK_OAK_LEAVES;
+                trunkHeight = 6 + (Math.abs(seedHash) % 3); // 6, 7, or 8 blocks tall
+            }
+            case BIRCH -> {
+                // Birch: 5 to 6 blocks tall slender tree
+                logId = ID_BIRCH_LOG;
+                leafId = ID_BIRCH_LEAVES;
+                trunkHeight = 5 + (Math.abs(seedHash) % 2); // 5 or 6 blocks tall
+            }
+            default -> {
+                // Oak: 4 to 5 blocks tall classic rounded tree
+                logId = ID_OAK_LOG;
+                leafId = ID_OAK_LEAVES;
+                trunkHeight = 4 + (Math.abs(seedHash) % 2); // 4 or 5 blocks tall
+            }
+        }
 
-            // Canopy Leaves strictly within valid local bounds
+        // Convert soil under trunk to dirt
+        chunk.setStateId(tx, ty, tz, Blocks.DIRT.getDefaultState().getStateId());
+
+        // 1. Wood Trunk
+        for (int y = 1; y <= trunkHeight; y++) {
+            if (ty + y < Chunk.HEIGHT) {
+                chunk.setStateId(tx, ty + y, tz, logId);
+            }
+        }
+
+        // 2. Canopy Foliage by Tree Type
+        if (type == TreeType.SPRUCE) {
+            // Coniferous spire: bare lower trunk (first 3-4 blocks), then alternating conical tiers tapering to top
+            int topY = ty + trunkHeight;
+
+            // Tier 1 (Lowest wide tier, 5x5 clipped corners)
+            setCanopyDisc(chunk, tx, tz, topY - 7, 2, true, leafId, maxLx, maxLz);
+            // Tier 2 (3x3 cross)
+            setCanopyCross(chunk, tx, tz, topY - 5, 1, leafId, maxLx, maxLz);
+            // Tier 3 (5x5 clipped corners)
+            setCanopyDisc(chunk, tx, tz, topY - 3, 2, true, leafId, maxLx, maxLz);
+            // Tier 4 (3x3 cross)
+            setCanopyCross(chunk, tx, tz, topY - 1, 1, leafId, maxLx, maxLz);
+            // Tier 5 (3x3 square at top of trunk)
+            setCanopyDisc(chunk, tx, tz, topY, 1, false, leafId, maxLx, maxLz);
+            // Spire Peak (Pointy needle top)
+            if (topY + 1 < Chunk.HEIGHT) chunk.setStateId(tx, topY + 1, tz, leafId);
+            if (topY + 2 < Chunk.HEIGHT) chunk.setStateId(tx, topY + 2, tz, leafId);
+
+        } else if (type == TreeType.DARK_OAK) {
+            // Wide umbrella / mushroom cap canopy that casts heavy shadow
+            int topY = ty + trunkHeight;
+
+            // Base under-canopy: 5x5 disc
+            setCanopyDisc(chunk, tx, tz, topY - 2, 2, true, leafId, maxLx, maxLz);
+            // Main wide umbrella canopy: 7x7 disc (radius 3 with clipped corners)
+            setCanopyDisc(chunk, tx, tz, topY - 1, 3, true, leafId, maxLx, maxLz);
+            // Upper crown: 5x5 disc
+            setCanopyDisc(chunk, tx, tz, topY, 2, true, leafId, maxLx, maxLz);
+            // Top crown cross
+            setCanopyCross(chunk, tx, tz, topY + 1, 1, leafId, maxLx, maxLz);
+
+        } else if (type == TreeType.BIRCH) {
+            // Slender column canopy
+            int leafBase = ty + trunkHeight - 2;
+            setCanopyCross(chunk, tx, tz, leafBase, 2, leafId, maxLx, maxLz);
+            setCanopyDisc(chunk, tx, tz, leafBase + 1, 1, false, leafId, maxLx, maxLz);
+            setCanopyDisc(chunk, tx, tz, leafBase + 2, 1, false, leafId, maxLx, maxLz);
+            setCanopyCross(chunk, tx, tz, leafBase + 3, 1, leafId, maxLx, maxLz);
+            if (leafBase + 4 < Chunk.HEIGHT) chunk.setStateId(tx, leafBase + 4, tz, leafId);
+
+        } else {
+            // Classic Oak rounded balloon canopy
             int leafBase = ty + trunkHeight - 1;
-            for (int dx = -2; dx <= 2; dx++) {
-                for (int dz = -2; dz <= 2; dz++) {
-                    if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
-                    int lx = tx + dx;
-                    int lz = tz + dz;
-                    if (lx >= 0 && lx < maxLx && lz >= 0 && lz < maxLz) {
-                        if (leafBase < Chunk.HEIGHT) chunk.setBlockState(lx, leafBase, lz, leafType);
-                        if (leafBase + 1 < Chunk.HEIGHT) chunk.setBlockState(lx, leafBase + 1, lz, leafType);
+            setCanopyDisc(chunk, tx, tz, leafBase, 2, true, leafId, maxLx, maxLz);
+            setCanopyDisc(chunk, tx, tz, leafBase + 1, 2, true, leafId, maxLx, maxLz);
+            setCanopyDisc(chunk, tx, tz, leafBase + 2, 1, false, leafId, maxLx, maxLz);
+            setCanopyCross(chunk, tx, tz, leafBase + 3, 1, leafId, maxLx, maxLz);
+        }
+    }
+
+    private void setCanopyDisc(Chunk chunk, int cx, int cz, int y, int radius, boolean clipCorners, int leafId, int maxLx, int maxLz) {
+        if (y < 0 || y >= Chunk.HEIGHT) return;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if (clipCorners && Math.abs(dx) == radius && Math.abs(dz) == radius) continue;
+                int lx = cx + dx;
+                int lz = cz + dz;
+                if (lx >= 0 && lx < maxLx && lz >= 0 && lz < maxLz) {
+                    if (chunk.getStateId(lx, y, lz) == ID_AIR) {
+                        chunk.setStateId(lx, y, lz, leafId);
                     }
                 }
             }
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    int lx = tx + dx;
-                    int lz = tz + dz;
-                    if (lx >= 0 && lx < maxLx && lz >= 0 && lz < maxLz) {
-                        if (leafBase + 2 < Chunk.HEIGHT) chunk.setBlockState(lx, leafBase + 2, lz, leafType);
+        }
+    }
+
+    private void setCanopyCross(Chunk chunk, int cx, int cz, int y, int radius, int leafId, int maxLx, int maxLz) {
+        if (y < 0 || y >= Chunk.HEIGHT) return;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if (Math.abs(dx) + Math.abs(dz) > radius) continue;
+                int lx = cx + dx;
+                int lz = cz + dz;
+                if (lx >= 0 && lx < maxLx && lz >= 0 && lz < maxLz) {
+                    if (chunk.getStateId(lx, y, lz) == ID_AIR) {
+                        chunk.setStateId(lx, y, lz, leafId);
                     }
                 }
-            }
-            if (leafBase + 3 < Chunk.HEIGHT) {
-                chunk.setBlockState(tx, leafBase + 3, tz, leafType);
-                if (tx + 1 < maxLx) chunk.setBlockState(tx + 1, leafBase + 3, tz, leafType);
-                if (tx - 1 >= 0) chunk.setBlockState(tx - 1, leafBase + 3, tz, leafType);
-                if (tz + 1 < maxLz) chunk.setBlockState(tx, leafBase + 3, tz + 1, leafType);
-                if (tz - 1 >= 0) chunk.setBlockState(tx, leafBase + 3, tz - 1, leafType);
             }
         }
     }

@@ -69,6 +69,18 @@ public final class Blocks {
     public static final BlockType DIORITE = register(new BlockType.Builder("diorite", (byte) 18)
             .name("Diorite").color("#b3b3b6").hardness(1.5f).build());
 
+    public static final BlockType SPRUCE_LOG = register(new BlockType.Builder("spruce_log", (byte) 19)
+            .name("Spruce Log").color("#3b2715").hardness(2.0f).properties(BlockProperties.AXIS).build());
+
+    public static final BlockType SPRUCE_LEAVES = register(new BlockType.Builder("spruce_leaves", (byte) 20)
+            .name("Spruce Leaves").color("#2e583b").hardness(0.2f).transparent(true).build());
+
+    public static final BlockType DARK_OAK_LOG = register(new BlockType.Builder("dark_oak_log", (byte) 21)
+            .name("Dark Oak Log").color("#2c1e13").hardness(2.0f).properties(BlockProperties.AXIS).build());
+
+    public static final BlockType DARK_OAK_LEAVES = register(new BlockType.Builder("dark_oak_leaves", (byte) 22)
+            .name("Dark Oak Leaves").color("#234b1a").hardness(0.2f).transparent(true).build());
+
     static {
         // Eagerly trigger BlockStateRegistry so default states are bound on class load
         BlockStateRegistry.getTotalStates();

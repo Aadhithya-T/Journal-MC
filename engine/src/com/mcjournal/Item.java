@@ -36,10 +36,7 @@ public final class Item {
     }
 
     public static boolean isAxeEffective(BlockType block) {
-        return block == Blocks.OAK_LOG
-            || block == Blocks.BIRCH_LOG
-            || block == Blocks.OAK_LEAVES
-            || block == Blocks.BIRCH_LEAVES;
+        return block != null && (block.isLog() || block.isLeaves());
     }
 
     public static boolean isAxeEffective(BlockState state) {
