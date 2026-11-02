@@ -9,7 +9,7 @@ public class Camera {
     private float pitch = 0; // In degrees
     private float roll = 0;  // In degrees (Hurt camera tilt / screen shake)
     private float fov = 70.0f; // In degrees
-    private float near = 0.05f;
+    private float near = 0.02f;
     private float far = 350.0f;
 
     private final Matrix4f viewMatrix = new Matrix4f();

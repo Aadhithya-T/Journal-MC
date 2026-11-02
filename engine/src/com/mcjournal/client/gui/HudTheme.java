@@ -44,9 +44,10 @@ public final class HudTheme {
     public static final int HOTBAR_HEIGHT = SLOT_SIZE + (HOTBAR_PADDING * 2);             // 26px
 
     // Slot Styling
-    public static final int SLOT_BG = 0x0c0c10;
-    public static final int SLOT_BORDER_OUTER = 0x282832;
-    public static final int SLOT_BORDER_INNER = 0x1a1a22;
+    public static final int SLOT_BG = 0x161620;
+    public static final float SLOT_BG_ALPHA = 0.70f;
+    public static final int SLOT_BORDER_OUTER = 0x3c3c4a;
+    public static final int SLOT_BORDER_INNER = 0x0c0c12;
 
     // Icon Metrics
     public static final int ICON_SIZE = 9;
@@ -59,3 +60,4 @@ public final class HudTheme {
     public static final int TEXT_MUTED = 0x9494a0;
     public static final int TEXT_GOLD = 0xffc83b;
 }
+

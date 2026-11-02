@@ -44,7 +44,7 @@ public class MCJournalApp {
     private double fpsTimer = 0.0;
 
     public MCJournalApp() {
-        this.window = new Window("Minecraft Journal - Native Hardcore Edition", 1280, 760);
+        this.window = new Window("Journal-MC: Native Hardcore Edition", 1280, 760);
         this.input = new InputHandler();
         this.camera = new Camera();
         this.player = new Player();
@@ -95,7 +95,8 @@ public class MCJournalApp {
 
             // Subsystem updates
             atmosphericSystem.update(deltaTime, worldSession.isInWorld(), screenManager.hasScreen());
-            debugController.update(input);
+            debugController.update(input, this);
+            if (getHudRenderer() != null) getHudRenderer().update((float) deltaTime);
 
             if (screenManager.hasScreen()) {
                 screenManager.update(input);
@@ -253,6 +254,14 @@ public class MCJournalApp {
     }
 
     public com.mcjournal.client.gui.HudRenderer getHudRenderer() { return gameRenderer.getHudRenderer(); }
+
+    
+    public void takeScreenshot() {
+        String filename = ScreenshotHelper.saveScreenshot(window.getWidth(), window.getHeight());
+        if (filename != null && getHudRenderer() != null) {
+            getHudRenderer().setNotification("Saved screenshot as " + filename);
+        }
+    }
 
     public TextureAtlas getAtlas() {
         return gameRenderer.getAtlas();

@@ -45,6 +45,24 @@ public class HudRenderer {
     private String cachedTargetBlockName = "";
     private String cachedTargetBlockId = "";
 
+    // Ephemeral in-game notifications (e.g. Screenshot capture toast)
+    private String notificationText = null;
+    private float notificationTimer = 0.0f;
+
+    public void setNotification(String text) {
+        this.notificationText = text;
+        this.notificationTimer = 3.0f;
+    }
+
+    public void update(float deltaTime) {
+        if (notificationTimer > 0.0f) {
+            notificationTimer -= deltaTime;
+            if (notificationTimer <= 0.0f) {
+                notificationText = null;
+            }
+        }
+    }
+
     public HudRenderer() {}
 
     public HudContext getContext() {
@@ -102,6 +120,11 @@ public class HudRenderer {
         if (ctx.hasPlayer() && ctx.player.hurtTime > 0) {
             renderHurtVignette(gui, ctx, width, height);
         }
+
+        // 5. Ephemeral In-Game Notifications (e.g. Screenshot capture toast)
+        if (notificationText != null && notificationTimer > 0.0f) {
+            renderNotification(gui, font, width, height);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -111,23 +134,20 @@ public class HudRenderer {
         int cx = width / 2;
         int cy = height / 2;
 
-        // 1. Deep shadow backing for crisp contrast against bright sky, snow, or dark caves
-        gui.drawRect(cx - 6, cy - 1, 13, 3, 0.03f, 0.03f, 0.05f, 0.80f);
-        gui.drawRect(cx - 1, cy - 6, 3, 13, 0.03f, 0.03f, 0.05f, 0.80f);
+        // Inverted blend crosshair arms (Classic vanilla behavior: inverts cleanly against any backdrop)
+        gui.setInvertedBlend(true);
+        gui.drawRect(cx - 5, cy, 3, 1, 1.0f, 1.0f, 1.0f, 1.0f); // Left arm
+        gui.drawRect(cx + 3, cy, 3, 1, 1.0f, 1.0f, 1.0f, 1.0f); // Right arm
+        gui.drawRect(cx, cy - 5, 1, 3, 1.0f, 1.0f, 1.0f, 1.0f); // Top arm
+        gui.drawRect(cx, cy + 3, 1, 3, 1.0f, 1.0f, 1.0f, 1.0f); // Bottom arm
+        if (!hasTarget) {
+            gui.drawRect(cx, cy, 1, 1, 1.0f, 1.0f, 1.0f, 1.0f); // Center pip
+        }
+        gui.setInvertedBlend(false);
 
-        // 2. Reticle Arms (Light high-contrast bars)
-        float r = 0.94f, g = 0.94f, b = 0.97f, a = 0.95f;
-        gui.drawRect(cx - 5, cy, 3, 1, r, g, b, a); // Left
-        gui.drawRect(cx + 3, cy, 3, 1, r, g, b, a); // Right
-        gui.drawRect(cx, cy - 5, 1, 3, r, g, b, a); // Top
-        gui.drawRect(cx, cy + 3, 1, 3, r, g, b, a); // Bottom
-
-        // 3. Center Target Pip
+        // Center Target Pip when targeting an interactable block (Vibrant gold highlight)
         if (hasTarget) {
-            // Luminous gold dot when targeting an interactable block
             gui.drawRect(cx, cy, 1, 1, HudTheme.GOLD_R, HudTheme.GOLD_G, HudTheme.GOLD_B, 1.0f);
-        } else {
-            gui.drawRect(cx, cy, 1, 1, r, g, b, 0.70f);
         }
     }
 
@@ -156,11 +176,11 @@ public class HudRenderer {
             int sx = hx + HudTheme.HOTBAR_PADDING + i * slotSize;
             int sy = hy + HudTheme.HOTBAR_PADDING;
 
-            // Recessed Slot Cavity
-            gui.drawRect(sx, sy, slotSize, slotSize, 0.05f, 0.05f, 0.07f, 0.95f);
-            gui.drawRect(sx, sy, slotSize, 1, 0.02f, 0.02f, 0.03f, 0.85f); // Inner top drop shadow
-            gui.drawRect(sx, sy, 1, slotSize, 0.02f, 0.02f, 0.03f, 0.85f); // Inner left drop shadow
-            gui.drawRect(sx + slotSize - 1, sy, 1, slotSize, 0.16f, 0.16f, 0.20f, 0.60f); // Divider
+            // High-Contrast Slot Cavity (Lighter translucent fill, distinct visible border, 1px inner inset shadow)
+            gui.drawRect(sx, sy, slotSize, slotSize, 0.24f, 0.24f, 0.29f, 0.85f); // Visible slot border
+            gui.drawRect(sx + 1, sy + 1, slotSize - 2, slotSize - 2, 0.09f, 0.09f, 0.13f, HudTheme.SLOT_BG_ALPHA); // Lighter translucent cavity well
+            gui.drawRect(sx + 1, sy + 1, slotSize - 2, 1, 0.03f, 0.03f, 0.05f, 0.90f); // Recessed inner top drop shadow
+            gui.drawRect(sx + 1, sy + 1, 1, slotSize - 2, 0.03f, 0.03f, 0.05f, 0.90f); // Recessed inner left drop shadow
 
             // Slot Item / Block Content
             byte itemId = player.hotbarBlocks[i];
@@ -265,6 +285,19 @@ public class HudRenderer {
     }
 
     private void renderHealthGem(GuiRenderer gui, int x, int y, int pipValue, boolean isHurt) {
+        if (isHurt) {
+            // Damage Hurt Flash: Container blinks brilliant white during player hurtTime
+            float flashA = 0.95f;
+            gui.drawRect(x + 1, y, 2, 1, 1.0f, 1.0f, 1.0f, flashA);
+            gui.drawRect(x + 5, y, 2, 1, 1.0f, 1.0f, 1.0f, flashA);
+            gui.drawRect(x, y + 1, 9, 4, 1.0f, 1.0f, 1.0f, flashA);
+            gui.drawRect(x + 1, y + 5, 7, 1, 1.0f, 1.0f, 1.0f, flashA);
+            gui.drawRect(x + 2, y + 6, 5, 1, 1.0f, 1.0f, 1.0f, flashA);
+            gui.drawRect(x + 3, y + 7, 3, 1, 1.0f, 1.0f, 1.0f, flashA);
+            gui.drawRect(x + 4, y + 8, 1, 1, 1.0f, 1.0f, 1.0f, flashA);
+            return;
+        }
+
         // 9x9 Health Crest / Shield Gem
         float bgR = 0.08f, bgG = 0.08f, bgB = 0.10f, bgA = 0.85f;
 
@@ -397,15 +430,12 @@ public class HudRenderer {
         int panelW = 188;
         int panelH = padY * 2 + lines * lineH - 1;
 
-        // Frosted Charcoal Slate Panel with subtle border
-        gui.drawRect(x, y, panelW, panelH, 0.07f, 0.07f, 0.09f, 0.82f);
-        gui.drawRect(x, y, panelW, 1, 0.22f, 0.22f, 0.28f, 0.80f);             // Top border
-        gui.drawRect(x, y + panelH - 1, panelW, 1, 0.05f, 0.05f, 0.07f, 0.90f); // Bottom border
-        gui.drawRect(x, y, 1, panelH, 0.22f, 0.22f, 0.28f, 0.80f);             // Left border
-        gui.drawRect(x + panelW - 1, y, 1, panelH, 0.05f, 0.05f, 0.07f, 0.90f); // Right border
-
-        // Signature Journal-MC Gold Accent Notch on top-left of panel
-        gui.drawRect(x, y, 20, 2, HudTheme.GOLD_R, HudTheme.GOLD_G, HudTheme.GOLD_B, 1.0f);
+        // Frosted Charcoal Slate Panel with subtle border (Cleaner 0.65 opacity)
+        gui.drawRect(x, y, panelW, panelH, 0.07f, 0.07f, 0.09f, 0.65f);
+        gui.drawRect(x, y, panelW, 1, 0.22f, 0.22f, 0.28f, 0.75f);             // Top border
+        gui.drawRect(x, y + panelH - 1, panelW, 1, 0.05f, 0.05f, 0.07f, 0.85f); // Bottom border
+        gui.drawRect(x, y, 1, panelH, 0.22f, 0.22f, 0.28f, 0.75f);             // Left border
+        gui.drawRect(x + panelW - 1, y, 1, panelH, 0.05f, 0.05f, 0.07f, 0.85f); // Right border
 
         int curY = y + padY;
 
@@ -457,10 +487,10 @@ public class HudRenderer {
                 cachedFps = ctx.currentFps;
                 cachedRenderedChunks = ctx.renderedChunks;
                 cachedLoadedChunks = ctx.loadedChunks;
-                cachedFpsStr = cachedFps + " FPS  •  " + cachedRenderedChunks + "/" + cachedLoadedChunks + " chunks";
+                cachedFpsStr = cachedFps + " FPS  •  Chunks " + cachedRenderedChunks + "/" + cachedLoadedChunks;
             }
             int fpsColor = cachedFps >= 50 ? 0x90e090 : (cachedFps >= 30 ? 0xf0c060 : 0xf07070);
-            font.drawString(gui, "§7Perf:§r " + cachedFps + " FPS §8•§r " + cachedRenderedChunks + "/" + cachedLoadedChunks + " chk", x + padX, curY, fontScale, fpsColor, true);
+            font.drawString(gui, "§7" + cachedFps + " FPS §8•§r §7Chunks §f" + cachedRenderedChunks + "/" + cachedLoadedChunks, x + padX, curY, fontScale, fpsColor, true);
         }
     }
 
@@ -528,6 +558,22 @@ public class HudRenderer {
             float alpha = hurtFraction * 0.32f;
             gui.drawRect(0, 0, width, height, 0.90f, 0.05f, 0.05f, alpha);
         }
+    }
+
+    private void renderNotification(GuiRenderer gui, FontRenderer font, int width, int height) {
+        float scale = 0.46f;
+        float textW = font.getStringWidth(notificationText, scale);
+        float padX = 8;
+        float padY = 4;
+        float panelW = textW + padX * 2;
+        float panelH = font.getFontHeight(scale) + padY * 2;
+        float panelX = GuiLayout.centerX(width, (int) panelW);
+        float panelY = 24;
+
+        float alpha = Math.clamp(notificationTimer * 2.0f, 0.0f, 1.0f);
+        gui.drawRect(panelX, panelY, panelW, panelH, 0.08f, 0.08f, 0.11f, 0.85f * alpha);
+        gui.drawRect(panelX, panelY, panelW, 1, HudTheme.GOLD_R, HudTheme.GOLD_G, HudTheme.GOLD_B, 0.90f * alpha);
+        font.drawString(gui, notificationText, panelX + padX, panelY + padY, scale, 0xffffff, true);
     }
 
     public void cleanup() {

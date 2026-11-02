@@ -229,6 +229,21 @@ public class GuiRenderer {
         }
     }
 
+    /**
+     * Toggles inverted color blending mode (GL_ONE_MINUS_DST_COLOR, GL_ONE_MINUS_SRC_COLOR).
+     * Used for HUD crosshairs and high-contrast reticles that must invert cleanly
+     * over both blindingly bright backgrounds (sky, snow) and deep shadows/caves.
+     */
+    public void setInvertedBlend(boolean inverted) {
+        if (!isDrawing) return;
+        flush();
+        if (inverted) {
+            glBlendFuncSeparate(GL_ONE_MINUS_DST_COLOR, GL_ONE_MINUS_SRC_COLOR, GL_ONE, GL_ZERO);
+        } else {
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        }
+    }
+
     public void drawRect(float x, float y, float w, float h, float r, float g, float b, float a) {
         if (!isDrawing) return;
 

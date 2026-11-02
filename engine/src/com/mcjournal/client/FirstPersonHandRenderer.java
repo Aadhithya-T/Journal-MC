@@ -266,7 +266,7 @@ public class FirstPersonHandRenderer {
         float hw = 0.08f;
         float hd = 0.08f;
         float yBottom = -0.48f; // Shoulder end
-        float yTop = 0.0f;       // Fist end
+        float yTop = 0.18f;      // Arm base extended past viewport edge
 
         // 6 faces * 6 vertices = 36 vertices, 11 floats each
         FloatBuffer buffer = MemoryUtil.memAllocFloat(36 * 11);
@@ -335,7 +335,7 @@ public class FirstPersonHandRenderer {
         float hw = 0.08f;
         float hd = 0.08f;
         float yBottom = -0.48f;
-        float yTop = 0.0f;
+        float yTop = 0.18f;
 
         // 1. Arm Faces (6 faces)
         putTexturedQuad(buffer, -hw, yTop, -hd, hw, yTop, -hd, hw, yTop, hd, -hw, yTop, hd, 4 * inv, 0 * inv, 8 * inv, 4 * inv, 0, 1, 0);
@@ -436,7 +436,7 @@ public class FirstPersonHandRenderer {
         float hw = 0.08f;
         float hd = 0.08f;
         float yBottom = -0.48f;
-        float yTop = 0.0f;
+        float yTop = 0.18f;
 
         // 1. Arm Faces (6 faces)
         putTexturedQuad(buffer, -hw, yTop, -hd, hw, yTop, -hd, hw, yTop, hd, -hw, yTop, hd, 4 * inv, 0 * inv, 8 * inv, 4 * inv, 0, 1, 0);
@@ -520,7 +520,7 @@ public class FirstPersonHandRenderer {
         float hw = 0.08f;
         float hd = 0.08f;
         float yBottom = -0.48f;
-        float yTop = 0.0f;
+        float yTop = 0.18f;
 
         // 1. Arm Faces (6 faces)
         putTexturedQuad(buffer, -hw, yTop, -hd, hw, yTop, -hd, hw, yTop, hd, -hw, yTop, hd, 4 * inv, 0 * inv, 8 * inv, 4 * inv, 0, 1, 0);
