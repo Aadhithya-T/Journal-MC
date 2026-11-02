@@ -50,6 +50,7 @@ public class GuiRenderer {
     private int totalQuadCount = 0;
 
     // Saved OpenGL state for strict restoration
+    private final int[] prevViewport = new int[4];
     private boolean prevDepthTest;
     private boolean prevCullFace;
     private boolean prevBlend;
@@ -119,12 +120,17 @@ public class GuiRenderer {
     }
 
     public void begin(int screenWidth, int screenHeight) {
+        begin(screenWidth, screenHeight, 0, 0, screenWidth, screenHeight);
+    }
+
+    public void begin(int logicalWidth, int logicalHeight, int viewportX, int viewportY, int viewportW, int viewportH) {
         if (isDrawing) {
             // Safe recovery if previous begin was not properly closed
             end();
         }
 
         // 1. Snapshot previous OpenGL state
+        glGetIntegerv(GL_VIEWPORT, prevViewport);
         prevDepthTest = glIsEnabled(GL_DEPTH_TEST);
         prevCullFace = glIsEnabled(GL_CULL_FACE);
         prevBlend = glIsEnabled(GL_BLEND);
@@ -146,9 +152,14 @@ public class GuiRenderer {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(false);
 
+        // Configure viewport in OpenGL coordinates (Y=0 at bottom)
+        int fbH = (prevViewport[3] > 0) ? prevViewport[3] : (viewportY + viewportH);
+        int glY = fbH - (viewportY + viewportH);
+        glViewport(viewportX, glY, viewportW, viewportH);
+
         // 3. Configure Orthographic Projection Matrix
         orthoMatrix.identity();
-        orthoMatrix.ortho2D(0, screenWidth, screenHeight, 0);
+        orthoMatrix.ortho2D(0, logicalWidth, logicalHeight, 0);
 
         guiShader.bind();
         guiShader.setUniform("uOrtho", orthoMatrix);
@@ -208,6 +219,9 @@ public class GuiRenderer {
             if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
             glDepthMask(prevDepthMask);
             glBlendFuncSeparate(prevBlendSrcRgb, prevBlendDstRgb, prevBlendSrcAlpha, prevBlendDstAlpha);
+            if (prevViewport[2] > 0 && prevViewport[3] > 0) {
+                glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+            }
 
             isDrawing = false;
             currentTextureId = -1;
