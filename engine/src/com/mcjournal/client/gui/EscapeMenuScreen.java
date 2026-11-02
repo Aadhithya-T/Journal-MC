@@ -1,7 +1,12 @@
 package com.mcjournal.client.gui;
 
 import com.mcjournal.client.MCJournalApp;
+import org.lwjgl.glfw.GLFW;
 
+/**
+ * Rebuilt EscapeMenuScreen using logical coordinates, Widget toolkit,
+ * centralized input dispatch, and screen navigation to Journal & Stats.
+ */
 public class EscapeMenuScreen extends Screen {
     public EscapeMenuScreen(MCJournalApp app) {
         super(app);
@@ -16,30 +21,35 @@ public class EscapeMenuScreen extends Screen {
     public void init(int width, int height) {
         super.init(width, height);
 
-        int btnW = 200;
+        int btnW = Math.min(200, width - 24);
         int btnH = 20;
         int centerX = GuiLayout.centerX(width, btnW);
-        int startY = height / 2 - 25;
+        int startY = Math.max(50, height / 2 - 44);
 
         // 1. Back to Game (Resume)
-        buttons.add(new Button(1, "Back to Game", centerX, startY, btnW, btnH, () -> {
+        Button resumeBtn = new Button(1, "Back to Game", centerX, startY, btnW, btnH, () -> {
             if (app != null) app.resumeGame();
-        }));
+        });
+        addWidget(resumeBtn);
+        focusManager.setFocus(resumeBtn);
 
-        // 2. Options / Journal Row (Split 2-column)
-        int splitW = GuiLayout.splitWidth(btnW, 4, 2); // 98px each
-        buttons.add(new Button(2, "Journal & Stats", centerX, startY + 24, splitW, btnH, () -> {
-            // Journal stats view
-        }));
+        // 2. Journal & Stats
+        Button journalBtn = new Button(2, "Journal & Stats", centerX, startY + 24, btnW, btnH, () -> {
+            if (app != null) app.setScreen(new JournalStatsScreen(app, this));
+        });
+        addWidget(journalBtn);
 
-        buttons.add(new Button(3, "Options...", centerX + splitW + 4, startY + 24, splitW, btnH, () -> {
+        // 3. Options...
+        Button optionsBtn = new Button(3, "Options...", centerX, startY + 48, btnW, btnH, () -> {
             if (app != null) app.setScreen(new OptionsScreen(app, this));
-        }));
+        });
+        addWidget(optionsBtn);
 
-        // 3. Save and Quit to Title
-        buttons.add(new Button(4, "Save and Quit to Title", centerX, startY + 48, btnW, btnH, () -> {
+        // 4. Save and Quit to Title
+        Button quitBtn = new Button(4, "Save and Quit to Title", centerX, startY + 72, btnW, btnH, () -> {
             if (app != null) app.saveAndQuitToTitle();
-        }));
+        });
+        addWidget(quitBtn);
     }
 
     @Override
@@ -49,8 +59,9 @@ public class EscapeMenuScreen extends Screen {
 
         // Header Title
         String title = "Game Menu";
-        float titleW = font.getStringWidth(title, 0.70f);
-        font.drawString(gui, title, GuiLayout.centerX(width, (int) titleW), height / 2 - 48, 0.70f, 0xffffff, true);
+        float titleScale = 0.85f;
+        float titleW = font.getStringWidth(title, titleScale);
+        font.drawString(gui, title, GuiLayout.centerX(width, (int) titleW), Math.max(20, height / 2 - 68), titleScale, 0xffffff, true);
 
         // Render Buttons
         super.render(gui, font, mouseX, mouseY, deltaTime);
@@ -58,8 +69,12 @@ public class EscapeMenuScreen extends Screen {
 
     @Override
     public void keyPressed(int keyCode, int scanCode, int action, int mods) {
-        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
-            if (app != null) app.resumeGame();
+        if (action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT) {
+            if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                if (app != null) app.resumeGame();
+                return;
+            }
         }
+        super.keyPressed(keyCode, scanCode, action, mods);
     }
 }

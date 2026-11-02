@@ -240,6 +240,14 @@ public class MCJournalApp {
         return player;
     }
 
+    public WorldSession getWorldSession() {
+        return worldSession;
+    }
+
+    public AtmosphericTimeSystem getAtmosphericSystem() {
+        return atmosphericSystem;
+    }
+
     public int getFps() {
         return currentFps;
     }

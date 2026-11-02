@@ -57,6 +57,12 @@ public class Player {
         1, 1, 1, 0, 0, 0, 0, 0, 0
     };
 
+    public float getX() { return pos.x; }
+    public float getY() { return pos.y; }
+    public float getZ() { return pos.z; }
+    public int getHealth() { return health; }
+    public int getHunger() { return hunger; }
+
     public byte getSelectedBlock() {
         int slot = Math.clamp(selectedSlot, 0, 8);
         return (hotbarCounts[slot] > 0) ? hotbarBlocks[slot] : 0;

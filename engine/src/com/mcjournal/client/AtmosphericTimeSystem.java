@@ -117,6 +117,8 @@ public class AtmosphericTimeSystem {
         return t * t * (3.0f - 2.0f * t);
     }
 
+    public boolean isDay() { double cycle = worldTimeTicks % 24000.0; return cycle >= 0.0 && cycle < 12500.0; }
+
     public double getWorldTimeTicks() {
         return worldTimeTicks;
     }
