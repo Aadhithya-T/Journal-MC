@@ -447,18 +447,70 @@ public class TerrainGenerator {
         int leafId;
         int trunkHeight;
 
+        if (type == TreeType.DARK_OAK) {
+            // Dark Oak: strictly generates as a thick 2x2 trunk structure with sprawling 8x8 umbrella canopy
+            if (tx + 1 >= maxLx) tx = maxLx - 2;
+            if (tz + 1 >= maxLz) tz = maxLz - 2;
+            if (tx < 0 || tz < 0) return;
+
+            logId = ID_DARK_OAK_LOG;
+            leafId = ID_DARK_OAK_LEAVES;
+            trunkHeight = 6 + (Math.abs(seedHash) % 3); // 6, 7, or 8 blocks trunk
+
+            // Convert soil under 2x2 trunk footprint to dirt
+            for (int ox = 0; ox <= 1; ox++) {
+                for (int oz = 0; oz <= 1; oz++) {
+                    chunk.setStateId(tx + ox, ty, tz + oz, Blocks.DIRT.getDefaultState().getStateId());
+                }
+            }
+
+            // 1. Thick 2x2 Wood Trunk (4 columns)
+            for (int ox = 0; ox <= 1; ox++) {
+                for (int oz = 0; oz <= 1; oz++) {
+                    for (int y = 1; y <= trunkHeight; y++) {
+                        if (ty + y < Chunk.HEIGHT) {
+                            chunk.setStateId(tx + ox, ty + y, tz + oz, logId);
+                        }
+                    }
+                }
+            }
+
+            int topY = ty + trunkHeight;
+
+            // 2. Thick irregular side branch logs extending outward beneath/inside the canopy
+            int[][] branches = {
+                {tx - 1, topY - 2, tz},
+                {tx + 2, topY - 2, tz + 1},
+                {tx, topY - 1, tz - 1},
+                {tx + 1, topY - 1, tz + 2}
+            };
+            for (int[] b : branches) {
+                int bx = b[0], by = b[1], bz = b[2];
+                if (bx >= 0 && bx < maxLx && bz >= 0 && bz < maxLz && by < Chunk.HEIGHT) {
+                    chunk.setStateId(bx, by, bz, logId);
+                }
+            }
+
+            // 3. Sprawling 8x8 to 9x9 multi-layered dense umbrella canopy
+            // Layer 1 (bottom skirt): 6x6 disc
+            setCanopyDisc2x2(chunk, tx, tz, topY - 2, 2, true, leafId, maxLx, maxLz);
+            // Layer 2 (main umbrella spread): 8x8 dense disc
+            setCanopyDisc2x2(chunk, tx, tz, topY - 1, 3, true, leafId, maxLx, maxLz);
+            // Layer 3 (upper canopy roof): 8x8 dense disc
+            setCanopyDisc2x2(chunk, tx, tz, topY, 3, true, leafId, maxLx, maxLz);
+            // Layer 4 (roof crown): 6x6 disc
+            setCanopyDisc2x2(chunk, tx, tz, topY + 1, 2, true, leafId, maxLx, maxLz);
+            // Layer 5 (center crest): 4x4 disc
+            setCanopyDisc2x2(chunk, tx, tz, topY + 2, 1, false, leafId, maxLx, maxLz);
+            return;
+        }
+
         switch (type) {
             case SPRUCE -> {
                 // Spruce: the tallest tree (11 to 14 blocks high!), conifer pagoda/spire structure
                 logId = ID_SPRUCE_LOG;
                 leafId = ID_SPRUCE_LEAVES;
                 trunkHeight = 11 + (Math.abs(seedHash) % 4); // 11, 12, 13, or 14 blocks tall!
-            }
-            case DARK_OAK -> {
-                // Dark Oak: 6 to 8 blocks trunk with wide umbrella/mushroom canopy
-                logId = ID_DARK_OAK_LOG;
-                leafId = ID_DARK_OAK_LEAVES;
-                trunkHeight = 6 + (Math.abs(seedHash) % 3); // 6, 7, or 8 blocks tall
             }
             case BIRCH -> {
                 // Birch: 5 to 6 blocks tall slender tree
@@ -502,19 +554,6 @@ public class TerrainGenerator {
             // Spire Peak (Pointy needle top)
             if (topY + 1 < Chunk.HEIGHT) chunk.setStateId(tx, topY + 1, tz, leafId);
             if (topY + 2 < Chunk.HEIGHT) chunk.setStateId(tx, topY + 2, tz, leafId);
-
-        } else if (type == TreeType.DARK_OAK) {
-            // Wide umbrella / mushroom cap canopy that casts heavy shadow
-            int topY = ty + trunkHeight;
-
-            // Base under-canopy: 5x5 disc
-            setCanopyDisc(chunk, tx, tz, topY - 2, 2, true, leafId, maxLx, maxLz);
-            // Main wide umbrella canopy: 7x7 disc (radius 3 with clipped corners)
-            setCanopyDisc(chunk, tx, tz, topY - 1, 3, true, leafId, maxLx, maxLz);
-            // Upper crown: 5x5 disc
-            setCanopyDisc(chunk, tx, tz, topY, 2, true, leafId, maxLx, maxLz);
-            // Top crown cross
-            setCanopyCross(chunk, tx, tz, topY + 1, 1, leafId, maxLx, maxLz);
 
         } else if (type == TreeType.BIRCH) {
             // Slender column canopy
@@ -566,4 +605,22 @@ public class TerrainGenerator {
             }
         }
     }
+    private void setCanopyDisc2x2(Chunk chunk, int tx, int tz, int y, int radius, boolean clipCorners, int leafId, int maxLx, int maxLz) {
+        if (y < 0 || y >= Chunk.HEIGHT) return;
+        for (int dx = -radius; dx <= 1 + radius; dx++) {
+            for (int dz = -radius; dz <= 1 + radius; dz++) {
+                int distX = (dx < 0) ? -dx : (dx > 1 ? dx - 1 : 0);
+                int distZ = (dz < 0) ? -dz : (dz > 1 ? dz - 1 : 0);
+                if (clipCorners && distX == radius && distZ == radius) continue;
+                int lx = tx + dx;
+                int lz = tz + dz;
+                if (lx >= 0 && lx < maxLx && lz >= 0 && lz < maxLz) {
+                    if (chunk.getStateId(lx, y, lz) == ID_AIR) {
+                        chunk.setStateId(lx, y, lz, leafId);
+                    }
+                }
+            }
+        }
+    }
+
 }

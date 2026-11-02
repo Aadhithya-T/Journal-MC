@@ -200,6 +200,48 @@ public class TreeFoliageAndNewTreesTest {
         assert spruceHeight > oakHeight : "Spruce (" + spruceHeight + ") must be taller than Oak (" + oakHeight + ")";
         assert spruceHeight > birchHeight : "Spruce (" + spruceHeight + ") must be taller than Birch (" + birchHeight + ")";
         assert spruceHeight > darkOakHeight : "Spruce (" + spruceHeight + ") must be taller than Dark Oak (" + darkOakHeight + ")";
+
+        // Detailed verification of 2x2 trunk and 8x8 canopy spread for Dark Oak
+        testDarkOak2x2Structure(gen);
+    }
+
+    private static void testDarkOak2x2Structure(TerrainGenerator gen) {
+        Chunk darkOakChunk = new Chunk(0, 0);
+        int tyCenter = gen.computeHeight(7, 7);
+        darkOakChunk.setStateId(7, tyCenter, 7, Blocks.GRASS.getDefaultState().getStateId());
+        darkOakChunk.setStateId(8, tyCenter, 7, Blocks.GRASS.getDefaultState().getStateId());
+        darkOakChunk.setStateId(7, tyCenter, 8, Blocks.GRASS.getDefaultState().getStateId());
+        darkOakChunk.setStateId(8, tyCenter, 8, Blocks.GRASS.getDefaultState().getStateId());
+        gen.plantTree(darkOakChunk, 0, 0, 7, 7, TerrainGenerator.TreeType.DARK_OAK, 0, 16, 16);
+
+        int idDarkOakLog = Blocks.DARK_OAK_LOG.getDefaultState().getStateId();
+        int idDarkOakLeaves = Blocks.DARK_OAK_LEAVES.getDefaultState().getStateId();
+
+        // 1. Verify 2x2 trunk
+        assert darkOakChunk.getStateId(7, tyCenter + 1, 7) == idDarkOakLog : "Dark Oak trunk (7, 7) must be log";
+        assert darkOakChunk.getStateId(8, tyCenter + 1, 7) == idDarkOakLog : "Dark Oak trunk (8, 7) must be log";
+        assert darkOakChunk.getStateId(7, tyCenter + 1, 8) == idDarkOakLog : "Dark Oak trunk (7, 8) must be log";
+        assert darkOakChunk.getStateId(8, tyCenter + 1, 8) == idDarkOakLog : "Dark Oak trunk (8, 8) must be log";
+
+        // 2. Verify 8x8 canopy width
+        int minLeafX = 16, maxLeafX = -1;
+        int minLeafZ = 16, maxLeafZ = -1;
+        for (int y = tyCenter + 1; y < Chunk.HEIGHT; y++) {
+            for (int x = 0; x < 16; x++) {
+                for (int z = 0; z < 16; z++) {
+                    if (darkOakChunk.getStateId(x, y, z) == idDarkOakLeaves) {
+                        if (x < minLeafX) minLeafX = x;
+                        if (x > maxLeafX) maxLeafX = x;
+                        if (z < minLeafZ) minLeafZ = z;
+                        if (z > maxLeafZ) maxLeafZ = z;
+                    }
+                }
+            }
+        }
+        int canopyWidthX = maxLeafX - minLeafX + 1;
+        int canopyWidthZ = maxLeafZ - minLeafZ + 1;
+        System.out.println(String.format("[Dark Oak Structure] Trunk: 2x2 | Canopy Spread: %dx%d blocks", canopyWidthX, canopyWidthZ));
+        assert canopyWidthX >= 8 && canopyWidthZ >= 8 : "Dark Oak canopy must be at least 8x8 wide, got: " + canopyWidthX + "x" + canopyWidthZ;
     }
 
     private static int measureTreeHeight(Chunk chunk, int tx, int tz, int groundY) {
