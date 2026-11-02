@@ -3,18 +3,21 @@ package com.mcjournal.client.gui;
 import org.lwjgl.system.MemoryUtil;
 
 import java.awt.*;
+import java.awt.font.FontRenderContext;
+import java.awt.font.GlyphVector;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 
 /**
- * Bitmap font renderer with integer scaling, Minecraft color formatting (§0-§f, §r),
- * full Latin-1 & special symbol coverage (°, ⚔, ▶, ♥), and LRU text-width measurement caching.
+ * Bitmap font renderer with integer scaling, color formatting (§0-§f, §r),
+ * full Latin-1 & special symbol coverage (°, ⚔, ▶, ♥), and accurate typography metrics.
  */
 public class FontRenderer {
     private static final int FONT_TEX_SIZE = 512;
@@ -26,7 +29,7 @@ public class FontRenderer {
     public static final int SLOT_HEART = 258;  // ♥ (U+2665)
     public static final int SLOT_SKULL = 259;  // ☠ (U+2620)
 
-    // Minecraft Standard 16 Color Table (§0 - §f)
+    // Standard 16 Color Table (§0 - §f)
     private static final int[] COLOR_CODE_TABLE = {
             0x000000, // 0: Black
             0x0000AA, // 1: Dark Blue
@@ -46,6 +49,8 @@ public class FontRenderer {
             0xFFFFFF  // f: White
     };
 
+    private static final Set<Character> WARNED_CHARS = Collections.synchronizedSet(new HashSet<>());
+
     private int textureId;
     private final float[] glyphU0 = new float[GLYPH_COUNT];
     private final float[] glyphV0 = new float[GLYPH_COUNT];
@@ -53,18 +58,14 @@ public class FontRenderer {
     private final float[] glyphV1 = new float[GLYPH_COUNT];
     private final int[] glyphWidth = new int[GLYPH_COUNT];
     private final int[] glyphHeight = new int[GLYPH_COUNT];
-    private int baseFontHeight = 20;
 
-    // Fast bounded LRU measurement cache to eliminate per-frame String allocations
-    private final Map<String, Float> widthCache = new LinkedHashMap<>(256, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<String, Float> eldest) {
-            return size() > 512;
-        }
-    };
+    private int baseAscent = 16;
+    private int baseCapHeight = 14;
+    private int baseLineHeight = 20;
 
     /**
      * Resolves a character to its glyph array slot index.
+     * Logs a warning when an unmapped char above 255 falls back to space.
      */
     public static int getGlyphIndex(char ch) {
         if (ch == '▶' || ch == 9654) return SLOT_PLAY;
@@ -72,6 +73,10 @@ public class FontRenderer {
         if (ch == '♥' || ch == 9829) return SLOT_HEART;
         if (ch == '☠' || ch == 9760) return SLOT_SKULL;
         if (ch >= 32 && ch < 256) return (int) ch;
+
+        if (ch > 255 && WARNED_CHARS.add(ch)) {
+            System.err.println("[FontRenderer] Warning: Character U+" + Integer.toHexString(ch).toUpperCase() + " ('" + ch + "') above 255 falls back to space");
+        }
         return 32; // fallback to space
     }
 
@@ -89,7 +94,7 @@ public class FontRenderer {
             if (is != null) {
                 Font baseFont = Font.createFont(Font.TRUETYPE_FONT, is);
                 font = baseFont.deriveFont(Font.PLAIN, 20.0f);
-                System.out.println("[FontRenderer] 🔤 Loaded authentic Minecraft TTF font: " + font.getFontName());
+                System.out.println("[FontRenderer] Loaded TTF font: " + font.getFontName());
             }
         } catch (Exception e) {
             System.err.println("[FontRenderer] Notice: Using fallback bold font: " + e.getMessage());
@@ -101,7 +106,17 @@ public class FontRenderer {
 
         g.setFont(font);
         FontMetrics fm = g.getFontMetrics();
-        this.baseFontHeight = fm.getHeight();
+        this.baseAscent = fm.getAscent();
+        this.baseLineHeight = fm.getHeight();
+
+        FontRenderContext frc = g.getFontRenderContext();
+        try {
+            GlyphVector gv = font.createGlyphVector(frc, "H");
+            int ch = (int) Math.round(gv.getPixelBounds(null, 0, 0).getHeight());
+            this.baseCapHeight = (ch > 0) ? ch : Math.round(baseAscent * 0.75f);
+        } catch (Throwable t) {
+            this.baseCapHeight = Math.round(baseAscent * 0.75f);
+        }
 
         int x = 4;
         int y = fm.getAscent() + 4;
@@ -198,8 +213,6 @@ public class FontRenderer {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, FONT_TEX_SIZE, FONT_TEX_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
         MemoryUtil.memFree(buffer);
         glBindTexture(GL_TEXTURE_2D, 0);
-
-        widthCache.clear();
     }
 
     private void renderProceduralSymbol(Graphics2D g, int slot, int x, int y, int w, int h) {
@@ -216,6 +229,109 @@ public class FontRenderer {
         } else {
             g.drawRect(x + 2, y + 2, w - 4, h - 4);
         }
+    }
+
+    // --- Typography Metric Accessors ---
+
+    public float getAscent(float scale) {
+        return (baseAscent > 0 ? baseAscent : 16.0f) * scale;
+    }
+
+    public float getAscent(TextStyle style) {
+        return getAscent(style != null ? style.getScale() : 1.0f);
+    }
+
+    public float getCapHeight(float scale) {
+        return (baseCapHeight > 0 ? baseCapHeight : 14.0f) * scale;
+    }
+
+    public float getCapHeight(TextStyle style) {
+        return getCapHeight(style != null ? style.getScale() : 1.0f);
+    }
+
+    public float getLineHeight(float scale) {
+        return (baseLineHeight > 0 ? baseLineHeight : 20.0f) * scale;
+    }
+
+    public float getLineHeight(TextStyle style) {
+        return getLineHeight(style != null ? style.getScale() : 1.0f);
+    }
+
+    public float getFontHeight(float scale) {
+        return getLineHeight(scale);
+    }
+
+    public float getFontHeight(int scale) {
+        return getLineHeight((float) scale);
+    }
+
+    // --- Width Measurement (Allocation-free, without trailing space) ---
+
+    public float width(String text, TextStyle style) {
+        return width(text, style != null ? style.getScale() : 1.0f);
+    }
+
+    public float width(String text, float scale) {
+        if (text == null || text.isEmpty()) return 0.0f;
+
+        int visibleCount = 0;
+        float glyphsWidth = 0.0f;
+
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+
+            // Formatting codes (§.) do not occupy visual width
+            if (ch == '§' && i + 1 < text.length()) {
+                i++;
+                continue;
+            }
+
+            int c = getGlyphIndex(ch);
+            glyphsWidth += glyphWidth[c] * scale;
+            visibleCount++;
+        }
+
+        if (visibleCount <= 0) return 0.0f;
+        // No trailing spacing after the final glyph
+        return glyphsWidth + (visibleCount - 1) * (1.0f * scale);
+    }
+
+    public float getStringWidth(String text, float scale) {
+        return width(text, scale);
+    }
+
+    public float getStringWidth(String text, int scale) {
+        return width(text, (float) scale);
+    }
+
+    // --- Drawing API ---
+
+    public void drawString(GuiRenderer gui, String text, float x, float y, TextStyle style) {
+        if (style == null) {
+            drawString(gui, text, x, y, 1.0f, 0xFFFFFF, true);
+        } else {
+            drawString(gui, text, x, y, style.getScale(), style.getColorHex(), style.hasShadow());
+        }
+    }
+
+    public void drawString(GuiRenderer gui, String text, float x, float y, TextStyle style, int colorHex) {
+        if (style == null) {
+            drawString(gui, text, x, y, 1.0f, colorHex, true);
+        } else {
+            drawString(gui, text, x, y, style.getScale(), colorHex, style.hasShadow());
+        }
+    }
+
+    public void drawCentered(GuiRenderer gui, String text, float centerX, float y, TextStyle style) {
+        if (text == null || text.isEmpty()) return;
+        float w = width(text, style);
+        drawString(gui, text, centerX - (w / 2.0f), y, style);
+    }
+
+    public void drawCentered(GuiRenderer gui, String text, float centerX, float y, TextStyle style, int colorHex) {
+        if (text == null || text.isEmpty()) return;
+        float w = width(text, style);
+        drawString(gui, text, centerX - (w / 2.0f), y, style, colorHex);
     }
 
     public void drawString(GuiRenderer gui, String text, float x, float y, float scale, int colorHex, boolean shadow) {
@@ -240,7 +356,7 @@ public class FontRenderer {
         for (int i = 0; i < text.length(); i++) {
             char ch = text.charAt(i);
 
-            // Handle Minecraft Formatting Codes (§0-§f, §r)
+            // Handle Formatting Codes (§0-§f, §r)
             if (ch == '§' && i + 1 < text.length()) {
                 char code = Character.toLowerCase(text.charAt(i + 1));
                 if (code >= '0' && code <= '9') {
@@ -261,7 +377,7 @@ public class FontRenderer {
 
             int effectiveColor;
             if (isShadow) {
-                // Authentic Minecraft Shadow: 25% brightness of the active text color
+                // Shadow: 25% brightness of the active text color
                 effectiveColor = ((activeColor & 0xFCFCFC) >> 2) | 0x111111;
             } else {
                 effectiveColor = activeColor;
@@ -282,43 +398,33 @@ public class FontRenderer {
         }
     }
 
-    public float getStringWidth(String text, float scale) {
-        if (text == null || text.isEmpty()) return 0;
+    // --- Ellipsize Utility ---
 
-        String cacheKey = text + "@" + scale;
-        Float cached = widthCache.get(cacheKey);
-        if (cached != null) {
-            return cached;
+    public String ellipsize(String text, float maxWidth, TextStyle style) {
+        return ellipsize(text, maxWidth, style != null ? style.getScale() : 1.0f);
+    }
+
+    public String ellipsize(String text, float maxWidth, float scale) {
+        if (text == null || text.isEmpty() || maxWidth <= 0.0f) return "";
+        if (width(text, scale) <= maxWidth) {
+            return text;
         }
 
-        float total = 0;
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
+        String ellipsis = "...";
+        float ellWidth = width(ellipsis, scale);
+        if (ellWidth > maxWidth) {
+            return ".";
+        }
 
-            // Color formatting codes do not contribute to string width
-            if (ch == '§' && i + 1 < text.length()) {
-                i++;
-                continue;
+        int len = text.length();
+        while (len > 0) {
+            String candidate = text.substring(0, len) + ellipsis;
+            if (width(candidate, scale) <= maxWidth) {
+                return candidate;
             }
-
-            int c = getGlyphIndex(ch);
-            total += (glyphWidth[c] * scale) + (1.0f * scale);
+            len--;
         }
-
-        widthCache.put(cacheKey, total);
-        return total;
-    }
-
-    public float getStringWidth(String text, int scale) {
-        return getStringWidth(text, (float) scale);
-    }
-
-    public float getFontHeight(float scale) {
-        return (baseFontHeight > 0 ? baseFontHeight : 20.0f) * scale;
-    }
-
-    public float getFontHeight(int scale) {
-        return getFontHeight((float) scale);
+        return ellipsis;
     }
 
     /**
@@ -334,7 +440,6 @@ public class FontRenderer {
             glDeleteTextures(textureId);
             textureId = 0;
         }
-        widthCache.clear();
     }
 
     public int getTextureId() {

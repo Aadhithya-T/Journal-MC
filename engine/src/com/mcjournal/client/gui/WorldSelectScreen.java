@@ -5,14 +5,22 @@ import com.mcjournal.client.WorldSaveManager;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Rebuilt WorldSelectScreen using logical coordinates, Widget toolkit,
- * centralized input dispatch, search filtering, and safe confirmation dialogs.
+ * World selection screen using logical coordinates, shared content column geometry,
+ * centralized input dispatch, and safe confirmation dialogs.
  */
 public class WorldSelectScreen extends Screen {
     private WorldSaveManager.SavedWorld currentWorld;
     private boolean isWorldSelected = true;
     private TextField searchField;
     private long lastCardClickTime = 0;
+
+    // Cached layout geometry computed in init() and shared across render() and mouseClicked()
+    private int colX;
+    private int colW;
+    private int cardX;
+    private int cardY;
+    private int cardW;
+    private int cardH;
 
     public WorldSelectScreen(MCJournalApp app) {
         super(app);
@@ -42,38 +50,50 @@ public class WorldSelectScreen extends Screen {
         this.currentWorld = WorldSaveManager.loadWorld();
         this.isWorldSelected = (currentWorld != null);
 
-        int totalBtnW = Math.min(320, width - 24);
-        int centerX = GuiLayout.centerX(width, totalBtnW);
+        // Single shared content column for search, world card, and both button rows
+        GuiLayout.Column column = GuiLayout.contentColumn(width, 316, 16);
+        this.colX = column.x;
+        this.colW = column.width;
 
-        // 1. Search Box at top
-        int searchW = Math.min(220, width - 32);
-        int searchX = GuiLayout.centerX(width, searchW);
-        searchField = new TextField(1, searchX, 22, searchW, 18);
+        // 1. Header Zone: Reserved height ensuring title and search box never collide
+        // Title at y=8; search field cleanly separated below title
+        int searchY = 26;
+        int searchH = 18;
+        searchField = new TextField(1, colX, searchY, colW, searchH);
         searchField.setPlaceholder("Search worlds...");
         addWidget(searchField);
 
-        // 2. Action Buttons at Bottom (Two rows)
-        int btnH = 20;
-        int rowGap = 4;
-        int row2Y = height - 28;
-        int row1Y = row2Y - btnH - rowGap;
+        // 2. World Card Geometry (stored once for render and mouse interaction)
+        this.cardX = colX;
+        this.cardY = 52;
+        this.cardW = colW;
+        this.cardH = 52;
 
-        // --- ROW 1 (Play Selected World | Create New World) ---
-        int r1BtnW = (totalBtnW - 6) / 2;
-        Button playBtn = new Button(2, "Play World", centerX, row1Y, r1BtnW, btnH, this::launchSelectedWorld);
+        // 3. Action Buttons at Bottom (Two uniform rows sharing one column and identical gutters)
+        int btnH = GuiLayout.ROW_HEIGHT;
+        int gutter = GuiLayout.GUTTER;
+        int row2Y = height - 28;
+        int row1Y = row2Y - btnH - gutter;
+
+        // --- ROW 1 (Play World | Create New World) ---
+        int r1BtnW = GuiLayout.buttonWidth(colW, 2, gutter);
+        Button playBtn = new Button(2, "Play World", colX, row1Y, r1BtnW, btnH, this::launchSelectedWorld);
         playBtn.setEnabled(isPlayable());
         addWidget(playBtn);
 
-        Button createBtn = new Button(3, "Create New World", centerX + r1BtnW + 6, row1Y, r1BtnW, btnH, () -> {
+        int r1Btn2X = colX + r1BtnW + gutter;
+        int r1Btn2W = colW - r1BtnW - gutter;
+        Button createBtn = new Button(3, "Create New World", r1Btn2X, row1Y, r1Btn2W, btnH, () -> {
             if (app != null) app.setScreen(new WorldCreateScreen(app));
         });
         addWidget(createBtn);
 
         // --- ROW 2 (Edit | Delete | Cancel) ---
-        int r2BtnW = (totalBtnW - 8) / 3;
-        int x0 = centerX;
-        int x1 = x0 + r2BtnW + 4;
-        int x2 = x1 + r2BtnW + 4;
+        int r2BtnW = GuiLayout.buttonWidth(colW, 3, gutter);
+        int x0 = colX;
+        int x1 = x0 + r2BtnW + gutter;
+        int x2 = x1 + r2BtnW + gutter;
+        int x2W = colW - (r2BtnW * 2 + gutter * 2);
 
         Button editBtn = new Button(4, "Edit", x0, row2Y, r2BtnW, btnH, () -> {
             if (currentWorld != null && app != null) {
@@ -87,7 +107,7 @@ public class WorldSelectScreen extends Screen {
         deleteBtn.setEnabled(currentWorld != null);
         addWidget(deleteBtn);
 
-        Button cancelBtn = new Button(6, "Cancel", x2, row2Y, r2BtnW, btnH, () -> {
+        Button cancelBtn = new Button(6, "Cancel", x2, row2Y, x2W, btnH, () -> {
             if (app != null) app.setScreen(new TitleScreen(app));
         });
         addWidget(cancelBtn);
@@ -132,20 +152,13 @@ public class WorldSelectScreen extends Screen {
     public void render(GuiRenderer gui, FontRenderer font, double mouseX, double mouseY, float deltaTime) {
         // 1. Semi-transparent backdrop and header/footer strips
         gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.40f);
-        gui.drawMenuHeaderFooterStrips(width, height, 44, 56);
+        gui.drawMenuHeaderFooterStrips(width, height, 48, 56);
 
         // 2. Header Title
         String title = "Select World";
-        float titleScale = 0.80f;
-        float titleW = font.getStringWidth(title, titleScale);
-        font.drawString(gui, title, GuiLayout.centerX(width, (int) titleW), 8, titleScale, 0xffffff, true);
+        font.drawCentered(gui, title, width / 2.0f, 8, TextStyle.TITLE);
 
-        // 3. World List Card
-        int cardW = Math.min(360, width - 24);
-        int cardH = 52;
-        int cardX = GuiLayout.centerX(width, cardW);
-        int cardY = 52;
-
+        // 3. World List Card (using cached layout geometry)
         boolean matchesSearch = isPlayable();
 
         if (currentWorld != null && matchesSearch) {
@@ -176,29 +189,33 @@ public class WorldSelectScreen extends Screen {
 
             if (isHovered) {
                 gui.drawRect(iconX, iconY, iconSize, iconSize, 0.0f, 0.0f, 0.0f, 0.40f);
-                font.drawString(gui, "▶", iconX + 13, iconY + 10, 0.85f, 0xffffff, true);
+                font.drawString(gui, "▶", iconX + 13, iconY + 10, TextStyle.TITLE, 0xffffff);
             }
 
-            // Text Info Hierarchy
+            // Authentic metadata extracted from currentWorld
             int textX = iconX + iconSize + 10;
-            font.drawString(gui, currentWorld.name != null ? currentWorld.name : "Hardcore World", textX, cardY + 8, 0.62f, 0xffffff, true);
+            String worldName = currentWorld.name != null ? currentWorld.name : "Hardcore World";
+            font.drawString(gui, worldName, textX, cardY + 8, TextStyle.BODY, 0xffffff);
 
-            String timeStr = "hardcore_world (" + (currentWorld.createdAt != null ? currentWorld.createdAt : "Saved") + ")";
-            font.drawString(gui, timeStr, textX, cardY + 22, 0.48f, 0x888888, false);
+            String createdDate = (currentWorld.createdAt != null && !currentWorld.createdAt.isEmpty())
+                    ? currentWorld.createdAt
+                    : "Saved";
+            String timeStr = worldName + " (" + createdDate + ")";
+            font.drawString(gui, timeStr, textX, cardY + 22, TextStyle.CAPTION, 0x888888);
 
-            String modeStr = "Hardcore Mode  |  2500x2500 Finite";
-            font.drawString(gui, modeStr, textX, cardY + 34, 0.48f, 0xaaaaaa, false);
+            int wW = currentWorld.worldWidth > 0 ? currentWorld.worldWidth : 2500;
+            int wD = currentWorld.worldDepth > 0 ? currentWorld.worldDepth : 2500;
+            String modeStr = "Hardcore Mode · " + wW + " × " + wD + " Finite";
+            font.drawString(gui, modeStr, textX, cardY + 34, TextStyle.CAPTION, 0xaaaaaa);
         } else {
             // Empty state
             String emptyTitle = (currentWorld == null) ? "No Worlds Found" : "No Matching Worlds";
-            float e1W = font.getStringWidth(emptyTitle, 0.75f);
-            font.drawString(gui, emptyTitle, GuiLayout.centerX(width, (int) e1W), height / 2 - 20, 0.75f, 0xcccccc, true);
+            font.drawCentered(gui, emptyTitle, width / 2.0f, height / 2 - 20, TextStyle.TITLE, 0xcccccc);
 
             String emptyHint = (currentWorld == null)
                     ? "Click 'Create New World' to begin your adventure."
                     : "Check your search query or clear the filter.";
-            float e2W = font.getStringWidth(emptyHint, 0.52f);
-            font.drawString(gui, emptyHint, GuiLayout.centerX(width, (int) e2W), height / 2, 0.52f, 0x888888, false);
+            font.drawCentered(gui, emptyHint, width / 2.0f, height / 2, TextStyle.CAPTION, 0x888888);
         }
 
         // 4. Render Action Buttons & Tooltips
@@ -211,11 +228,7 @@ public class WorldSelectScreen extends Screen {
             return true;
         }
 
-        int cardW = Math.min(360, width - 24);
-        int cardH = 52;
-        int cardX = GuiLayout.centerX(width, cardW);
-        int cardY = 52;
-
+        // Reuse cached geometry
         if (currentWorld != null && mouseX >= cardX && mouseX <= cardX + cardW && mouseY >= cardY && mouseY <= cardY + cardH) {
             isWorldSelected = true;
             long now = System.currentTimeMillis();
