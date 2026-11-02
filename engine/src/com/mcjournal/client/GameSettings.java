@@ -21,9 +21,11 @@ public class GameSettings {
     public float fov = 70.0f;       // In degrees (60..110)
     public boolean showFps = true;
     public int fogMode = 0;         // 0: Fancy, 1: Fast, 2: Off
+    public int guiScale = 0;        // 0: Auto, 1: 1x, 2: 2x, 3: 3x, 4: 4x
 
     public static final int[] FPS_PRESETS = {0, 30, 60, 90, 120, 144, 240, -1};
     public static final int[] RENDER_DISTANCE_PRESETS = {4, 6, 8, 10, 12, 16, 20, 24};
+    public static final int[] GUI_SCALE_PRESETS = {0, 1, 2, 3, 4};
 
     public static GameSettings load() {
         if (SETTINGS_FILE.exists()) {
@@ -32,6 +34,7 @@ public class GameSettings {
                 if (s != null) {
                     s.renderDistance = Math.clamp(s.renderDistance, 4, 24);
                     s.fov = Math.clamp(s.fov, 60.0f, 110.0f);
+                    s.guiScale = Math.clamp(s.guiScale, 0, 4);
                     return s;
                 }
             } catch (Exception e) {
@@ -109,6 +112,8 @@ public class GameSettings {
         save();
     }
 
+    public void cycleGuiScale() { guiScale = (guiScale + 1) % 5; save(); }
+    public String getGuiScaleDisplayString() { return (guiScale == 0) ? "Auto" : (guiScale + "x"); }
     public String getFogModeString() {
         return switch (fogMode) {
             case 0 -> "Fancy";

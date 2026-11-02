@@ -15,6 +15,18 @@ public abstract class Screen {
         this.app = app;
     }
 
+    public boolean usesLogicalCoordinates() {
+        return false;
+    }
+
+    public int getWidth() {
+        return width;
+    }
+
+    public int getHeight() {
+        return height;
+    }
+
     public void init(int width, int height) {
         this.width = width;
         this.height = height;

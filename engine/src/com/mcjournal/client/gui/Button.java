@@ -34,7 +34,7 @@ public class Button {
         gui.drawMinecraftButton(x, y, width, height, isHovered, isEnabled);
 
         float maxAllowedW = width - 14.0f;
-        float desiredScale = height >= 38 ? 0.88f : 0.78f;
+        float desiredScale = height >= 38 ? 0.88f : (height >= 28 ? 0.65f : 0.50f);
         float textW = font.getStringWidth(text, desiredScale);
         float scale = desiredScale;
         if (textW > maxAllowedW && textW > 0) {

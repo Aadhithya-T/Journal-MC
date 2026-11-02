@@ -184,6 +184,12 @@ public class MCJournalApp {
     }
 
     public void applySettings() {
+        if (screenManager != null && settings != null) {
+            screenManager.getScaleManager().setRequestedScale(settings.guiScale);
+            if (window != null && screenManager.getCurrentScreen() != null) {
+                screenManager.onResize(window.getWidth(), window.getHeight());
+            }
+        }
         if (window != null) {
             window.setVsync(settings.vsync || settings.maxFps == 0);
         }
@@ -196,6 +202,10 @@ public class MCJournalApp {
 
     public void setScreen(Screen screen) {
         screenManager.setScreen(screen, window, worldSession.getBlockBreakingManager());
+    }
+
+    public ScreenManager getScreenManager() {
+        return screenManager;
     }
 
     public Screen getCurrentScreen() {

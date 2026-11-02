@@ -52,7 +52,11 @@ public class InputHandler {
                 mouseButtons[button] = (action != GLFW_RELEASE);
             }
             if (app.getCurrentScreen() != null && action == GLFW_PRESS) {
-                app.getCurrentScreen().mouseClicked(currentMouseX, currentMouseY, button);
+                if (app.getScreenManager() != null) {
+                    app.getScreenManager().handleMouseClick(currentMouseX, currentMouseY, button);
+                } else {
+                    app.getCurrentScreen().mouseClicked(currentMouseX, currentMouseY, button);
+                }
             }
         });
 
