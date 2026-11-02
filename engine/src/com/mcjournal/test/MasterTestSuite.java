@@ -1,7 +1,5 @@
 package com.mcjournal.test;
 
-
-
 /**
 
  * MasterTestSuite orchestrates execution of all automated test suites across
@@ -12,8 +10,6 @@ package com.mcjournal.test;
 
 public class MasterTestSuite {
 
-
-
     @FunctionalInterface
 
     interface TestRunner {
@@ -22,13 +18,9 @@ public class MasterTestSuite {
 
     }
 
-
-
     private static int passedSuites = 0;
 
     private static int totalSuites = 0;
-
-
 
     public static void main(String[] args) {
 
@@ -38,95 +30,63 @@ public class MasterTestSuite {
 
         System.out.println("===============================================================================\n");
 
-
-
         long suiteStartTime = System.currentTimeMillis();
-
-
 
         // Phase 1: Finite World Configuration & Bounds
 
         runSuite("Phase 1: Finite World Configuration & Bounds", () -> FiniteWorldBoundsTest.main(new String[0]));
 
-
-
         // Phase 2: Finite Chunk System, Streaming & Partial Edge Chunks
 
         runSuite("Phase 2: Finite Chunk System, Streaming & Partial Edge Chunks", () -> FiniteChunkSystemTest.main(new String[0]));
-
-
 
         // Phase 3: Physical World Containment, Raycasting & Boundary Systems
 
         runSuite("Phase 3: Physical World Containment, Raycasting & Boundary Systems", () -> FiniteBoundaryPhysicsTest.main(new String[0]));
 
-
-
         // Phase 4: World Metadata V4, Persistence & Legacy Save Compatibility
 
         runSuite("Phase 4: World Metadata V4, Persistence & Legacy Save Compatibility", () -> FiniteWorldPersistenceTest.main(new String[0]));
-
-
 
         // Phase 5: Terrain & Biome Architecture
 
         runSuite("Phase 5: Terrain & Biome Architecture", () -> FiniteTerrainGenerationTest.main(new String[0]));
 
-
-
         // Phase 6: Structure Generation & POI Framework
 
         runSuite("Phase 6: Structure Generation & POI Framework", () -> FiniteStructureGenerationTest.main(new String[0]));
-
-
 
         // Phase 7: Finite World Final Integration & Stability
 
         runSuite("Phase 7: Finite World Final Integration & Stability", () -> FiniteWorldIntegrationAndStabilityTest.main(new String[0]));
 
-
-
         // GUI Overhaul Phase 0: GuiRenderer Verification & Stability
 
         runSuite("GUI Overhaul Phase 0: GuiRenderer Verification & Stability", () -> GuiRendererVerificationTest.main(new String[0]));
-
-
 
         // GUI Overhaul Phase 1: Virtual Resolution & Foundation
 
         runSuite("GUI Overhaul Phase 1: Virtual Resolution & Foundation", () -> GuiPhase1VerificationTest.main(new String[0]));
 
-
-
         // GUI Overhaul Phase 2: Widget Toolkit & Screen Management
 
         runSuite("GUI Overhaul Phase 2: Widget Toolkit & Screen Management", () -> GuiPhase2VerificationTest.main(new String[0]));
-
-
 
         // GUI Overhaul Phase 3: Screen Redesign & Branding
 
         runSuite("GUI Overhaul Phase 3: Screen Redesign & Branding", () -> GuiPhase3VerificationTest.main(new String[0]));
 
-
-
         // GUI Overhaul Phase 4: Gameplay HUD
 
         runSuite("GUI Overhaul Phase 4: Gameplay HUD", () -> GuiPhase4VerificationTest.main(new String[0]));
-
-
 
         // GUI Typography and Layout Overhaul: Phase 4 Overlap Diagnostics
 
         runSuite("GUI Overhaul: Phase 4 Layout and Overlap Diagnostics", () -> GuiPhase4OverlapDiagnosticTest.main(new String[0]));
 
-
-
         // Mining Mechanics: Inventory Slot Switch Resets Block Breaking
 
         runSuite("Mining Mechanics: Inventory Slot Switch Resets Block Breaking", () -> BlockBreakingInventorySwitchTest.main(new String[0]));
-
-
 
         // World Generation: Gravel, Andesite, Diorite & Stone
 
@@ -135,13 +95,12 @@ public class MasterTestSuite {
         // Tree Types & Foliage: Spruce, Dark Oak, Birch & Oak
         runSuite("Tree Types & Foliage: Spruce, Dark Oak, Birch & Oak", () -> TreeFoliageAndNewTreesTest.main(new String[0]));
 
-
+        // Texture Redesign: Authentic Stone & Cobblestone
+        runSuite("Texture Redesign: Authentic Stone & Cobblestone", () -> StoneAndCobblestoneRedesignTest.main(new String[0]));
 
         // P12 & P13 Performance Instrumentation & Constants
 
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
-
-
 
         // P11 New Dedicated Test Suites
 
@@ -156,8 +115,6 @@ public class MasterTestSuite {
         runSuite("P11: Physics, Collision, Gravity & Fall Damage", () -> PhysicsSimulationTest.main(new String[0]));
 
         runSuite("P11: Persistence Save -> Load Bit-for-Bit Fidelity", () -> PersistenceRoundTripTest.main(new String[0]));
-
-
 
         // Engine Integration Suites
 
@@ -179,19 +136,13 @@ public class MasterTestSuite {
 
         runSuite("P1: Chunk Streaming & Lifecycle", () -> ChunkStreamingTest.main(new String[0]));
 
-
-
         long totalTime = System.currentTimeMillis() - suiteStartTime;
-
-
 
         System.out.println("===============================================================================");
 
         System.out.println(String.format("TEST RESULTS: %d/%d SUITES PASSED (Total Time: %d ms)", passedSuites, totalSuites, totalTime));
 
         System.out.println("===============================================================================");
-
-
 
         if (passedSuites == totalSuites) {
 
@@ -206,8 +157,6 @@ public class MasterTestSuite {
         }
 
     }
-
-
 
     private static void runSuite(String suiteName, TestRunner runner) {
 
