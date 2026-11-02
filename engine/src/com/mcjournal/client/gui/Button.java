@@ -114,6 +114,8 @@ public class Button extends Widget {
         return false;
     }
 
+    public void activate() { if (onClick != null && isEnabled) onClick.run(); }
+
     public int getId() {
         return id;
     }

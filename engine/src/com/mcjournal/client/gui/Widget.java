@@ -212,6 +212,8 @@ public abstract class Widget {
         return tooltipText;
     }
 
+    public void setTooltip(String tooltipText) { setTooltipText(tooltipText); }
+
     public void setTooltipText(String tooltipText) {
         this.tooltipText = tooltipText;
     }
