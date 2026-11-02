@@ -67,3 +67,4 @@ public class GuiPhase4OverlapDiagnosticTest {
         System.out.println("[Phase 4 Diagnostics] Verified WorldSelectScreen and WorldCreateScreen across 12 resolution/scale configurations: 0 violations.");
     }
 }
+
