@@ -51,6 +51,9 @@ public class MasterTestSuite {
         // GUI Overhaul Phase 2: Widget Toolkit & Screen Management
         runSuite("GUI Overhaul Phase 2: Widget Toolkit & Screen Management", () -> GuiPhase2VerificationTest.main(new String[0]));
 
+        // GUI Overhaul Phase 3: Screen Redesign & Branding
+        runSuite("GUI Overhaul Phase 3: Screen Redesign & Branding", () -> GuiPhase3VerificationTest.main(new String[0]));
+
         // P12 & P13 Performance Instrumentation & Constants
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
 
