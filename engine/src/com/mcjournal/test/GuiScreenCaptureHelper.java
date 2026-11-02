@@ -10,6 +10,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
@@ -25,8 +26,105 @@ public class GuiScreenCaptureHelper {
         String mode = args.length > 0 ? args[0] : "phase3";
         if ("ab".equalsIgnoreCase(mode)) {
             runFontAbTest();
+        } else if ("after".equalsIgnoreCase(mode)) {
+            runPhase5AfterRegression();
         } else {
             captureScreens(mode);
+        }
+    }
+
+    public static void runPhase5AfterRegression() {
+        File outDir = new File("docs/screenshots/after");
+        if (!outDir.exists()) {
+            outDir.mkdirs();
+        }
+
+        int[][] resolutions = {
+                {854, 480},
+                {1280, 720},
+                {1920, 1080},
+                {2560, 1440}
+        };
+
+        int[] scales = {0, 1, 2}; // 0 = Auto
+
+        long window = 0;
+        try {
+            if (!glfwInit()) {
+                System.err.println("[Phase5] GLFW init failed");
+                return;
+            }
+
+            glfwDefaultWindowHints();
+            glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+
+            window = glfwCreateWindow(800, 600, "HeadlessCapture", 0, 0);
+            if (window == 0) {
+                System.err.println("[Phase5] Failed to create GLFW window");
+                return;
+            }
+
+            glfwMakeContextCurrent(window);
+            GL.createCapabilities();
+
+            GuiRenderer gui = new GuiRenderer();
+            FontRenderer font = new FontRenderer(FontRenderer.ACTIVE_CONFIG);
+            GuiScaleManager scaleManager = new GuiScaleManager();
+
+            int totalCaptures = 0;
+
+            for (int[] res : resolutions) {
+                int resW = res[0];
+                int resH = res[1];
+
+                for (int scale : scales) {
+                    String scaleLabel = (scale == 0) ? "auto" : ("scale" + scale);
+
+                    scaleManager.setRequestedScale(scale);
+                    scaleManager.update(resW, resH, resW, resH);
+                    int guiW = scaleManager.getGuiWidth();
+                    int guiH = scaleManager.getGuiHeight();
+
+                    // 1. Verify and Capture WorldSelectScreen
+                    WorldSelectScreen selectScreen = new WorldSelectScreen(null);
+                    selectScreen.init(guiW, guiH);
+                    List<GuiDiagnostics.Violation> selectV = GuiDiagnostics.checkScreen(selectScreen, font);
+                    if (!selectV.isEmpty()) {
+                        throw new AssertionError("WorldSelectScreen violation at " + resW + "x" + resH + " (" + scaleLabel + "): " + selectV.get(0));
+                    }
+                    captureScreen(gui, font, selectScreen, scaleManager, resW, resH, guiW, guiH,
+                            new File(outDir, "world_select_" + resW + "x" + resH + "_" + scaleLabel + ".png"));
+
+                    // 2. Verify and Capture WorldCreateScreen
+                    WorldCreateScreen createScreen = new WorldCreateScreen(null);
+                    createScreen.init(guiW, guiH);
+                    List<GuiDiagnostics.Violation> createV = GuiDiagnostics.checkScreen(createScreen, font);
+                    if (!createV.isEmpty()) {
+                        throw new AssertionError("WorldCreateScreen violation at " + resW + "x" + resH + " (" + scaleLabel + "): " + createV.get(0));
+                    }
+                    captureScreen(gui, font, createScreen, scaleManager, resW, resH, guiW, guiH,
+                            new File(outDir, "world_create_" + resW + "x" + resH + "_" + scaleLabel + ".png"));
+
+                    totalCaptures += 2;
+                }
+            }
+
+            gui.cleanup();
+            font.cleanup();
+            System.out.println("[Phase5] Successfully verified zero layout violations and saved " + totalCaptures + " regression captures to " + outDir.getPath());
+        } catch (Throwable t) {
+            System.err.println("[Phase5] Regression error: " + t.getMessage());
+            t.printStackTrace();
+            throw new RuntimeException(t);
+        } finally {
+            if (window != 0) {
+                glfwDestroyWindow(window);
+                glfwTerminate();
+            }
         }
     }
 
