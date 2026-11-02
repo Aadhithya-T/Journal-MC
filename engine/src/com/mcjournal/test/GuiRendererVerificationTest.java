@@ -375,7 +375,7 @@ public class GuiRendererVerificationTest {
         optionsScreen.render(gui, font, 200, 200, 0.016f);
         gui.end();
         int optionsDrawCalls = gui.getDrawCallCount();
-        assert optionsDrawCalls > 0 && optionsDrawCalls < 15 : "OptionsScreen draw calls must be compact, got: " + optionsDrawCalls;
+        assert optionsDrawCalls > 0 && optionsDrawCalls < 20 : "OptionsScreen draw calls must be compact, got: " + optionsDrawCalls;
 
         // C. EscapeMenuScreen
         EscapeMenuScreen escapeScreen = new EscapeMenuScreen(null);

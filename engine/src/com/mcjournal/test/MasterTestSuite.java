@@ -45,6 +45,9 @@ public class MasterTestSuite {
         // GUI Overhaul Phase 0: GuiRenderer Verification & Stability
         runSuite("GUI Overhaul Phase 0: GuiRenderer Verification & Stability", () -> GuiRendererVerificationTest.main(new String[0]));
 
+        // GUI Overhaul Phase 1: Virtual Resolution & Foundation
+        runSuite("GUI Overhaul Phase 1: Virtual Resolution & Foundation", () -> GuiPhase1VerificationTest.main(new String[0]));
+
         // P12 & P13 Performance Instrumentation & Constants
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
 
