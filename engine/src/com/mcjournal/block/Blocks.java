@@ -60,6 +60,15 @@ public final class Blocks {
     public static final BlockType DANDELION = register(new BlockType.Builder("dandelion", (byte) 15)
             .name("Dandelion").color("#ffdd00").plant(true).build());
 
+    public static final BlockType GRAVEL = register(new BlockType.Builder("gravel", (byte) 16)
+            .name("Gravel").color("#7e7c7a").hardness(0.6f).build());
+
+    public static final BlockType ANDESITE = register(new BlockType.Builder("andesite", (byte) 17)
+            .name("Andesite").color("#828383").hardness(1.5f).build());
+
+    public static final BlockType DIORITE = register(new BlockType.Builder("diorite", (byte) 18)
+            .name("Diorite").color("#b3b3b6").hardness(1.5f).build());
+
     static {
         // Eagerly trigger BlockStateRegistry so default states are bound on class load
         BlockStateRegistry.getTotalStates();

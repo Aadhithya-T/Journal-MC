@@ -59,6 +59,9 @@ public class ProceduralTextureGenerator {
             case 16 -> renderSpriteToTile(tile, IRON_AXE_SPRITE, TOOL_PALETTE);
             case 17 -> renderSpriteToTile(tile, IRON_SHOVEL_SPRITE, TOOL_PALETTE);
             case 18 -> renderSpriteToTile(tile, IRON_PICKAXE_SPRITE, TOOL_PALETTE);
+            case 19 -> generateGravel(tile, rand);
+            case 20 -> generateAndesite(tile, rand);
+            case 21 -> generateDiorite(tile, rand);
             default -> fillSolid(tile, 0, 0, 0, 0);
         }
 
@@ -910,6 +913,171 @@ public class ProceduralTextureGenerator {
                         tile[idx + 1] = (byte) g;
                         tile[idx + 2] = (byte) b;
                         tile[idx + 3] = (byte) a;
+                    }
+                }
+            }
+        }
+    }
+
+    // 19: Gravel (Warm taupe-gray granular composite of interlocking micro-pebbles and silt crevices)
+    private static void generateGravel(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {82, 78, 76},    // 0: Deep pebble crevice shadow
+            {102, 98, 95},   // 1: Dark taupe-gray grain
+            {126, 122, 120}, // 2: Base warm taupe gravel body
+            {148, 142, 138}, // 3: Highlight pebble facet
+            {170, 164, 160}  // 4: Bright flint/limestone pebble highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int bx = x / 4;
+                int by = y / 4;
+
+                // Macro pebble cluster variation (4x4 texels)
+                int macro = hash(bx, by, 3131) % 100;
+                int baseTone = 2;
+                if (macro < 26) baseTone = 1;
+                else if (macro > 74) baseTone = 3;
+
+                // Micro pebble granularity (individual 1x1 & 2x2 stones)
+                int micro = hash(x, y, 3232) % 100;
+                int tone = baseTone;
+                if (micro < 22) tone = Math.max(0, baseTone - 1);
+                else if (micro > 78) tone = Math.min(4, baseTone + 1);
+
+                // Irregular pebble boundaries & rounded silt crevices
+                boolean isCrevice = (hash(x / 2, y / 2, 3333) % 15 == 0) ||
+                                    ((x % 8 == 0 || y % 8 == 0) && (hash(x, y, 3434) % 10 < 4));
+                if (isCrevice) {
+                    tone = Math.max(0, tone - 2);
+                }
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+
+        // Scatter distinctive rounded pebble highlights and flint chips
+        for (int p = 0; p < 36; p++) {
+            int px = hash(p, 19, 3535) % (TILE_SIZE - 4);
+            int py = hash(p, 53, 3636) % (TILE_SIZE - 4);
+            int pw = 2 + (hash(p, 71, 3737) % 3);
+            int ph = 2 + (hash(p, 89, 3838) % 2);
+
+            for (int dy = 0; dy < ph; dy++) {
+                for (int dx = 0; dx < pw; dx++) {
+                    int x = px + dx;
+                    int y = py + dy;
+                    if (dx == 0 && dy == 0) {
+                        setPixel(tile, x, y, PALETTE[4][0], PALETTE[4][1], PALETTE[4][2], 255);
+                    } else if (dx == pw - 1 || dy == ph - 1) {
+                        setPixel(tile, x, y, PALETTE[0][0], PALETTE[0][1], PALETTE[0][2], 255);
+                    } else {
+                        setPixel(tile, x, y, PALETTE[3][0], PALETTE[3][1], PALETTE[3][2], 255);
+                    }
+                }
+            }
+        }
+    }
+
+    // 20: Andesite (Cool volcanic gray igneous rock with mottled slate texture and fine mineral flecks)
+    private static void generateAndesite(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {94, 96, 98},    // 0: Deep volcanic fissure
+            {112, 114, 116}, // 1: Dark slate-gray matrix
+            {130, 132, 134}, // 2: Neutral andesite body
+            {148, 150, 154}, // 3: Pale mineral grain
+            {170, 172, 176}  // 4: Cool feldspar/quartz grain highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int bx = x / 4;
+                int by = y / 4;
+
+                // Macro volcanic flow patches
+                int macro = hash(bx, by, 4141) % 100;
+                int baseTone = 2;
+                if (macro < 28) baseTone = 1;
+                else if (macro > 72) baseTone = 3;
+
+                // Micro basaltic grain
+                int micro = hash(x, y, 4242) % 100;
+                int tone = baseTone;
+                if (micro < 20) tone = Math.max(0, baseTone - 1);
+                else if (micro > 80) tone = Math.min(4, baseTone + 1);
+
+                // Distinctive mottled volcanic noise (rougher and more speckled than smooth stone)
+                int mottle = hash(x / 3, y / 3, 4343) % 10;
+                if (mottle < 2) {
+                    tone = Math.max(0, tone - 1);
+                } else if (mottle > 7) {
+                    tone = Math.min(4, tone + 1);
+                }
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+
+        // Scatter fine feldspar and pyroxene crystals
+        for (int m = 0; m < 48; m++) {
+            int mx = hash(m, 17, 4444) % TILE_SIZE;
+            int my = hash(m, 31, 4545) % TILE_SIZE;
+            if (m % 2 == 0) {
+                setPixel(tile, mx, my, PALETTE[4][0], PALETTE[4][1], PALETTE[4][2], 255); // Pale speckle
+            } else {
+                setPixel(tile, mx, my, PALETTE[0][0], PALETTE[0][1], PALETTE[0][2], 255); // Dark crystal
+            }
+        }
+    }
+
+    // 21: Diorite (High-contrast coarse intrusive rock with stark white/pale feldspar and dark hornblende chunks)
+    private static void generateDiorite(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {55, 55, 58},    // 0: Dark hornblende / pyroxene spot
+            {92, 92, 96},    // 1: Medium gray shadow ring
+            {152, 152, 156}, // 2: Light gray transition
+            {190, 190, 195}, // 3: Stark white/off-white plagioclase feldspar
+            {228, 228, 232}  // 4: Brilliant white quartz highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int bx = x / 4;
+                int by = y / 4;
+
+                // High-contrast feldspar field (predominantly bright tone 3 and 4)
+                int macro = hash(bx, by, 5151) % 100;
+                int baseTone = 3;
+                if (macro < 20) baseTone = 2;
+                else if (macro > 65) baseTone = 4;
+
+                int micro = hash(x, y, 5252) % 100;
+                int tone = baseTone;
+                if (micro < 15) tone = Math.max(2, baseTone - 1);
+                else if (micro > 80) tone = Math.min(4, baseTone + 1);
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+
+        // Prominent dark hornblende mineral clusters (2x2 to 3x3 black/dark gray flecks)
+        for (int c = 0; c < 32; c++) {
+            int cx = hash(c, 13, 5353) % (TILE_SIZE - 3);
+            int cy = hash(c, 29, 5454) % (TILE_SIZE - 3);
+            int size = 1 + (hash(c, 41, 5555) % 3);
+
+            for (int dy = 0; dy < size; dy++) {
+                for (int dx = 0; dx < size; dx++) {
+                    int x = cx + dx;
+                    int y = cy + dy;
+                    if (dx == 0 && dy == 0 && size > 1) {
+                        setPixel(tile, x, y, PALETTE[1][0], PALETTE[1][1], PALETTE[1][2], 255);
+                    } else {
+                        setPixel(tile, x, y, PALETTE[0][0], PALETTE[0][1], PALETTE[0][2], 255);
                     }
                 }
             }

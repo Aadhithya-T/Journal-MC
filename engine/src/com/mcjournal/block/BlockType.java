@@ -126,6 +126,9 @@ public class BlockType {
             case 13 -> 12; // Tall Grass
             case 14 -> 13; // Poppy
             case 15 -> 14; // Dandelion
+            case 16 -> 19; // Gravel
+            case 17 -> 20; // Andesite
+            case 18 -> 21; // Diorite
             default -> 2;
         };
     }
@@ -146,6 +149,9 @@ public class BlockType {
             case 13 -> 12; // Tall Grass
             case 14 -> 13; // Poppy
             case 15 -> 14; // Dandelion
+            case 16 -> 19; // Gravel
+            case 17 -> 20; // Andesite
+            case 18 -> 21; // Diorite
             default -> 0;
         };
     }
@@ -164,6 +170,9 @@ public class BlockType {
             case 13 -> Blocks.TALL_GRASS;
             case 14 -> Blocks.POPPY;
             case 15 -> Blocks.DANDELION;
+            case 16 -> Blocks.GRAVEL;
+            case 17 -> Blocks.ANDESITE;
+            case 18 -> Blocks.DIORITE;
             default -> Blocks.AIR;
         };
     }
