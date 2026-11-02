@@ -2,106 +2,165 @@ package com.mcjournal.client.gui;
 
 import com.mcjournal.client.MCJournalApp;
 import com.mcjournal.client.WorldSaveManager;
+import org.lwjgl.glfw.GLFW;
 
+/**
+ * Rebuilt WorldEditScreen using logical coordinates, Widget toolkit,
+ * centralized input dispatch, and safe confirmation dialog for world deletion.
+ */
 public class WorldEditScreen extends Screen {
     private final WorldSaveManager.SavedWorld world;
-    private String worldName;
-    private float cursorTimer = 0.0f;
+    private TextField nameField;
 
     public WorldEditScreen(MCJournalApp app, WorldSaveManager.SavedWorld world) {
         super(app);
         this.world = world;
-        this.worldName = (world != null && world.name != null) ? world.name : "New Adventure";
+    }
+
+    @Override
+    public boolean usesLogicalCoordinates() {
+        return true;
+    }
+
+    public WorldSaveManager.SavedWorld getWorld() {
+        return world;
+    }
+
+    public TextField getNameField() {
+        return nameField;
+    }
+
+    public String getWorldName() {
+        return (nameField != null) ? nameField.getText() : (world != null ? world.name : "New Adventure");
     }
 
     @Override
     public void init(int width, int height) {
         super.init(width, height);
 
-        int totalBtnW = 400;
-        int centerX = (width - totalBtnW) / 2;
-        int btnW = (totalBtnW - 8) / 2; // 196px each
-        int btnH = 38;
-        int bottomY = height - 56;
+        int formW = Math.min(320, width - 24);
+        int formX = GuiLayout.centerX(width, formW);
+        int startY = Math.max(48, height / 2 - 70);
 
-        // 1. Save World Button (Left)
-        buttons.add(new Button(1, "Save", centerX, bottomY, btnW, btnH, this::saveAndExit));
+        // 1. World Name TextField
+        nameField = new TextField(1, formX, startY + 16, formW, 22);
+        nameField.setPlaceholder("Enter world name...");
+        nameField.setMaxLength(28);
+        String initialName = (world != null && world.name != null) ? world.name : "New Adventure";
+        nameField.setText(initialName);
+        nameField.setOnEnterPressed(this::saveAndExit);
+        addWidget(nameField);
+        focusManager.setFocus(nameField);
 
-        // 2. Cancel Button (Right)
-        buttons.add(new Button(2, "Cancel", centerX + btnW + 8, bottomY, btnW, btnH, () -> {
-            app.setScreen(new WorldSelectScreen(app));
-        }));
+        // 2. Action Buttons at Bottom
+        int btnH = 20;
+        int btnGap = 6;
+        int btnY = height - 32;
+
+        // Save (Left) | Delete (Middle) | Cancel (Right)
+        int btnW = (formW - btnGap * 2) / 3;
+        int saveX = formX;
+        int deleteX = saveX + btnW + btnGap;
+        int cancelX = deleteX + btnW + btnGap;
+
+        Button saveBtn = new Button(2, "Save", saveX, btnY, btnW, btnH, this::saveAndExit);
+        addWidget(saveBtn);
+
+        Button deleteBtn = new Button(3, "Delete", deleteX, btnY, btnW, btnH, this::promptDeleteWorld);
+        addWidget(deleteBtn);
+
+        Button cancelBtn = new Button(4, "Cancel", cancelX, btnY, btnW, btnH, this::cancelAndExit);
+        addWidget(cancelBtn);
     }
 
-    private void saveAndExit() {
-        String finalName = worldName.trim().isEmpty() ? "New Adventure" : worldName.trim();
+    public void saveAndExit() {
+        String enteredName = (nameField != null) ? nameField.getText().trim() : "";
+        String finalName = enteredName.isEmpty() ? "New Adventure" : enteredName;
         WorldSaveManager.renameWorld(finalName);
-        app.setScreen(new WorldSelectScreen(app));
+        if (app != null) {
+            app.setScreen(new WorldSelectScreen(app));
+        }
+    }
+
+    public void promptDeleteWorld() {
+        String targetName = (world != null && world.name != null) ? world.name : "this world";
+        String msg = "Are you sure you want to delete '" + targetName + "'?\nThis action cannot be undone!";
+
+        ConfirmScreen confirm = new ConfirmScreen(app, "Delete World?", msg, "Delete", "Cancel", true,
+                () -> {
+                    WorldSaveManager.deleteWorld();
+                    if (app != null) {
+                        app.setScreen(new WorldSelectScreen(app));
+                    }
+                },
+                () -> {
+                    if (app != null) {
+                        app.popScreen();
+                    }
+                });
+
+        if (app != null) {
+            app.pushScreen(confirm);
+        }
+    }
+
+    public void cancelAndExit() {
+        if (app != null) {
+            app.setScreen(new WorldSelectScreen(app));
+        }
     }
 
     @Override
     public void render(GuiRenderer gui, FontRenderer font, double mouseX, double mouseY, float deltaTime) {
-        cursorTimer += deltaTime * 2.0f;
-
-        // 1. Dark translucent slate background with header/footer strips
-        gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.40f);
-        gui.drawMenuHeaderFooterStrips(width, height, 64, 82);
+        // 1. Background overlay & menu strips
+        gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.45f);
+        gui.drawMenuHeaderFooterStrips(width, height, 36, 44);
 
         // 2. Header Title
         String title = "Edit World";
-        float titleW = font.getStringWidth(title, 1.20f);
-        font.drawString(gui, title, (width - titleW) / 2.0f, 16, 1.20f, 0xffffff, true);
+        float titleScale = 0.85f;
+        float titleW = font.getStringWidth(title, titleScale);
+        font.drawString(gui, title, GuiLayout.centerX(width, (int) titleW), 12, titleScale, 0xffffff, true);
 
-        // 3. Form Cards Container (500px wide, centered)
-        int boxW = Math.min(500, width - 48);
-        int centerX = (width - boxW) / 2;
-        int startY = 96;
+        // 3. Form section
+        int formW = Math.min(320, width - 24);
+        int formX = GuiLayout.centerX(width, formW);
+        int startY = Math.max(48, height / 2 - 70);
 
-        // --- SECTION 1: World Name Input Box ---
-        font.drawString(gui, "World Name", centerX, startY, 0.80f, 0xaaaaaa, true);
-        int nameInputY = startY + 18;
-        int nameInputH = 34;
+        // Section Label
+        font.drawString(gui, "World Name", formX, startY + 2, 0.55f, 0xaaaaaa, true);
 
-        gui.drawRect(centerX - 1, nameInputY - 1, boxW + 2, nameInputH + 2, 0.65f, 0.65f, 0.65f, 1.0f);
-        gui.drawRect(centerX, nameInputY, boxW, nameInputH, 0.0f, 0.0f, 0.0f, 1.0f);
-
-        String displayName = worldName + ((int) cursorTimer % 2 == 0 ? "_" : "");
-        float nameScale = 0.85f;
-        float nameFontH = font.getFontHeight(nameScale);
-        float nameTextY = nameInputY + (nameInputH - nameFontH) / 2.0f;
-        font.drawString(gui, displayName, centerX + 10, nameTextY, nameScale, 0xffffff, false);
-
-        // --- SECTION 2: World Info Card ---
+        // 4. World Info Card
         if (world != null) {
-            int infoCardY = nameInputY + nameInputH + 16;
-            int infoCardH = 56;
+            int cardY = startY + 46;
+            int cardH = 50;
+            gui.drawBevelBox(formX, cardY, formW, cardH, 0x18181c, 0x484852, 0x202024);
 
-            gui.drawBevelBox(centerX, infoCardY, boxW, infoCardH, 0x18181c, 0x585860, 0x222226);
-            font.drawString(gui, "⚔ Hardcore World (" + world.biome + ")", centerX + 14, infoCardY + 11, 0.84f, 0xdddddd, true);
-            font.drawString(gui, "Seed: " + world.seed + " | Created: " + world.createdAt, centerX + 14, infoCardY + 31, 0.70f, 0xaaaaaa, false);
+            String modeStr = "⚔ Mode: Hardcore (" + world.biome + ")";
+            font.drawString(gui, modeStr, formX + 8, cardY + 8, 0.55f, 0xdddddd, true);
+
+            String seedStr = "Seed: " + world.seed;
+            if (world.createdAt != null && !world.createdAt.isEmpty()) {
+                seedStr += "  |  Created: " + world.createdAt;
+            }
+            font.drawString(gui, seedStr, formX + 8, cardY + 22, 0.48f, 0x888888, false);
+
+            String boundsStr = "Bounds: " + world.worldWidth + "x" + world.worldDepth + "x" + world.worldHeight + " (Finite)";
+            font.drawString(gui, boundsStr, formX + 8, cardY + 34, 0.48f, 0x777777, false);
         }
 
-        // 4. Render Action Buttons
+        // 5. Render Widgets & Tooltips
         super.render(gui, font, mouseX, mouseY, deltaTime);
     }
 
     @Override
-    public void charTyped(char character) {
-        if (worldName.length() < 24 && character >= 32 && character <= 126) {
-            worldName += character;
-        }
-    }
-
-    @Override
     public void keyPressed(int keyCode, int scanCode, int action, int mods) {
-        if (action == org.lwjgl.glfw.GLFW.GLFW_PRESS || action == org.lwjgl.glfw.GLFW.GLFW_REPEAT) {
-            if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE && !worldName.isEmpty()) {
-                worldName = worldName.substring(0, worldName.length() - 1);
-            } else if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER) {
-                saveAndExit();
-            } else if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
-                app.setScreen(new WorldSelectScreen(app));
+        if (action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT) {
+            if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                cancelAndExit();
+                return;
             }
         }
+        super.keyPressed(keyCode, scanCode, action, mods);
     }
 }

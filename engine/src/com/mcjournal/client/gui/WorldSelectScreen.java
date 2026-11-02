@@ -2,16 +2,38 @@ package com.mcjournal.client.gui;
 
 import com.mcjournal.client.MCJournalApp;
 import com.mcjournal.client.WorldSaveManager;
+import org.lwjgl.glfw.GLFW;
 
+/**
+ * Rebuilt WorldSelectScreen using logical coordinates, Widget toolkit,
+ * centralized input dispatch, search filtering, and safe confirmation dialogs.
+ */
 public class WorldSelectScreen extends Screen {
     private WorldSaveManager.SavedWorld currentWorld;
     private boolean isWorldSelected = true;
-    private String searchText = "";
-    private float cursorTimer = 0.0f;
+    private TextField searchField;
+    private long lastCardClickTime = 0;
 
     public WorldSelectScreen(MCJournalApp app) {
         super(app);
         this.currentWorld = WorldSaveManager.loadWorld();
+    }
+
+    @Override
+    public boolean usesLogicalCoordinates() {
+        return true;
+    }
+
+    public WorldSaveManager.SavedWorld getCurrentWorld() {
+        return currentWorld;
+    }
+
+    public boolean isWorldSelected() {
+        return isWorldSelected;
+    }
+
+    public TextField getSearchField() {
+        return searchField;
     }
 
     @Override
@@ -20,156 +42,166 @@ public class WorldSelectScreen extends Screen {
         this.currentWorld = WorldSaveManager.loadWorld();
         this.isWorldSelected = (currentWorld != null);
 
-        int totalBtnW = 400;
-        int centerX = (width - totalBtnW) / 2;
+        int totalBtnW = Math.min(320, width - 24);
+        int centerX = GuiLayout.centerX(width, totalBtnW);
 
-        // Bottom Footer Button Positions
-        int row1Y = height - 88;
-        int row2Y = height - 44;
-        int btnH = 38; // Equal height for both rows
+        // 1. Search Box at top
+        int searchW = Math.min(220, width - 32);
+        int searchX = GuiLayout.centerX(width, searchW);
+        searchField = new TextField(1, searchX, 22, searchW, 18);
+        searchField.setPlaceholder("Search worlds...");
+        addWidget(searchField);
 
-        int row1BtnW = (totalBtnW - 8) / 2; // 196px each
-        int row2BtnW = (totalBtnW - 2 * 8) / 3; // 128px each
+        // 2. Action Buttons at Bottom (Two rows)
+        int btnH = 20;
+        int rowGap = 4;
+        int row2Y = height - 28;
+        int row1Y = row2Y - btnH - rowGap;
 
-        // --- ROW 1 ---
-        // 1. Play Selected World (Left)
-        Button playBtn = new Button(1, "Play Selected World", centerX, row1Y, row1BtnW, btnH, () -> {
-            if (currentWorld != null) {
-                app.enterWorld(currentWorld.seed, currentWorld.name, currentWorld.biome, currentWorld);
-            }
+        // --- ROW 1 (Play Selected World | Create New World) ---
+        int r1BtnW = (totalBtnW - 6) / 2;
+        Button playBtn = new Button(2, "Play World", centerX, row1Y, r1BtnW, btnH, this::launchSelectedWorld);
+        playBtn.setEnabled(isPlayable());
+        addWidget(playBtn);
+
+        Button createBtn = new Button(3, "Create New World", centerX + r1BtnW + 6, row1Y, r1BtnW, btnH, () -> {
+            if (app != null) app.setScreen(new WorldCreateScreen(app));
         });
-        playBtn.setEnabled(currentWorld != null && isWorldSelected);
-        buttons.add(playBtn);
+        addWidget(createBtn);
 
-        // 2. Create New World (Right, only enabled when 0 worlds exist)
-        Button createBtn = new Button(2, "Create New World", centerX + row1BtnW + 8, row1Y, row1BtnW, btnH, () -> {
-            if (currentWorld == null) {
-                app.setScreen(new WorldCreateScreen(app));
-            }
-        });
-        createBtn.setEnabled(currentWorld == null);
-        buttons.add(createBtn);
-
-        // --- ROW 2 (3 Buttons: Edit | Delete | Back) ---
+        // --- ROW 2 (Edit | Delete | Cancel) ---
+        int r2BtnW = (totalBtnW - 8) / 3;
         int x0 = centerX;
-        int x1 = x0 + row2BtnW + 8;
-        int x2 = x1 + row2BtnW + 8;
+        int x1 = x0 + r2BtnW + 4;
+        int x2 = x1 + r2BtnW + 4;
 
-        // 3. Edit Button (Renames the world)
-        Button editBtn = new Button(3, "Edit", x0, row2Y, row2BtnW, btnH, () -> {
-            if (currentWorld != null) {
+        Button editBtn = new Button(4, "Edit", x0, row2Y, r2BtnW, btnH, () -> {
+            if (currentWorld != null && app != null) {
                 app.setScreen(new WorldEditScreen(app, currentWorld));
             }
         });
         editBtn.setEnabled(currentWorld != null);
-        buttons.add(editBtn);
+        addWidget(editBtn);
 
-        // 4. Delete Button
-        Button deleteBtn = new Button(4, "Delete", x1, row2Y, row2BtnW, btnH, () -> {
-            WorldSaveManager.deleteWorld();
-            init(width, height);
-        });
+        Button deleteBtn = new Button(5, "Delete", x1, row2Y, r2BtnW, btnH, this::promptDeleteWorld);
         deleteBtn.setEnabled(currentWorld != null);
-        buttons.add(deleteBtn);
+        addWidget(deleteBtn);
 
-        // 5. Back Button
-        buttons.add(new Button(5, "Back", x2, row2Y, row2BtnW, btnH, () -> {
-            app.setScreen(new TitleScreen(app));
-        }));
+        Button cancelBtn = new Button(6, "Cancel", x2, row2Y, r2BtnW, btnH, () -> {
+            if (app != null) app.setScreen(new TitleScreen(app));
+        });
+        addWidget(cancelBtn);
+    }
+
+    private boolean isPlayable() {
+        if (currentWorld == null || !isWorldSelected) return false;
+        if (searchField == null) return true;
+        String query = searchField.getText().trim().toLowerCase();
+        if (query.isEmpty()) return true;
+        return currentWorld.name != null && currentWorld.name.toLowerCase().contains(query);
+    }
+
+    public void launchSelectedWorld() {
+        if (isPlayable() && app != null) {
+            app.enterWorld(currentWorld.seed, currentWorld.name, currentWorld.biome, currentWorld);
+        }
+    }
+
+    public void promptDeleteWorld() {
+        if (currentWorld == null) return;
+
+        String worldName = currentWorld.name != null ? currentWorld.name : "this world";
+        String prompt = "Are you sure you want to delete '" + worldName + "'?\nThis action cannot be undone!";
+
+        ConfirmScreen confirm = new ConfirmScreen(app, "Delete World?", prompt, "Delete", "Cancel", true,
+                () -> {
+                    WorldSaveManager.deleteWorld();
+                    currentWorld = null;
+                    init(width, height);
+                },
+                () -> {
+                    if (app != null) app.popScreen();
+                });
+
+        if (app != null) {
+            app.pushScreen(confirm);
+        }
     }
 
     @Override
     public void render(GuiRenderer gui, FontRenderer font, double mouseX, double mouseY, float deltaTime) {
-        cursorTimer += deltaTime * 2.0f;
+        // 1. Semi-transparent backdrop and header/footer strips
+        gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.40f);
+        gui.drawMenuHeaderFooterStrips(width, height, 44, 56);
 
-        // 1. Semi-transparent dark overlay showing the background
-        gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.35f);
-
-        // 2. Top Header and Bottom Footer Strips
-        gui.drawMenuHeaderFooterStrips(width, height, 72, 98);
-
-        // Header Title (Centered with comfortable top margin)
+        // 2. Header Title
         String title = "Select World";
-        float titleW = font.getStringWidth(title, 1.20f);
-        font.drawString(gui, title, (width - titleW) / 2.0f, 12, 1.20f, 0xffffff, true);
+        float titleScale = 0.80f;
+        float titleW = font.getStringWidth(title, titleScale);
+        font.drawString(gui, title, GuiLayout.centerX(width, (int) titleW), 8, titleScale, 0xffffff, true);
 
-        // Search Input Box (Centered, 380px wide)
-        int searchW = 380;
-        int searchH = 24;
-        int searchX = (width - searchW) / 2;
-        int searchY = 38;
+        // 3. World List Card
+        int cardW = Math.min(360, width - 24);
+        int cardH = 52;
+        int cardX = GuiLayout.centerX(width, cardW);
+        int cardY = 52;
 
-        gui.drawRect(searchX - 1, searchY - 1, searchW + 2, searchH + 2, 0.65f, 0.65f, 0.65f, 1.0f);
-        gui.drawRect(searchX, searchY, searchW, searchH, 0.0f, 0.0f, 0.0f, 1.0f);
+        boolean matchesSearch = isPlayable();
 
-        String searchDisplay = searchText.isEmpty() ? "Search..." : searchText + ((int) cursorTimer % 2 == 0 ? "_" : "");
-        int searchColor = searchText.isEmpty() ? 0x777777 : 0xffffff;
-        font.drawString(gui, searchDisplay, searchX + 8, searchY + 4, 0.75f, searchColor, false);
-
-        // 3. Center World Selection Cards List (Starting at Y=96 with clear separation from header)
-        int cardW = Math.min(640, width - 48);
-        int cardH = 80;
-        int cardX = (width - cardW) / 2;
-        int cardY = 96;
-
-        if (currentWorld != null) {
+        if (currentWorld != null && matchesSearch) {
             boolean isHovered = mouseX >= cardX && mouseX <= cardX + cardW && mouseY >= cardY && mouseY <= cardY + cardH;
 
-            // Selection / Hover Card Background
+            // Card background & border
             if (isWorldSelected) {
-                gui.drawRect(cardX - 1, cardY - 1, cardW + 2, cardH + 2, 1.0f, 1.0f, 1.0f, 0.95f);
-                gui.drawRect(cardX, cardY, cardW, cardH, 0.12f, 0.12f, 0.14f, 0.95f);
+                gui.drawRect(cardX - 1, cardY - 1, cardW + 2, cardH + 2, 1.0f, 1.0f, 1.0f, 0.90f);
+                gui.drawRect(cardX, cardY, cardW, cardH, 0.14f, 0.14f, 0.18f, 0.95f);
             } else if (isHovered) {
-                gui.drawRect(cardX, cardY, cardW, cardH, 0.20f, 0.20f, 0.22f, 0.85f);
+                gui.drawRect(cardX, cardY, cardW, cardH, 0.20f, 0.20f, 0.24f, 0.85f);
             } else {
-                gui.drawRect(cardX, cardY, cardW, cardH, 0.08f, 0.08f, 0.10f, 0.75f);
+                gui.drawRect(cardX, cardY, cardW, cardH, 0.10f, 0.10f, 0.12f, 0.75f);
             }
 
-            // World Icon Thumbnail (56x56 box, centered vertically in card)
-            int iconSize = 56;
-            int iconX = cardX + 12;
-            int iconY = cardY + 12;
+            // Thumbnail Icon (36x36)
+            int iconSize = 36;
+            int iconX = cardX + 8;
+            int iconY = cardY + 8;
 
-            // Sky top / Grass middle / Dirt bottom
-            gui.drawRect(iconX, iconY, iconSize, 24, 0.45f, 0.65f, 0.92f, 1.0f);        // Sky
-            gui.drawRect(iconX, iconY + 24, iconSize, 8, 0.35f, 0.68f, 0.22f, 1.0f);    // Grass top
-            gui.drawRect(iconX, iconY + 32, iconSize, 24, 0.52f, 0.36f, 0.22f, 1.0f);   // Dirt
+            gui.drawRect(iconX, iconY, iconSize, 16, 0.45f, 0.65f, 0.92f, 1.0f);        // Sky
+            gui.drawRect(iconX, iconY + 16, iconSize, 6, 0.35f, 0.68f, 0.22f, 1.0f);    // Grass
+            gui.drawRect(iconX, iconY + 22, iconSize, 14, 0.52f, 0.36f, 0.22f, 1.0f);   // Dirt
 
-            // Mini Oak Tree on Icon
-            gui.drawRect(iconX + 24, iconY + 16, 8, 16, 0.40f, 0.26f, 0.12f, 1.0f);     // Trunk
-            gui.drawRect(iconX + 18, iconY + 8, 20, 12, 0.28f, 0.58f, 0.18f, 1.0f);     // Canopy
+            // Mini tree
+            gui.drawRect(iconX + 16, iconY + 10, 4, 12, 0.40f, 0.26f, 0.12f, 1.0f);    // Trunk
+            gui.drawRect(iconX + 12, iconY + 4, 12, 8, 0.28f, 0.58f, 0.18f, 1.0f);     // Leaves
 
-            // Play Icon overlay on hover
             if (isHovered) {
-                gui.drawRect(iconX, iconY, iconSize, iconSize, 0.0f, 0.0f, 0.0f, 0.4f);
-                font.drawString(gui, "▶", iconX + 20, iconY + 14, 1.35f, 0xffffff, true);
+                gui.drawRect(iconX, iconY, iconSize, iconSize, 0.0f, 0.0f, 0.0f, 0.40f);
+                font.drawString(gui, "▶", iconX + 13, iconY + 10, 0.85f, 0xffffff, true);
             }
 
-            // Text Info Hierarchy (All text properly padded and contained inside the card)
-            int textX = iconX + iconSize + 14;
+            // Text Info Hierarchy
+            int textX = iconX + iconSize + 10;
+            font.drawString(gui, currentWorld.name != null ? currentWorld.name : "Hardcore World", textX, cardY + 8, 0.62f, 0xffffff, true);
 
-            // Line 1: World Name (Bold White)
-            font.drawString(gui, currentWorld.name, textX, cardY + 12, 0.92f, 0xffffff, true);
+            String timeStr = "hardcore_world (" + (currentWorld.createdAt != null ? currentWorld.createdAt : "Saved") + ")";
+            font.drawString(gui, timeStr, textX, cardY + 22, 0.48f, 0x888888, false);
 
-            // Line 2: Folder name & Timestamp in parentheses
-            String timeStr = "hardcore_world (" + currentWorld.createdAt + ")";
-            font.drawString(gui, timeStr, textX, cardY + 34, 0.70f, 0x888888, false);
-
-            // Line 3: Mode & Version details
-            String modeStr = "Hardcore Mode, Version: 1.20 / Java 26";
-            font.drawString(gui, modeStr, textX, cardY + 54, 0.70f, 0xaaaaaa, false);
+            String modeStr = "Hardcore Mode  |  2500x2500 Finite";
+            font.drawString(gui, modeStr, textX, cardY + 34, 0.48f, 0xaaaaaa, false);
         } else {
-            // Empty State
-            String empty1 = "No Worlds Found";
-            float e1W = font.getStringWidth(empty1, 1.20f);
-            font.drawString(gui, empty1, (width - e1W) / 2.0f, height / 2 - 35, 1.20f, 0xcccccc, true);
+            // Empty state
+            String emptyTitle = (currentWorld == null) ? "No Worlds Found" : "No Matching Worlds";
+            float e1W = font.getStringWidth(emptyTitle, 0.75f);
+            font.drawString(gui, emptyTitle, GuiLayout.centerX(width, (int) e1W), height / 2 - 20, 0.75f, 0xcccccc, true);
 
-            String empty2 = "Click 'Create New World' to begin your adventure.";
-            float e2W = font.getStringWidth(empty2, 0.82f);
-            font.drawString(gui, empty2, (width - e2W) / 2.0f, height / 2, 0.82f, 0x888888, false);
+            String emptyHint = (currentWorld == null)
+                    ? "Click 'Create New World' to begin your adventure."
+                    : "Check your search query or clear the filter.";
+            float e2W = font.getStringWidth(emptyHint, 0.52f);
+            font.drawString(gui, emptyHint, GuiLayout.centerX(width, (int) e2W), height / 2, 0.52f, 0x888888, false);
         }
 
-        // 4. Render Buttons
+        // 4. Render Action Buttons & Tooltips
         super.render(gui, font, mouseX, mouseY, deltaTime);
     }
 
@@ -179,30 +211,37 @@ public class WorldSelectScreen extends Screen {
             return true;
         }
 
-        int cardW = Math.min(640, width - 48);
-        int cardH = 80;
-        int cardX = (width - cardW) / 2;
-        int cardY = 96;
+        int cardW = Math.min(360, width - 24);
+        int cardH = 52;
+        int cardX = GuiLayout.centerX(width, cardW);
+        int cardY = 52;
 
         if (currentWorld != null && mouseX >= cardX && mouseX <= cardX + cardW && mouseY >= cardY && mouseY <= cardY + cardH) {
             isWorldSelected = true;
-            init(width, height);
-
-            // Click card to enter directly
-            if (button == 0) {
-                app.enterWorld(currentWorld.seed, currentWorld.name, currentWorld.biome, currentWorld);
+            long now = System.currentTimeMillis();
+            if (button == 0 && (now - lastCardClickTime) < 300) {
+                launchSelectedWorld();
                 return true;
             }
+            lastCardClickTime = now;
+            return true;
         }
         return false;
     }
 
     @Override
     public void keyPressed(int keyCode, int scanCode, int action, int mods) {
-        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER && currentWorld != null && isWorldSelected) {
-            app.enterWorld(currentWorld.seed, currentWorld.name, currentWorld.biome, currentWorld);
-        } else if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
-            app.setScreen(new TitleScreen(app));
+        if (action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT) {
+            if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+                if (isPlayable()) {
+                    launchSelectedWorld();
+                    return;
+                }
+            } else if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                if (app != null) app.setScreen(new TitleScreen(app));
+                return;
+            }
         }
+        super.keyPressed(keyCode, scanCode, action, mods);
     }
 }

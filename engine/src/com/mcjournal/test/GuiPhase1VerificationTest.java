@@ -332,7 +332,7 @@ public class GuiPhase1VerificationTest {
         TitleScreen title = new TitleScreen(null);
         OptionsScreen options = new OptionsScreen(null, title);
         EscapeMenuScreen escape = new EscapeMenuScreen(null);
-        WorldSelectScreen legacyWorldSelect = new WorldSelectScreen(null);
+        Screen legacyWorldSelect = new Screen(null) { @Override public boolean usesLogicalCoordinates() { return false; } };
 
         // Migrated screens must declare logical coordinates
         assert title.usesLogicalCoordinates() : "TitleScreen must use logical coordinates";
