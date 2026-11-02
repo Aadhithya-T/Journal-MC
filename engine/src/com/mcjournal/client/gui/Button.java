@@ -1,37 +1,47 @@
 package com.mcjournal.client.gui;
 
-public class Button {
-    private final int id;
-    private String text;
-    private float x;
-    private float y;
-    private float width;
-    private float height;
-    private boolean isHovered;
-    private boolean isEnabled = true;
-    private final Runnable onClick;
+import org.lwjgl.glfw.GLFW;
+
+/**
+ * Standard interactive button widget with 9-slice rendering, keyboard activation,
+ * focus highlighting, and duplicate activation prevention.
+ */
+public class Button extends Widget {
+    protected final int id;
+    protected String text;
+    protected final Runnable onClick;
+
+    private boolean isPressed = false;
+    private boolean activatedOnPress = false;
 
     public Button(int id, String text, float x, float y, float width, float height, Runnable onClick) {
+        super(x, y, width, height);
         this.id = id;
         this.text = text;
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
         this.onClick = onClick;
     }
 
-    public void update(double mouseX, double mouseY) {
-        if (!isEnabled) {
-            isHovered = false;
-            return;
-        }
-        this.isHovered = mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
+    @Override
+    public void render(GuiRenderer gui, FontRenderer font, double mouseX, double mouseY, float deltaTime) {
+        render(gui, font);
     }
 
+    /**
+     * Backward-compatible 2-argument render method.
+     */
     public void render(GuiRenderer gui, FontRenderer font) {
+        if (!isVisible) return;
+
         // Draw Authentic Vanilla Minecraft 9-Slice Stone Button
         gui.drawMinecraftButton(x, y, width, height, isHovered, isEnabled);
+
+        // Focus Highlight Border (1px crisp outline)
+        if (isFocused && isEnabled) {
+            gui.drawRect(x - 1, y - 1, width + 2, 1, 1.0f, 1.0f, 1.0f, 0.85f);
+            gui.drawRect(x - 1, y + height, width + 2, 1, 1.0f, 1.0f, 1.0f, 0.85f);
+            gui.drawRect(x - 1, y, 1, height, 1.0f, 1.0f, 1.0f, 0.85f);
+            gui.drawRect(x + width, y, 1, height, 1.0f, 1.0f, 1.0f, 0.85f);
+        }
 
         float maxAllowedW = width - 14.0f;
         float desiredScale = height >= 38 ? 0.88f : (height >= 28 ? 0.65f : 0.50f);
@@ -58,30 +68,50 @@ public class Button {
         font.drawString(gui, text, textX, textY, scale, textColor, true);
     }
 
+    @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0 && isEnabled && isHovered) {
-            if (onClick != null) onClick.run();
+            isPressed = true;
+            activatedOnPress = true;
+            if (onClick != null) {
+                onClick.run();
+            }
             return true;
         }
         return false;
     }
 
-    public void setPosition(float x, float y) {
-        this.x = x;
-        this.y = y;
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            boolean wasPressed = isPressed;
+            isPressed = false;
+            // Prevent duplicate activation if already executed on press
+            if (activatedOnPress) {
+                activatedOnPress = false;
+                return wasPressed;
+            }
+            if (wasPressed && isEnabled && isMouseOver(mouseX, mouseY)) {
+                if (onClick != null) {
+                    onClick.run();
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
-    public void setSize(float width, float height) {
-        this.width = width;
-        this.height = height;
-    }
-
-    public boolean isEnabled() {
-        return isEnabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.isEnabled = enabled;
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int action, int mods) {
+        if (isFocused && isEnabled && (action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT)) {
+            if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER || keyCode == GLFW.GLFW_KEY_SPACE) {
+                if (onClick != null) {
+                    onClick.run();
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     public int getId() {
