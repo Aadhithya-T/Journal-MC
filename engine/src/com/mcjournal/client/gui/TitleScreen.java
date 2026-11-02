@@ -25,37 +25,41 @@ public class TitleScreen extends Screen {
     }
 
     @Override
+    public boolean usesLogicalCoordinates() {
+        return true;
+    }
+
+    @Override
     public void init(int width, int height) {
         super.init(width, height);
         logoRenderer.init();
 
-        int btnWidth = 400;
-        int btnHeight = 40;
-        int centerX = (width - btnWidth) / 2;
+        int btnWidth = 200;
+        int btnHeight = 20;
+        int centerX = GuiLayout.centerX(width, btnWidth);
 
         // Position menu below logo
-        int logoH = 120;
-        int startY = Math.max(logoH + 30, height / 2 - 10);
+        int startY = Math.max(65, height / 2 - 10);
 
         // 1. Singleplayer Button (Row 1)
         buttons.add(new Button(1, "Singleplayer", centerX, startY, btnWidth, btnHeight, () -> {
-            app.setScreen(new WorldSelectScreen(app));
+            if (app != null) app.setScreen(new WorldSelectScreen(app));
         }));
 
         // 2. Multiplayer Button (Row 2)
-        buttons.add(new Button(2, "Multiplayer", centerX, startY + 48, btnWidth, btnHeight, () -> {
+        buttons.add(new Button(2, "Multiplayer", centerX, startY + 24, btnWidth, btnHeight, () -> {
             multiplayerNotice = "Multiplayer servers coming in a future update!";
             noticeTimer = 3.0f;
         }));
 
         // 3. Options... & Quit Game (Row 3, split 2-column)
-        int splitW = (btnWidth - 8) / 2; // 196px
-        buttons.add(new Button(3, "Options...", centerX, startY + 96, splitW, btnHeight, () -> {
-            app.setScreen(new OptionsScreen(app, this));
+        int splitW = GuiLayout.splitWidth(btnWidth, 4, 2); // 98px
+        buttons.add(new Button(3, "Options...", centerX, startY + 48, splitW, btnHeight, () -> {
+            if (app != null) app.setScreen(new OptionsScreen(app, this));
         }));
 
-        buttons.add(new Button(4, "Quit Game", centerX + splitW + 8, startY + 96, splitW, btnHeight, () -> {
-            app.quitGame();
+        buttons.add(new Button(4, "Quit Game", centerX + splitW + 4, startY + 48, splitW, btnHeight, () -> {
+            if (app != null) app.quitGame();
         }));
     }
 
@@ -70,38 +74,38 @@ public class TitleScreen extends Screen {
         // Soft darkened vignette overlay over the live 3D background
         gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.25f);
 
-        // 1. Render 3D Stone Minecraft Title Logo (512x140)
-        int logoW = Math.min(500, width - 40);
+        // 1. Render 3D Stone Minecraft Title Logo (250x68)
+        int logoW = Math.min(260, width - 20);
         int logoH = (int) (logoW * (140.0f / 512.0f));
-        int logoX = (width - logoW) / 2;
-        int logoY = Math.max(16, height / 2 - 195);
+        int logoX = GuiLayout.centerX(width, logoW);
+        int logoY = Math.max(8, height / 2 - 95);
 
         logoRenderer.render(gui, logoX, logoY, logoW, logoH);
 
         // 2. Pulsing Yellow Splash Text (Angled at bottom right of logo)
-        float scalePulse = 0.95f + (float) Math.sin(splashTimer) * 0.08f;
+        float scalePulse = 0.52f + (float) Math.sin(splashTimer) * 0.04f;
         float splashW = font.getStringWidth(currentSplash, scalePulse);
-        float splashX = logoX + logoW - (splashW * 0.65f) - 10;
-        float splashY = logoY + logoH - 12;
+        float splashX = logoX + logoW - (splashW * 0.65f) - 5;
+        float splashY = logoY + logoH - 6;
 
         font.drawString(gui, currentSplash, splashX, splashY, scalePulse, 0xffff00, true);
 
         // 3. Multiplayer / Notice Toast
         if (multiplayerNotice != null) {
-            float noticeW = font.getStringWidth(multiplayerNotice, 0.90f);
-            float toastX = (width - noticeW) / 2.0f;
-            float toastY = height / 2 - 40;
-            gui.drawBevelBox(toastX - 16, toastY - 8, noticeW + 32, 36, 0x221808, 0xaa7700, 0x553300);
-            font.drawString(gui, multiplayerNotice, toastX, toastY, 0.90f, 0xffcc00, true);
+            float noticeW = font.getStringWidth(multiplayerNotice, 0.48f);
+            float toastX = GuiLayout.centerX(width, (int) noticeW);
+            float toastY = height / 2 - 20;
+            gui.drawBevelBox(toastX - 8, toastY - 4, noticeW + 16, 18, 0x221808, 0xaa7700, 0x553300);
+            font.drawString(gui, multiplayerNotice, toastX, toastY, 0.48f, 0xffcc00, true);
         }
 
         // 4. Authentic Minecraft Corner Footers
         String leftFooter = "Minecraft* 26.1.2 - Singleplayer (Hardcore Edition)";
-        font.drawString(gui, leftFooter, 8, height - 18, 0.72f, 0xcccccc, true);
+        font.drawString(gui, leftFooter, GuiLayout.anchorLeft(4), GuiLayout.anchorBottom(height, 10, 2), 0.45f, 0xcccccc, true);
 
         String rightFooter = "Java 26 + OpenGL 3.3";
-        float rightW = font.getStringWidth(rightFooter, 0.72f);
-        font.drawString(gui, rightFooter, width - rightW - 8, height - 18, 0.72f, 0xcccccc, true);
+        float rightW = font.getStringWidth(rightFooter, 0.45f);
+        font.drawString(gui, rightFooter, GuiLayout.anchorRight(width, (int) rightW, 4), GuiLayout.anchorBottom(height, 10, 2), 0.45f, 0xcccccc, true);
 
         // 5. Render Buttons
         super.render(gui, font, mouseX, mouseY, deltaTime);

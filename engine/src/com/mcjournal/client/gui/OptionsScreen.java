@@ -12,16 +12,21 @@ public class OptionsScreen extends Screen {
     }
 
     @Override
+    public boolean usesLogicalCoordinates() {
+        return true;
+    }
+
+    @Override
     public void init(int width, int height) {
         super.init(width, height);
         buttons.clear();
 
-        int btnW = 190;
-        int btnH = 40;
-        int gap = 16;
-        int totalRowW = btnW * 2 + gap; // 396px
-        int startX = (width - totalRowW) / 2;
-        int startY = height / 2 - 80;
+        int btnW = 150;
+        int btnH = 20;
+        int gap = 8;
+        int totalRowW = btnW * 2 + gap; // 308px
+        int startX = GuiLayout.centerX(width, totalRowW);
+        int startY = height / 2 - 45;
 
         GameSettings settings = (app != null) ? app.getSettings() : new GameSettings();
 
@@ -40,26 +45,33 @@ public class OptionsScreen extends Screen {
         }));
 
         // Row 2: Render Distance & Show FPS
-        buttons.add(new Button(3, "Render Dist: " + settings.renderDistance + " Chunks", startX, startY + 48, btnW, btnH, () -> {
+        buttons.add(new Button(3, "Render Dist: " + settings.renderDistance + " Chunks", startX, startY + 24, btnW, btnH, () -> {
             settings.cycleRenderDistance();
             if (app != null) app.applySettings();
             init(width, height);
         }));
 
-        buttons.add(new Button(4, "Show FPS: " + (settings.showFps ? "ON" : "OFF"), startX + btnW + gap, startY + 48, btnW, btnH, () -> {
+        buttons.add(new Button(4, "Show FPS: " + (settings.showFps ? "ON" : "OFF"), startX + btnW + gap, startY + 24, btnW, btnH, () -> {
             settings.toggleShowFps();
             init(width, height);
         }));
 
-        // Row 3: Fog Quality
-        buttons.add(new Button(5, "Fog: " + settings.getFogModeString(), (width - btnW) / 2, startY + 96, btnW, btnH, () -> {
+        // Row 3: Fog Quality & GUI Scale
+        buttons.add(new Button(5, "Fog: " + settings.getFogModeString(), startX, startY + 48, btnW, btnH, () -> {
             settings.cycleFogMode();
             init(width, height);
         }));
 
+        buttons.add(new Button(6, "GUI Scale: " + settings.getGuiScaleDisplayString(), startX + btnW + gap, startY + 48, btnW, btnH, () -> {
+            settings.cycleGuiScale();
+            if (app != null) app.applySettings();
+            init(width, height);
+        }));
+
         // Done Button (Centered bottom)
-        int doneW = 320;
-        buttons.add(new Button(10, "Done", (width - doneW) / 2, startY + 160, doneW, btnH, () -> {
+        int doneW = 200;
+        int doneX = GuiLayout.centerX(width, doneW);
+        buttons.add(new Button(10, "Done", doneX, startY + 76, doneW, btnH, () -> {
             settings.save();
             if (app != null) app.applySettings();
             if (app != null) app.setScreen(parentScreen);
@@ -73,8 +85,8 @@ public class OptionsScreen extends Screen {
 
         // Title
         String title = "Video Settings & Options";
-        float titleW = font.getStringWidth(title, 1.30f);
-        font.drawString(gui, title, (width - titleW) / 2.0f, height / 2 - 125, 1.30f, 0xffffff, true);
+        float titleW = font.getStringWidth(title, 0.70f);
+        font.drawString(gui, title, GuiLayout.centerX(width, (int) titleW), height / 2 - 68, 0.70f, 0xffffff, true);
 
         // Render Buttons
         super.render(gui, font, mouseX, mouseY, deltaTime);

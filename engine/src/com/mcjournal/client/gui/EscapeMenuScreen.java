@@ -8,32 +8,37 @@ public class EscapeMenuScreen extends Screen {
     }
 
     @Override
+    public boolean usesLogicalCoordinates() {
+        return true;
+    }
+
+    @Override
     public void init(int width, int height) {
         super.init(width, height);
 
-        int btnW = 320;
-        int btnH = 40;
-        int centerX = (width - btnW) / 2;
-        int startY = height / 2 - 38;
+        int btnW = 200;
+        int btnH = 20;
+        int centerX = GuiLayout.centerX(width, btnW);
+        int startY = height / 2 - 25;
 
         // 1. Back to Game (Resume)
         buttons.add(new Button(1, "Back to Game", centerX, startY, btnW, btnH, () -> {
-            app.resumeGame();
+            if (app != null) app.resumeGame();
         }));
 
         // 2. Options / Journal Row (Split 2-column)
-        int splitW = (btnW - 8) / 2; // 156px each
-        buttons.add(new Button(2, "Journal & Stats", centerX, startY + 48, splitW, btnH, () -> {
+        int splitW = GuiLayout.splitWidth(btnW, 4, 2); // 98px each
+        buttons.add(new Button(2, "Journal & Stats", centerX, startY + 24, splitW, btnH, () -> {
             // Journal stats view
         }));
 
-        buttons.add(new Button(3, "Options...", centerX + splitW + 8, startY + 48, splitW, btnH, () -> {
-            app.setScreen(new OptionsScreen(app, this));
+        buttons.add(new Button(3, "Options...", centerX + splitW + 4, startY + 24, splitW, btnH, () -> {
+            if (app != null) app.setScreen(new OptionsScreen(app, this));
         }));
 
         // 3. Save and Quit to Title
-        buttons.add(new Button(4, "Save and Quit to Title", centerX, startY + 96, btnW, btnH, () -> {
-            app.saveAndQuitToTitle();
+        buttons.add(new Button(4, "Save and Quit to Title", centerX, startY + 48, btnW, btnH, () -> {
+            if (app != null) app.saveAndQuitToTitle();
         }));
     }
 
@@ -44,8 +49,8 @@ public class EscapeMenuScreen extends Screen {
 
         // Header Title
         String title = "Game Menu";
-        float titleW = font.getStringWidth(title, 1.40f);
-        font.drawString(gui, title, (width - titleW) / 2.0f, height / 2 - 82, 1.40f, 0xffffff, true);
+        float titleW = font.getStringWidth(title, 0.70f);
+        font.drawString(gui, title, GuiLayout.centerX(width, (int) titleW), height / 2 - 48, 0.70f, 0xffffff, true);
 
         // Render Buttons
         super.render(gui, font, mouseX, mouseY, deltaTime);
@@ -53,9 +58,8 @@ public class EscapeMenuScreen extends Screen {
 
     @Override
     public void keyPressed(int keyCode, int scanCode, int action, int mods) {
-        // Pressing ESC again inside the escape menu resumes the game!
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
-            app.resumeGame();
+            if (app != null) app.resumeGame();
         }
     }
 }
