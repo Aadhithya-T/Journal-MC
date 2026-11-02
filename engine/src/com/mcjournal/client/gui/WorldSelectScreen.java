@@ -57,7 +57,7 @@ public class WorldSelectScreen extends Screen {
 
         // 1. Header Zone: Reserved height ensuring title and search box never collide
         // Title at y=8; search field cleanly separated below title
-        int searchY = 26;
+        int searchY = 30;
         int searchH = 18;
         searchField = new TextField(1, colX, searchY, colW, searchH);
         searchField.setPlaceholder("Search worlds...");
@@ -257,4 +257,10 @@ public class WorldSelectScreen extends Screen {
         }
         super.keyPressed(keyCode, scanCode, action, mods);
     }
+    public int getColX() { return colX; }
+    public int getColW() { return colW; }
+    public int getCardX() { return cardX; }
+    public int getCardY() { return cardY; }
+    public int getCardW() { return cardW; }
+    public int getCardH() { return cardH; }
 }

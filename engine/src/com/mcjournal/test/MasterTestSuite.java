@@ -57,6 +57,9 @@ public class MasterTestSuite {
         // GUI Overhaul Phase 4: Gameplay HUD
         runSuite("GUI Overhaul Phase 4: Gameplay HUD", () -> GuiPhase4VerificationTest.main(new String[0]));
 
+        // GUI Typography and Layout Overhaul: Phase 4 Overlap Diagnostics
+        runSuite("GUI Overhaul: Phase 4 Layout and Overlap Diagnostics", () -> GuiPhase4OverlapDiagnosticTest.main(new String[0]));
+
         // P12 & P13 Performance Instrumentation & Constants
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
 

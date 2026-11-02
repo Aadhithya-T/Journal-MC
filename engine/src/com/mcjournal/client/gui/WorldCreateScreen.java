@@ -55,11 +55,11 @@ public class WorldCreateScreen extends Screen {
         GuiLayout.Column column = GuiLayout.contentColumn(width, 316, 16);
         this.formX = column.x;
         this.formW = column.width;
-        this.startY = Math.max(34, height / 2 - 96);
+        this.startY = Math.max(30, height / 2 - 96);
 
         // 1. World Name TextField
         this.nameLabelY = startY;
-        int nameFieldY = nameLabelY + 14;
+        int nameFieldY = nameLabelY + 12;
         nameField = new TextField(1, formX, nameFieldY, formW, 20);
         nameField.setPlaceholder("Enter world name...");
         nameField.setMaxLength(28);
@@ -77,8 +77,8 @@ public class WorldCreateScreen extends Screen {
         int gutter = GuiLayout.GUTTER;
         int seedBtnW = 60;
         int seedFieldW = formW - seedBtnW - gutter;
-        this.seedLabelY = nameFieldY + 24;
-        int seedFieldY = seedLabelY + 14;
+        this.seedLabelY = nameFieldY + 22;
+        int seedFieldY = seedLabelY + 12;
 
         seedField = new TextField(2, formX, seedFieldY, seedFieldW, 20);
         seedField.setPlaceholder("Leave blank for random seed...");
@@ -197,4 +197,11 @@ public class WorldCreateScreen extends Screen {
         }
         super.keyPressed(keyCode, scanCode, action, mods);
     }
+    public int getFormX() { return formX; }
+    public int getFormW() { return formW; }
+    public int getNameLabelY() { return nameLabelY; }
+    public int getSeedLabelY() { return seedLabelY; }
+    public int getCard1Y() { return card1Y; }
+    public int getCard2Y() { return card2Y; }
+    public int getCardH() { return cardH; }
 }
