@@ -72,30 +72,24 @@ public class WorldSelectScreen extends Screen {
         // 3. Action Buttons at Bottom (Two uniform rows sharing one column and identical gutters)
         int btnH = GuiLayout.ROW_HEIGHT;
         int gutter = GuiLayout.GUTTER;
-        int row2Y = height - 28;
+        int row2Y = height - GuiLayout.BOTTOM_MARGIN;
         int row1Y = row2Y - btnH - gutter;
 
         // --- ROW 1 (Play World | Create New World) ---
-        int r1BtnW = GuiLayout.buttonWidth(colW, 2, gutter);
-        Button playBtn = new Button(2, "Play World", colX, row1Y, r1BtnW, btnH, this::launchSelectedWorld);
+        GuiLayout.ButtonSlot[] r1 = GuiLayout.distributeRow(colX, colW, 2, gutter);
+        Button playBtn = new Button(2, "Play World", r1[0].x(), row1Y, r1[0].width(), btnH, this::launchSelectedWorld);
         playBtn.setEnabled(isPlayable());
         addWidget(playBtn);
 
-        int r1Btn2X = colX + r1BtnW + gutter;
-        int r1Btn2W = colW - r1BtnW - gutter;
-        Button createBtn = new Button(3, "Create New World", r1Btn2X, row1Y, r1Btn2W, btnH, () -> {
+        Button createBtn = new Button(3, "Create New World", r1[1].x(), row1Y, r1[1].width(), btnH, () -> {
             if (app != null) app.setScreen(new WorldCreateScreen(app));
         });
         addWidget(createBtn);
 
         // --- ROW 2 (Edit | Delete | Cancel) ---
-        int r2BtnW = GuiLayout.buttonWidth(colW, 3, gutter);
-        int x0 = colX;
-        int x1 = x0 + r2BtnW + gutter;
-        int x2 = x1 + r2BtnW + gutter;
-        int x2W = colW - (r2BtnW * 2 + gutter * 2);
+        GuiLayout.ButtonSlot[] r2 = GuiLayout.distributeRow(colX, colW, 3, gutter);
 
-        Button editBtn = new Button(4, "Edit", x0, row2Y, r2BtnW, btnH, () -> {
+        Button editBtn = new Button(4, "Edit", r2[0].x(), row2Y, r2[0].width(), btnH, () -> {
             if (currentWorld != null && app != null) {
                 app.setScreen(new WorldEditScreen(app, currentWorld));
             }
@@ -103,11 +97,11 @@ public class WorldSelectScreen extends Screen {
         editBtn.setEnabled(currentWorld != null);
         addWidget(editBtn);
 
-        Button deleteBtn = new Button(5, "Delete", x1, row2Y, r2BtnW, btnH, this::promptDeleteWorld);
+        Button deleteBtn = new Button(5, "Delete", r2[1].x(), row2Y, r2[1].width(), btnH, this::promptDeleteWorld);
         deleteBtn.setEnabled(currentWorld != null);
         addWidget(deleteBtn);
 
-        Button cancelBtn = new Button(6, "Cancel", x2, row2Y, x2W, btnH, () -> {
+        Button cancelBtn = new Button(6, "Cancel", r2[2].x(), row2Y, r2[2].width(), btnH, () -> {
             if (app != null) app.setScreen(new TitleScreen(app));
         });
         addWidget(cancelBtn);
@@ -189,33 +183,33 @@ public class WorldSelectScreen extends Screen {
 
             if (isHovered) {
                 gui.drawRect(iconX, iconY, iconSize, iconSize, 0.0f, 0.0f, 0.0f, 0.40f);
-                font.drawString(gui, "▶", iconX + 13, iconY + 10, TextStyle.TITLE, 0xffffff);
+                font.drawString(gui, "▶", iconX + 12, iconY + 8, TextStyle.TITLE);
             }
 
             // Authentic metadata extracted from currentWorld
             int textX = iconX + iconSize + 10;
             String worldName = currentWorld.name != null ? currentWorld.name : "Hardcore World";
-            font.drawString(gui, worldName, textX, cardY + 8, TextStyle.BODY, 0xffffff);
+            font.drawString(gui, worldName, textX, cardY + 8, TextStyle.BODY);
 
             String createdDate = (currentWorld.createdAt != null && !currentWorld.createdAt.isEmpty())
                     ? currentWorld.createdAt
                     : "Saved";
             String timeStr = worldName + " (" + createdDate + ")";
-            font.drawString(gui, timeStr, textX, cardY + 22, TextStyle.CAPTION, 0x888888);
+            font.drawString(gui, timeStr, textX, cardY + 22, TextStyle.CAPTION);
 
             int wW = currentWorld.worldWidth > 0 ? currentWorld.worldWidth : 2500;
             int wD = currentWorld.worldDepth > 0 ? currentWorld.worldDepth : 2500;
             String modeStr = "Hardcore Mode · " + wW + " × " + wD + " Finite";
-            font.drawString(gui, modeStr, textX, cardY + 34, TextStyle.CAPTION, 0xaaaaaa);
+            font.drawString(gui, modeStr, textX, cardY + 34, TextStyle.CAPTION.withColor(0xaaaaaa));
         } else {
             // Empty state
             String emptyTitle = (currentWorld == null) ? "No Worlds Found" : "No Matching Worlds";
-            font.drawCentered(gui, emptyTitle, width / 2.0f, height / 2 - 20, TextStyle.TITLE, 0xcccccc);
+            font.drawCentered(gui, emptyTitle, width / 2.0f, height / 2 - 20, TextStyle.TITLE.withColor(0xcccccc));
 
             String emptyHint = (currentWorld == null)
                     ? "Click 'Create New World' to begin your adventure."
                     : "Check your search query or clear the filter.";
-            font.drawCentered(gui, emptyHint, width / 2.0f, height / 2, TextStyle.CAPTION, 0x888888);
+            font.drawCentered(gui, emptyHint, width / 2.0f, height / 2, TextStyle.CAPTION);
         }
 
         // 4. Render Action Buttons & Tooltips

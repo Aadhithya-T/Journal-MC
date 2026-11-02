@@ -153,30 +153,30 @@ public class WorldCreateScreen extends Screen {
 
         // 2. Header Title
         String title = "Create New World";
-        font.drawCentered(gui, title, width / 2.0f, 10, TextStyle.TITLE);
+        font.drawCentered(gui, title, width / 2.0f, GuiLayout.TITLE_Y, TextStyle.TITLE);
 
         // 3. Form section labels
-        font.drawString(gui, "World Name", formX, nameLabelY, TextStyle.BODY, 0xaaaaaa);
-        font.drawString(gui, "World Seed", formX, seedLabelY, TextStyle.BODY, 0xaaaaaa);
+        font.drawString(gui, "World Name", formX, nameLabelY, TextStyle.BODY.withColor(0xaaaaaa));
+        font.drawString(gui, "World Seed", formX, seedLabelY, TextStyle.BODY.withColor(0xaaaaaa));
 
         // 4. Game Mode & World Info Cards (Vertical two-line cards without horizontal collisions)
-        float bodyH = font.getLineHeight(TextStyle.BODY);
+        int bodyH = Math.round(font.getLineHeight(TextStyle.BODY));
         int padY = 5;
         int lineGap = 3;
 
         // Card 1: Game Mode
         gui.drawBevelBox(formX, card1Y, formW, cardH, 0x18181c, 0x484852, 0x202024);
         int c1Line1Y = card1Y + padY;
-        int c1Line2Y = c1Line1Y + (int) bodyH + lineGap;
-        font.drawString(gui, "Game Mode: Hardcore", formX + 8, c1Line1Y, TextStyle.BODY, 0xffffff);
-        font.drawString(gui, "One life · Permadeath", formX + 8, c1Line2Y, TextStyle.CAPTION, 0x888888);
+        int c1Line2Y = c1Line1Y + bodyH + lineGap;
+        font.drawString(gui, "Game Mode: Hardcore", formX + 8, c1Line1Y, TextStyle.BODY);
+        font.drawString(gui, "One life · Permadeath", formX + 8, c1Line2Y, TextStyle.CAPTION);
 
         // Card 2: World Type
         gui.drawBevelBox(formX, card2Y, formW, cardH, 0x18181c, 0x484852, 0x202024);
         int c2Line1Y = card2Y + padY;
-        int c2Line2Y = c2Line1Y + (int) bodyH + lineGap;
-        font.drawString(gui, "World Type: Multi-Biome", formX + 8, c2Line1Y, TextStyle.BODY, 0xdddddd);
-        font.drawString(gui, "2500 × 2500 · Finite bounds", formX + 8, c2Line2Y, TextStyle.CAPTION, 0x888888);
+        int c2Line2Y = c2Line1Y + bodyH + lineGap;
+        font.drawString(gui, "World Type: Multi-Biome", formX + 8, c2Line1Y, TextStyle.BODY);
+        font.drawString(gui, "2500 × 2500 · Finite bounds", formX + 8, c2Line2Y, TextStyle.CAPTION);
 
         // Validation Error notice if present
         if (validationError != null) {

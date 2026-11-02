@@ -34,7 +34,7 @@ public class MinecraftLogoRenderer {
         Font mcFontLarge = null;
         Font mcFontSmall = null;
 
-        try (InputStream is = MinecraftLogoRenderer.class.getResourceAsStream("/fonts/minecraft.ttf")) {
+        try (InputStream is = MinecraftLogoRenderer.class.getResourceAsStream("/fonts/Monocraft.ttf")) {
             if (is != null) {
                 Font baseFont = Font.createFont(Font.TRUETYPE_FONT, is);
                 mcFontLarge = baseFont.deriveFont(Font.BOLD, 58.0f);

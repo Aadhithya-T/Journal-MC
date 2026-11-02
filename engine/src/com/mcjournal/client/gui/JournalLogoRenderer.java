@@ -37,7 +37,7 @@ public class JournalLogoRenderer {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
 
         Font logoFont = null;
-        try (InputStream is = JournalLogoRenderer.class.getResourceAsStream("/fonts/minecraft.ttf")) {
+        try (InputStream is = JournalLogoRenderer.class.getResourceAsStream("/fonts/Monocraft.ttf")) {
             if (is != null) {
                 Font baseFont = Font.createFont(Font.TRUETYPE_FONT, is);
                 logoFont = baseFont.deriveFont(Font.BOLD, 52.0f);

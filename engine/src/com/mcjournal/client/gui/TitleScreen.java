@@ -58,7 +58,7 @@ public class TitleScreen extends Screen {
         focusManager.setFocus(singleplayerBtn);
 
         // 2. Options... & Quit Game (Row 2, split 2-column)
-        int splitW = GuiLayout.splitWidth(btnWidth, 4, 2); // 98px
+        int splitW = GuiLayout.buttonWidth(btnWidth, 2, 4); // 98px
         Button optionsBtn = new Button(2, "Options...", centerX, startY + 24, splitW, btnHeight, () -> {
             if (app != null) app.setScreen(new OptionsScreen(app, this));
         });
