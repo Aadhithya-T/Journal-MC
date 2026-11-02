@@ -209,6 +209,11 @@ public class GuiPhase4VerificationTest {
     private static void testHotbarInventoryReflection() {
         System.out.print("[Phase 4.6] Hotbar 9-slot inventory, selection & stack counts... ");
 
+        assert HudTheme.HOTBAR_WIDTH == 202 : "Hotbar width must be 202px for 22px slots";
+        assert HudTheme.HOTBAR_HEIGHT == 26 : "Hotbar height must be 26px";
+        assert HudTheme.STATUS_BAR_WIDTH == 99 : "Status bar width (10 icons) must be 99px";
+        assert HudTheme.STATUS_BAR_WIDTH <= HudTheme.HOTBAR_WIDTH : "Status bars must comfortably fit within hotbar span";
+
         Player player = new Player();
         assert player.hotbarBlocks.length == 9 : "Hotbar must have exactly 9 slots";
         assert player.hotbarCounts.length == 9 : "Hotbar counts must have 9 slots";

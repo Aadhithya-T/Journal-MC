@@ -818,10 +818,10 @@ public class FirstPersonHandRenderer {
             updateHeldBlockMesh(heldItem);
         }
 
-        // Base Viewmodel Anchor Position (Prominently framed in first-person view)
-        float baseX = isHoldingTool ? 0.34f : (isHoldingBlock ? 0.38f : 0.44f);
-        float baseY = isHoldingTool ? -0.28f : (isHoldingBlock ? -0.32f : -0.40f);
-        float baseZ = isHoldingTool ? -0.44f : (isHoldingBlock ? -0.48f : -0.56f);
+        // Base Viewmodel Anchor Position (Refined framing in first-person view to prevent screen obstruction)
+        float baseX = isHoldingTool ? 0.38f : (isHoldingBlock ? 0.40f : 0.44f);
+        float baseY = isHoldingTool ? -0.34f : (isHoldingBlock ? -0.36f : -0.42f);
+        float baseZ = isHoldingTool ? -0.48f : (isHoldingBlock ? -0.50f : -0.56f);
 
         // 1. Calculate Idle Breathing Bob
         float idleY = (float) Math.sin(idleTime * 1.8f) * 0.003f;
@@ -871,6 +871,10 @@ public class FirstPersonHandRenderer {
         modelMatrix.rotate((float) Math.toRadians(baseYaw + animYaw), new Vector3f(0, 1, 0));       // Yaw inward
         modelMatrix.rotate((float) Math.toRadians(basePitch + animPitch), new Vector3f(1, 0, 0));     // Pitch forward
         modelMatrix.rotate((float) Math.toRadians(baseRoll + bobRoll + animRoll), new Vector3f(0, 0, 1)); // Roll tilt
+
+        // Scaled to prevent held item/tool from dominating the screen
+        float viewmodelScale = isHoldingTool ? 0.82f : 0.85f;
+        modelMatrix.scale(viewmodelScale);
 
         // Render Hand with GL_DEPTH_TEST and depth buffer clearing so hand never clips into voxels
         glEnable(GL_DEPTH_TEST);
