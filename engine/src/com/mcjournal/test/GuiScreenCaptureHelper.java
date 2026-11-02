@@ -187,6 +187,12 @@ public class GuiScreenCaptureHelper {
                 createScreen.init(guiW, guiH);
                 captureScreen(gui, font, createScreen, scaleManager, resW, resH, guiW, guiH,
                         new File(outDir, "world_create_" + resW + "x" + resH + ".png"));
+
+                // 3. Capture TitleScreen
+                TitleScreen titleScreen = new TitleScreen(null);
+                titleScreen.init(guiW, guiH);
+                captureScreen(gui, font, titleScreen, scaleManager, resW, resH, guiW, guiH,
+                        new File(outDir, "title_screen_" + resW + "x" + resH + ".png"));
             }
 
             gui.cleanup();

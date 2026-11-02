@@ -181,16 +181,26 @@ public class FontRenderer {
         g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
 
         Font font = null;
-        try (InputStream is = FontRenderer.class.getResourceAsStream(config.getResourcePath())) {
-            if (is != null) {
+        InputStream stream = FontRenderer.class.getResourceAsStream(config.getResourcePath());
+        if (stream == null) {
+            java.io.File file = new java.io.File("engine/resources" + config.getResourcePath());
+            if (file.exists()) {
+                try {
+                    stream = new java.io.FileInputStream(file);
+                } catch (Exception ignored) {}
+            }
+        }
+
+        if (stream != null) {
+            try (InputStream is = stream) {
                 Font baseFont = Font.createFont(Font.TRUETYPE_FONT, is);
                 font = baseFont.deriveFont(Font.PLAIN, config.getBakeSize());
                 System.out.println("[FontRenderer] Loaded TTF font: " + font.getFontName() + " (" + config.getName() + " at " + config.getBakeSize() + "px)");
-            } else {
-                System.err.println("[FontRenderer] Warning: Font resource not found at " + config.getResourcePath() + ", using fallback");
+            } catch (Exception e) {
+                System.err.println("[FontRenderer] Notice: Error loading font (" + e.getMessage() + "), using fallback");
             }
-        } catch (Exception e) {
-            System.err.println("[FontRenderer] Notice: Error loading font (" + e.getMessage() + "), using fallback");
+        } else {
+            System.err.println("[FontRenderer] Warning: Font resource not found at " + config.getResourcePath() + ", using fallback");
         }
 
         if (font == null) {

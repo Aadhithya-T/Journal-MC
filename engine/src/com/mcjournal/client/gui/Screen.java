@@ -79,18 +79,18 @@ public abstract class Screen {
     }
 
     public void init(int width, int height) {
-        init(width, height, this.font);
-    }
-
-    public void init(int width, int height, FontRenderer font) {
         this.width = width;
         this.height = height;
-        if (font != null) {
-            this.font = font;
-        }
         this.widgets.clear();
         this.buttons.clear();
         this.focusManager.clearFocus();
+    }
+
+    public void init(int width, int height, FontRenderer font) {
+        if (font != null) {
+            this.font = font;
+        }
+        init(width, height);
     }
 
     /**

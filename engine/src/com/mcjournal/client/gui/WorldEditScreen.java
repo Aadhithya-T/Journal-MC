@@ -47,8 +47,8 @@ public class WorldEditScreen extends Screen {
     public int getCardH() { return cardH; }
 
     @Override
-    public void init(int width, int height, FontRenderer font) {
-        super.init(width, height, font);
+    public void init(int width, int height) {
+        super.init(width, height);
         FontRenderer fr = getFont();
 
         GuiLayout.Column column = GuiLayout.contentColumn(width, 316, 16);

@@ -20,6 +20,14 @@ public class ScreenManager {
     private Window window;
     private BlockBreakingManager breakingManager;
 
+    public void setFontRenderer(FontRenderer fontRenderer) {
+        this.lastFontRenderer = fontRenderer;
+    }
+
+    public FontRenderer getLastFontRenderer() {
+        return lastFontRenderer;
+    }
+
     public GuiScaleManager getScaleManager() {
         return scaleManager;
     }

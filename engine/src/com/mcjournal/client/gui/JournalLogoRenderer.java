@@ -37,12 +37,21 @@ public class JournalLogoRenderer {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
 
         Font logoFont = null;
-        try (InputStream is = JournalLogoRenderer.class.getResourceAsStream("/fonts/Monocraft.ttf")) {
-            if (is != null) {
+        InputStream stream = JournalLogoRenderer.class.getResourceAsStream("/fonts/Monocraft.ttf");
+        if (stream == null) {
+            java.io.File file = new java.io.File("engine/resources/fonts/Monocraft.ttf");
+            if (file.exists()) {
+                try {
+                    stream = new java.io.FileInputStream(file);
+                } catch (Exception ignored) {}
+            }
+        }
+        if (stream != null) {
+            try (InputStream is = stream) {
                 Font baseFont = Font.createFont(Font.TRUETYPE_FONT, is);
                 logoFont = baseFont.deriveFont(Font.BOLD, 52.0f);
-            }
-        } catch (Exception ignored) {}
+            } catch (Exception ignored) {}
+        }
 
         if (logoFont == null) {
             logoFont = new Font("Dialog", Font.BOLD, 48);
