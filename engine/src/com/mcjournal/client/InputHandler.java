@@ -22,14 +22,20 @@ public class InputHandler {
             if (key >= 0 && key < keys.length) {
                 keys[key] = (action != GLFW_RELEASE);
             }
-            if (app.getCurrentScreen() != null && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-                app.getCurrentScreen().keyPressed(key, scancode, action, mods);
+            if (app != null && app.getCurrentScreen() != null) {
+                if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+                    app.getCurrentScreen().keyPressed(key, scancode, action, mods);
+                } else if (action == GLFW_RELEASE) {
+                    app.getCurrentScreen().keyReleased(key, scancode, action, mods);
+                }
             }
         });
 
         glfwSetCharCallback(windowHandle, (window, codepoint) -> {
-            if (app.getCurrentScreen() != null && codepoint >= 32 && codepoint <= 126) {
-                app.getCurrentScreen().charTyped((char) codepoint);
+            if (app != null && app.getCurrentScreen() != null) {
+                if (Character.isBmpCodePoint(codepoint) && !Character.isISOControl(codepoint)) {
+                    app.getCurrentScreen().charTyped((char) codepoint);
+                }
             }
         });
 
@@ -51,17 +57,28 @@ public class InputHandler {
             if (button >= 0 && button < mouseButtons.length) {
                 mouseButtons[button] = (action != GLFW_RELEASE);
             }
-            if (app.getCurrentScreen() != null && action == GLFW_PRESS) {
-                if (app.getScreenManager() != null) {
-                    app.getScreenManager().handleMouseClick(currentMouseX, currentMouseY, button);
-                } else {
-                    app.getCurrentScreen().mouseClicked(currentMouseX, currentMouseY, button);
+            if (app != null && app.getCurrentScreen() != null) {
+                if (action == GLFW_PRESS) {
+                    if (app.getScreenManager() != null) {
+                        app.getScreenManager().handleMouseClick(currentMouseX, currentMouseY, button);
+                    } else {
+                        app.getCurrentScreen().mouseClicked(currentMouseX, currentMouseY, button);
+                    }
+                } else if (action == GLFW_RELEASE) {
+                    if (app.getScreenManager() != null) {
+                        app.getScreenManager().handleMouseRelease(currentMouseX, currentMouseY, button);
+                    } else {
+                        app.getCurrentScreen().mouseReleased(currentMouseX, currentMouseY, button);
+                    }
                 }
             }
         });
 
         glfwSetScrollCallback(windowHandle, (window, xoffset, yoffset) -> {
             scrollDelta += yoffset;
+            if (app != null && app.getScreenManager() != null && app.getCurrentScreen() != null) {
+                app.getScreenManager().handleMouseScroll(currentMouseX, currentMouseY, yoffset);
+            }
         });
     }
 

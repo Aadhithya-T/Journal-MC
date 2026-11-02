@@ -5,32 +5,22 @@ import com.mcjournal.client.gui.GuiRenderer;
 import com.mcjournal.client.gui.GuiScaleManager;
 import com.mcjournal.client.gui.Screen;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+
 /**
- * ScreenManager coordinates active GUI screen transitions, mouse cursor state,
- * input forwarding, virtual resolution scaling, and GUI rendering passes.
+ * ScreenManager coordinates GUI screen transitions, screen stack navigation (push/pop),
+ * mouse cursor locking, input forwarding, virtual resolution scaling, and GUI rendering.
  */
 public class ScreenManager {
-    private Screen currentScreen;
+    private final Deque<Screen> screenStack = new ArrayDeque<>();
+    private Screen currentScreen = null;
     private final GuiScaleManager scaleManager = new GuiScaleManager();
+    private Window window;
+    private BlockBreakingManager breakingManager;
 
     public GuiScaleManager getScaleManager() {
         return scaleManager;
-    }
-
-    public void setScreen(Screen screen, Window window, BlockBreakingManager breakingManager) {
-        this.currentScreen = screen;
-        if (screen != null) {
-            if (window != null) {
-                window.lockCursor(false);
-                scaleManager.update(window.getWidth(), window.getHeight(), window.getWidth(), window.getHeight());
-            }
-            int initW = screen.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : (window != null ? window.getWidth() : scaleManager.getFramebufferWidth());
-            int initH = screen.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getHeight() : scaleManager.getFramebufferHeight());
-            screen.init(initW, initH);
-            if (breakingManager != null) breakingManager.resetBreak();
-        } else {
-            if (window != null) window.lockCursor(true);
-        }
     }
 
     public Screen getCurrentScreen() {
@@ -40,6 +30,114 @@ public class ScreenManager {
     public boolean hasScreen() {
         return currentScreen != null;
     }
+
+    public int getStackDepth() {
+        return screenStack.size();
+    }
+
+    public boolean isInputConsumed() {
+        return currentScreen != null && currentScreen.getFocusedWidget() != null;
+    }
+
+    /**
+     * Sets or replaces the current root screen, closing all previous screens on the stack.
+     */
+    public void setScreen(Screen screen, Window window, BlockBreakingManager breakingManager) {
+        this.window = window;
+        this.breakingManager = breakingManager;
+
+        // Cleanly close previous screen stack
+        while (!screenStack.isEmpty()) {
+            Screen s = screenStack.pop();
+            s.onClosed();
+            s.dispose();
+        }
+
+        this.currentScreen = screen;
+        if (screen != null) {
+            screenStack.push(screen);
+            if (window != null) {
+                window.lockCursor(false);
+                scaleManager.update(window.getWidth(), window.getHeight(), window.getWidth(), window.getHeight());
+            }
+            int initW = screen.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : (window != null ? window.getWidth() : scaleManager.getFramebufferWidth());
+            int initH = screen.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getHeight() : scaleManager.getFramebufferHeight());
+            screen.init(initW, initH);
+            screen.onOpened();
+            if (breakingManager != null) breakingManager.resetBreak();
+        } else {
+            if (window != null) window.lockCursor(true);
+        }
+    }
+
+    /**
+     * Pushes a child screen onto the navigation stack, preserving the parent screen's state.
+     */
+    public void pushScreen(Screen child) {
+        if (child == null) return;
+
+        if (currentScreen != null) {
+            currentScreen.onDeactivated();
+        }
+
+        screenStack.push(child);
+        this.currentScreen = child;
+
+        if (window != null) {
+            window.lockCursor(false);
+            scaleManager.update(window.getWidth(), window.getHeight(), window.getWidth(), window.getHeight());
+        }
+
+        int initW = child.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : (window != null ? window.getWidth() : scaleManager.getFramebufferWidth());
+        int initH = child.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getHeight() : scaleManager.getFramebufferHeight());
+        child.init(initW, initH);
+        child.onOpened();
+
+        if (breakingManager != null) breakingManager.resetBreak();
+    }
+
+    /**
+     * Pops the current screen from the stack, restoring the previous parent screen.
+     */
+    public Screen popScreen() {
+        if (screenStack.isEmpty()) {
+            currentScreen = null;
+            if (window != null) window.lockCursor(true);
+            return null;
+        }
+
+        Screen closing = screenStack.pop();
+        closing.onClosed();
+        closing.dispose();
+
+        if (!screenStack.isEmpty()) {
+            currentScreen = screenStack.peek();
+            currentScreen.onReactivated();
+            if (window != null) {
+                window.lockCursor(false);
+            }
+        } else {
+            currentScreen = null;
+            if (window != null) {
+                window.lockCursor(true);
+            }
+        }
+        return currentScreen;
+    }
+
+    public void closeAllScreens() {
+        while (!screenStack.isEmpty()) {
+            Screen s = screenStack.pop();
+            s.onClosed();
+            s.dispose();
+        }
+        currentScreen = null;
+        if (window != null) {
+            window.lockCursor(true);
+        }
+    }
+
+    // --- Input Forwarding ---
 
     public void update(InputHandler input) {
         if (currentScreen != null && input != null) {
@@ -57,7 +155,7 @@ public class ScreenManager {
         if (currentScreen == null) return false;
         if (currentScreen.usesLogicalCoordinates()) {
             if (!scaleManager.isMouseInViewport(mouseX, mouseY)) {
-                return false; // Prevent clicks outside GUI viewport from activating interface elements
+                return false;
             }
             double guiX = scaleManager.windowToGuiX(mouseX);
             double guiY = scaleManager.windowToGuiY(mouseY);
@@ -67,13 +165,35 @@ public class ScreenManager {
         }
     }
 
+    public boolean handleMouseRelease(double mouseX, double mouseY, int button) {
+        if (currentScreen == null) return false;
+        if (currentScreen.usesLogicalCoordinates()) {
+            double guiX = scaleManager.windowToGuiX(mouseX);
+            double guiY = scaleManager.windowToGuiY(mouseY);
+            return currentScreen.mouseReleased(guiX, guiY, button);
+        } else {
+            return currentScreen.mouseReleased(mouseX, mouseY, button);
+        }
+    }
+
+    public boolean handleMouseScroll(double mouseX, double mouseY, double scrollDelta) {
+        if (currentScreen == null) return false;
+        if (currentScreen.usesLogicalCoordinates()) {
+            double guiX = scaleManager.windowToGuiX(mouseX);
+            double guiY = scaleManager.windowToGuiY(mouseY);
+            return currentScreen.mouseScrolled(guiX, guiY, scrollDelta);
+        } else {
+            return currentScreen.mouseScrolled(mouseX, mouseY, scrollDelta);
+        }
+    }
+
     public void onResize(int width, int height) {
         scaleManager.update(width, height, width, height);
-        if (currentScreen != null) {
-            if (currentScreen.usesLogicalCoordinates()) {
-                currentScreen.init(scaleManager.getGuiWidth(), scaleManager.getGuiHeight());
+        for (Screen screen : screenStack) {
+            if (screen.usesLogicalCoordinates()) {
+                screen.init(scaleManager.getGuiWidth(), scaleManager.getGuiHeight());
             } else {
-                currentScreen.init(width, height);
+                screen.init(width, height);
             }
         }
     }
