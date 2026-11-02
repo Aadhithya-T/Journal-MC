@@ -19,6 +19,11 @@ public class MinecraftLogoRenderer {
 
     public void init() {
         if (textureId != 0) return;
+        try {
+            org.lwjgl.opengl.GL.getCapabilities();
+        } catch (Throwable noGlContext) {
+            return;
+        }
 
         BufferedImage image = new BufferedImage(LOGO_TEX_W, LOGO_TEX_H, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics();
