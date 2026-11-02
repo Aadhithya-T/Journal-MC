@@ -24,7 +24,37 @@ public class BlockBreakingManager {
     private boolean wasRmbDown = false;
     private int hitParticleTick = 0;
 
+    private int lastSelectedSlot = -1;
+    private byte lastHeldTool = -1;
+    private int lastHeldCount = -1;
+
     public void update(ChunkManager world, ChunkRenderer renderer, ParticleManager particles, ItemEntityManager itemEntities, FluidPhysicsManager fluidPhysics, FirstPersonHandRenderer hand, Player player, Camera camera, boolean lmbDown, boolean rmbDown) {
+        if (player == null) return;
+
+        // Track inventory number (selected slot) and held item changes.
+        // If the inventory number changes while mining, block breaking is stopped and started from scratch.
+        int currentSlot = player.selectedSlot;
+        byte currentTool = player.getSelectedBlock();
+        int currentCount = player.getSelectedCount();
+
+        boolean inventoryChanged = (lastSelectedSlot != -1 && currentSlot != lastSelectedSlot)
+                || (lastHeldTool != -1 && currentTool != lastHeldTool)
+                || (lastHeldCount != -1 && currentCount != lastHeldCount);
+
+        if (inventoryChanged) {
+            if (breakProgress > 0.0f) {
+                breakProgress = 0.0f;
+                hitParticleTick = 0;
+                if (hand != null) {
+                    hand.resetMiningAnimation();
+                }
+            }
+        }
+
+        lastSelectedSlot = currentSlot;
+        lastHeldTool = currentTool;
+        lastHeldCount = currentCount;
+
         // 1. Cast ray from player eye position along look direction
         Vector3f eyePos = player.getEyePosition(1.0f);
         Vector3f lookDir = camera.getLookDirection();
@@ -242,4 +272,9 @@ public class BlockBreakingManager {
     public float getBreakProgress() {
         return breakProgress;
     }
+
+    public int getTargetBx() { return targetBx; }
+    public int getTargetBy() { return targetBy; }
+    public int getTargetBz() { return targetBz; }
+    public int getLastSelectedSlot() { return lastSelectedSlot; }
 }

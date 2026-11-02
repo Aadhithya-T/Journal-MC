@@ -683,6 +683,11 @@ public class FirstPersonHandRenderer {
         this.isMining = mining;
     }
 
+    public void resetMiningAnimation() {
+        this.miningTimer = 0.0f;
+        this.swingProgress = 0.0f;
+    }
+
     public void update(float deltaTime, Player player) {
         idleTime += deltaTime;
 
