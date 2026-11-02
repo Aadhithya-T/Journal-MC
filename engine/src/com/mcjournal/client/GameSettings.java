@@ -20,6 +20,9 @@ public class GameSettings {
     public int renderDistance = 12; // In chunks (4..24)
     public float fov = 70.0f;       // In degrees (60..110)
     public boolean showFps = true;
+    public boolean showHud = true;
+    public boolean showCoordinates = true;
+    public boolean showCrosshair = true;
     public int fogMode = 0;         // 0: Fancy, 1: Fast, 2: Off
     public int guiScale = 0;        // 0: Auto, 1: 1x, 2: 2x, 3: 3x, 4: 4x
 
@@ -101,6 +104,10 @@ public class GameSettings {
         if (fov > 110.0f) fov = 60.0f;
         save();
     }
+
+    public void toggleShowHud() { showHud = !showHud; save(); }
+    public void toggleShowCoordinates() { showCoordinates = !showCoordinates; save(); }
+    public void toggleShowCrosshair() { showCrosshair = !showCrosshair; save(); }
 
     public void toggleShowFps() {
         showFps = !showFps;
