@@ -42,6 +42,9 @@ public class MasterTestSuite {
         // Phase 7: Finite World Final Integration & Stability
         runSuite("Phase 7: Finite World Final Integration & Stability", () -> FiniteWorldIntegrationAndStabilityTest.main(new String[0]));
 
+        // GUI Overhaul Phase 0: GuiRenderer Verification & Stability
+        runSuite("GUI Overhaul Phase 0: GuiRenderer Verification & Stability", () -> GuiRendererVerificationTest.main(new String[0]));
+
         // P12 & P13 Performance Instrumentation & Constants
         runSuite("P12 & P13: Engine Instrumentation & Constants", () -> EngineInstrumentationTest.main(new String[0]));
 

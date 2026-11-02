@@ -547,7 +547,7 @@ public class FiniteWorldIntegrationAndStabilityTest {
         ChunkManager manager = new ChunkManager(2, 424242L, worldDir, WorldBounds.DEFAULT);
         int spawnCx = 78; // Center chunk (1250 / 16)
         int spawnCz = 78;
-        manager.waitForInitialChunks(spawnCx, spawnCz, 1);
+        manager.waitForInitialChunks(spawnCx, spawnCz, 2);
         int initialLoaded = manager.getLoadedChunkCount();
 
         // 1. Out-of-world mutation rejection

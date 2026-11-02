@@ -23,26 +23,26 @@ public class OptionsScreen extends Screen {
         int startX = (width - totalRowW) / 2;
         int startY = height / 2 - 80;
 
-        GameSettings settings = app.getSettings();
+        GameSettings settings = (app != null) ? app.getSettings() : new GameSettings();
 
         // Row 1: FOV & Max Framerate (FPS limit)
         buttons.add(new Button(1, "FOV: " + (int) settings.fov + "°", startX, startY, btnW, btnH, () -> {
             settings.cycleFov();
-            app.getCamera().setFov(settings.fov);
-            app.getCamera().updateProjection(app.getWindow().getAspectRatio());
+            if (app != null && app.getCamera() != null) app.getCamera().setFov(settings.fov);
+            if (app != null && app.getCamera() != null && app.getWindow() != null) app.getCamera().updateProjection(app.getWindow().getAspectRatio());
             init(width, height);
         }));
 
         buttons.add(new Button(2, "Max FPS: " + settings.getFpsDisplayString(), startX + btnW + gap, startY, btnW, btnH, () -> {
             settings.cycleFpsLimit();
-            app.applySettings();
+            if (app != null) app.applySettings();
             init(width, height);
         }));
 
         // Row 2: Render Distance & Show FPS
         buttons.add(new Button(3, "Render Dist: " + settings.renderDistance + " Chunks", startX, startY + 48, btnW, btnH, () -> {
             settings.cycleRenderDistance();
-            app.applySettings();
+            if (app != null) app.applySettings();
             init(width, height);
         }));
 
@@ -61,8 +61,8 @@ public class OptionsScreen extends Screen {
         int doneW = 320;
         buttons.add(new Button(10, "Done", (width - doneW) / 2, startY + 160, doneW, btnH, () -> {
             settings.save();
-            app.applySettings();
-            app.setScreen(parentScreen);
+            if (app != null) app.applySettings();
+            if (app != null) app.setScreen(parentScreen);
         }));
     }
 
@@ -83,9 +83,9 @@ public class OptionsScreen extends Screen {
     @Override
     public void keyPressed(int keyCode, int scanCode, int action, int mods) {
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
-            app.getSettings().save();
-            app.applySettings();
-            app.setScreen(parentScreen);
+            if (app != null) app.getSettings().save();
+            if (app != null) app.applySettings();
+            if (app != null) app.setScreen(parentScreen);
         }
     }
 }

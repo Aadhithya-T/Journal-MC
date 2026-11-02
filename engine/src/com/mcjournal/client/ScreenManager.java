@@ -45,8 +45,11 @@ public class ScreenManager {
     public void render(GuiRenderer guiRenderer, FontRenderer fontRenderer, InputHandler input, float deltaTime, int width, int height) {
         if (currentScreen != null && guiRenderer != null && fontRenderer != null && input != null) {
             guiRenderer.begin(width, height);
-            currentScreen.render(guiRenderer, fontRenderer, input.getMouseX(), input.getMouseY(), deltaTime);
-            guiRenderer.end();
+            try {
+                currentScreen.render(guiRenderer, fontRenderer, input.getMouseX(), input.getMouseY(), deltaTime);
+            } finally {
+                guiRenderer.end();
+            }
         }
     }
 }

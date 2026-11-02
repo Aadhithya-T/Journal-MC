@@ -5,23 +5,68 @@ import com.mcjournal.client.TextureAtlas;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryUtil;
 
+import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL14.GL_BLEND_DST_ALPHA;
+import static org.lwjgl.opengl.GL14.GL_BLEND_DST_RGB;
+import static org.lwjgl.opengl.GL14.GL_BLEND_SRC_ALPHA;
+import static org.lwjgl.opengl.GL14.GL_BLEND_SRC_RGB;
+import static org.lwjgl.opengl.GL14.glBlendFuncSeparate;
 import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30.*;
 
+/**
+ * High-performance batched 2D GUI renderer with robust OpenGL state preservation,
+ * dynamic quad buffering, Painter's-order consistency, and 1x1 white texture fallback.
+ */
 public class GuiRenderer {
+    public static final int MAX_QUADS = 2048;
+    public static final int VERTICES_PER_QUAD = 6;
+    public static final int FLOATS_PER_VERTEX = 8; // (x, y, u, v, r, g, b, a)
+    public static final int STRIDE_BYTES = FLOATS_PER_VERTEX * Float.BYTES;
+    public static final int BUFFER_CAPACITY_FLOATS = MAX_QUADS * VERTICES_PER_QUAD * FLOATS_PER_VERTEX;
+
     private final ShaderProgram guiShader;
     private final Matrix4f orthoMatrix = new Matrix4f();
-    private int vao;
-    private int vbo;
-    private final FloatBuffer vertexBuffer = MemoryUtil.memAllocFloat(6 * 8);
+    private final FloatBuffer vertexBuffer;
+
+    private int vao = 0;
+    private int vbo = 0;
+    private int whiteTextureId = 0;
+
+    // Batching state
+    private boolean isDrawing = false;
+    private boolean isCleanedUp = false;
+    private int currentTextureId = -1;
+    private int currentUseTexture = -1; // 0 = solid untextured, 1 = textured
+    private int quadCount = 0;
+
+    // Telemetry & metrics
+    private int drawCallCount = 0;
+    private int totalQuadCount = 0;
+
+    // Saved OpenGL state for strict restoration
+    private boolean prevDepthTest;
+    private boolean prevCullFace;
+    private boolean prevBlend;
+    private boolean prevDepthMask;
+    private int prevBlendSrcRgb;
+    private int prevBlendDstRgb;
+    private int prevBlendSrcAlpha;
+    private int prevBlendDstAlpha;
+    private int prevActiveTexture;
+    private int prevTextureBinding;
+    private int prevVao;
+    private int prevVbo;
+    private int prevProgram;
 
     public GuiRenderer() {
         this.guiShader = new ShaderProgram("/shaders/gui_vertex.glsl", "/shaders/gui_fragment.glsl");
+        this.vertexBuffer = MemoryUtil.memAllocFloat(BUFFER_CAPACITY_FLOATS);
         initGL();
     }
 
@@ -32,54 +77,249 @@ public class GuiRenderer {
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-        int stride = 8 * Float.BYTES;
+        // Pre-allocate VBO on GPU to avoid per-flush reallocation
+        glBufferData(GL_ARRAY_BUFFER, (long) BUFFER_CAPACITY_FLOATS * Float.BYTES, GL_DYNAMIC_DRAW);
 
-        glVertexAttribPointer(0, 2, GL_FLOAT, false, stride, 0);
+        // Vertex layout: Location 0: vec2 aPos (8 floats stride, offset 0)
+        glVertexAttribPointer(0, 2, GL_FLOAT, false, STRIDE_BYTES, 0);
         glEnableVertexAttribArray(0);
 
-        glVertexAttribPointer(1, 2, GL_FLOAT, false, stride, 2 * Float.BYTES);
+        // Vertex layout: Location 1: vec2 aUV (8 floats stride, offset 2 floats)
+        glVertexAttribPointer(1, 2, GL_FLOAT, false, STRIDE_BYTES, 2L * Float.BYTES);
         glEnableVertexAttribArray(1);
 
-        glVertexAttribPointer(2, 4, GL_FLOAT, false, stride, 4 * Float.BYTES);
+        // Vertex layout: Location 2: vec4 aColor (8 floats stride, offset 4 floats)
+        glVertexAttribPointer(2, 4, GL_FLOAT, false, STRIDE_BYTES, 4L * Float.BYTES);
         glEnableVertexAttribArray(2);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
+
+        // Generate 1x1 solid white texture (RGBA: 255, 255, 255, 255)
+        initWhiteTexture();
+    }
+
+    private void initWhiteTexture() {
+        whiteTextureId = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, whiteTextureId);
+
+        ByteBuffer pixel = MemoryUtil.memAlloc(4);
+        pixel.put((byte) 0xFF).put((byte) 0xFF).put((byte) 0xFF).put((byte) 0xFF);
+        pixel.flip();
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+        MemoryUtil.memFree(pixel);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 
     public void begin(int screenWidth, int screenHeight) {
+        if (isDrawing) {
+            // Safe recovery if previous begin was not properly closed
+            end();
+        }
+
+        // 1. Snapshot previous OpenGL state
+        prevDepthTest = glIsEnabled(GL_DEPTH_TEST);
+        prevCullFace = glIsEnabled(GL_CULL_FACE);
+        prevBlend = glIsEnabled(GL_BLEND);
+        prevDepthMask = glGetBoolean(GL_DEPTH_WRITEMASK);
+        prevBlendSrcRgb = glGetInteger(GL_BLEND_SRC_RGB);
+        prevBlendDstRgb = glGetInteger(GL_BLEND_DST_RGB);
+        prevBlendSrcAlpha = glGetInteger(GL_BLEND_SRC_ALPHA);
+        prevBlendDstAlpha = glGetInteger(GL_BLEND_DST_ALPHA);
+        prevActiveTexture = glGetInteger(GL_ACTIVE_TEXTURE);
+        prevTextureBinding = glGetInteger(GL_TEXTURE_BINDING_2D);
+        prevVao = glGetInteger(GL_VERTEX_ARRAY_BINDING);
+        prevVbo = glGetInteger(GL_ARRAY_BUFFER_BINDING);
+        prevProgram = glGetInteger(GL_CURRENT_PROGRAM);
+
+        // 2. Set up deterministic 2D GUI pipeline state
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(false);
 
+        // 3. Configure Orthographic Projection Matrix
         orthoMatrix.identity();
         orthoMatrix.ortho2D(0, screenWidth, screenHeight, 0);
 
         guiShader.bind();
         guiShader.setUniform("uOrtho", orthoMatrix);
+        guiShader.setUniform("uTexture", 0);
+
+        // 4. Reset batch trackers
+        isDrawing = true;
+        currentTextureId = -1;
+        currentUseTexture = -1;
+        quadCount = 0;
+        vertexBuffer.clear();
+    }
+
+    public void flush() {
+        if (quadCount == 0) return;
+
+        // Apply shader uniform for texture usage
+        guiShader.setUniform("uUseTexture", currentUseTexture);
+
+        if (currentUseTexture == 1) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, currentTextureId != 0 ? currentTextureId : whiteTextureId);
+        }
+
+        // Transfer buffered vertex attributes to GPU
+        vertexBuffer.flip();
+        glBindVertexArray(vao);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, vertexBuffer);
+
+        glDrawArrays(GL_TRIANGLES, 0, quadCount * VERTICES_PER_QUAD);
+
+        drawCallCount++;
+        totalQuadCount += quadCount;
+
+        // Reset buffer cursor for subsequent quads in this pass
+        vertexBuffer.clear();
+        quadCount = 0;
     }
 
     public void end() {
-        guiShader.unbind();
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_CULL_FACE);
+        if (!isDrawing) return;
+
+        try {
+            flush();
+        } finally {
+            // Restore previous bindings and shader
+            glActiveTexture(prevActiveTexture);
+            glBindTexture(GL_TEXTURE_2D, prevTextureBinding);
+            glBindBuffer(GL_ARRAY_BUFFER, prevVbo);
+            glBindVertexArray(prevVao);
+            glUseProgram(prevProgram);
+
+            // Restore previous OpenGL rasterizer and depth/blend states
+            if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+            if (prevCullFace) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+            if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+            glDepthMask(prevDepthMask);
+            glBlendFuncSeparate(prevBlendSrcRgb, prevBlendDstRgb, prevBlendSrcAlpha, prevBlendDstAlpha);
+
+            isDrawing = false;
+            currentTextureId = -1;
+            currentUseTexture = -1;
+        }
     }
 
     public void drawRect(float x, float y, float w, float h, float r, float g, float b, float a) {
-        guiShader.setUniform("uUseTexture", 0);
+        if (!isDrawing) return;
 
-        vertexBuffer.clear();
-        putVertex(x, y, 0, 0, r, g, b, a);
-        putVertex(x + w, y, 0, 0, r, g, b, a);
-        putVertex(x + w, y + h, 0, 0, r, g, b, a);
+        // Solid untextured rectangle
+        if (currentUseTexture != 0) {
+            flush();
+            currentUseTexture = 0;
+            currentTextureId = 0;
+        }
 
-        putVertex(x, y, 0, 0, r, g, b, a);
-        putVertex(x + w, y + h, 0, 0, r, g, b, a);
-        putVertex(x, y + h, 0, 0, r, g, b, a);
-        vertexBuffer.flip();
+        if (quadCount >= MAX_QUADS) {
+            flush();
+        }
 
-        drawBuffer();
+        putVertex(x, y, 0f, 0f, r, g, b, a);
+        putVertex(x + w, y, 1f, 0f, r, g, b, a);
+        putVertex(x + w, y + h, 1f, 1f, r, g, b, a);
+
+        putVertex(x, y, 0f, 0f, r, g, b, a);
+        putVertex(x + w, y + h, 1f, 1f, r, g, b, a);
+        putVertex(x, y + h, 0f, 1f, r, g, b, a);
+
+        quadCount++;
+    }
+
+    public void drawTexturedQuad(int textureId, float x, float y, float w, float h, float u0, float v0, float u1, float v1, float r, float g, float b, float a) {
+        if (!isDrawing) return;
+
+        int effectiveTex = (textureId != 0) ? textureId : whiteTextureId;
+
+        if (currentUseTexture != 1 || currentTextureId != effectiveTex) {
+            flush();
+            currentUseTexture = 1;
+            currentTextureId = effectiveTex;
+        }
+
+        if (quadCount >= MAX_QUADS) {
+            flush();
+        }
+
+        putVertex(x, y, u0, v0, r, g, b, a);
+        putVertex(x + w, y, u1, v0, r, g, b, a);
+        putVertex(x + w, y + h, u1, v1, r, g, b, a);
+
+        putVertex(x, y, u0, v0, r, g, b, a);
+        putVertex(x + w, y + h, u1, v1, r, g, b, a);
+        putVertex(x, y + h, u0, v1, r, g, b, a);
+
+        quadCount++;
+    }
+
+    public void drawTexturedQuadArbitrary(int textureId,
+                                          float x0, float y0, float u0, float v0,
+                                          float x1, float y1, float u1, float v1,
+                                          float x2, float y2, float u2, float v2,
+                                          float x3, float y3, float u3, float v3,
+                                          float r, float g, float b, float a) {
+        if (!isDrawing) return;
+
+        int effectiveTex = (textureId != 0) ? textureId : whiteTextureId;
+
+        if (currentUseTexture != 1 || currentTextureId != effectiveTex) {
+            flush();
+            currentUseTexture = 1;
+            currentTextureId = effectiveTex;
+        }
+
+        if (quadCount >= MAX_QUADS) {
+            flush();
+        }
+
+        putVertex(x0, y0, u0, v0, r, g, b, a);
+        putVertex(x1, y1, u1, v1, r, g, b, a);
+        putVertex(x2, y2, u2, v2, r, g, b, a);
+
+        putVertex(x0, y0, u0, v0, r, g, b, a);
+        putVertex(x2, y2, u2, v2, r, g, b, a);
+        putVertex(x3, y3, u3, v3, r, g, b, a);
+
+        quadCount++;
+    }
+
+    private void putVertex(float x, float y, float u, float v, float r, float g, float b, float a) {
+        vertexBuffer.put(x).put(y).put(u).put(v).put(r).put(g).put(b).put(a);
+    }
+
+    public void drawHexRect(float x, float y, float w, float h, int hexColor, float alpha) {
+        float r = ((hexColor >> 16) & 0xFF) / 255f;
+        float g = ((hexColor >> 8) & 0xFF) / 255f;
+        float b = (hexColor & 0xFF) / 255f;
+        drawRect(x, y, w, h, r, g, b, alpha);
+    }
+
+    public void drawBevelBox(float x, float y, float w, float h, int bgHex, int borderLightHex, int borderDarkHex) {
+        float bgR = ((bgHex >> 16) & 0xFF) / 255f, bgG = ((bgHex >> 8) & 0xFF) / 255f, bgB = (bgHex & 0xFF) / 255f;
+        float lR = ((borderLightHex >> 16) & 0xFF) / 255f, lG = ((borderLightHex >> 8) & 0xFF) / 255f, lB = (borderLightHex & 0xFF) / 255f;
+        float dR = ((borderDarkHex >> 16) & 0xFF) / 255f, dG = ((borderDarkHex >> 8) & 0xFF) / 255f, dB = (borderDarkHex & 0xFF) / 255f;
+
+        drawRect(x, y, w, h, bgR, bgG, bgB, 0.90f);
+
+        drawRect(x, y, w, 2, lR, lG, lB, 1.0f);
+        drawRect(x, y, 2, h, lR, lG, lB, 1.0f);
+
+        drawRect(x, y + h - 2, w, 2, dR, dG, dB, 1.0f);
+        drawRect(x + w - 2, y, 2, h, dR, dG, dB, 1.0f);
     }
 
     public void drawMinecraftButton(float x, float y, float w, float h, boolean isHovered, boolean isEnabled) {
@@ -152,93 +392,47 @@ public class GuiRenderer {
         }
     }
 
-    public void drawBevelBox(float x, float y, float w, float h, int bgHex, int borderLightHex, int borderDarkHex) {
-        float bgR = ((bgHex >> 16) & 0xFF) / 255f, bgG = ((bgHex >> 8) & 0xFF) / 255f, bgB = (bgHex & 0xFF) / 255f;
-        float lR = ((borderLightHex >> 16) & 0xFF) / 255f, lG = ((borderLightHex >> 8) & 0xFF) / 255f, lB = (borderLightHex & 0xFF) / 255f;
-        float dR = ((borderDarkHex >> 16) & 0xFF) / 255f, dG = ((borderDarkHex >> 8) & 0xFF) / 255f, dB = (borderDarkHex & 0xFF) / 255f;
-
-        drawRect(x, y, w, h, bgR, bgG, bgB, 0.90f);
-
-        drawRect(x, y, w, 2, lR, lG, lB, 1.0f);
-        drawRect(x, y, 2, h, lR, lG, lB, 1.0f);
-
-        drawRect(x, y + h - 2, w, 2, dR, dG, dB, 1.0f);
-        drawRect(x + w - 2, y, 2, h, dR, dG, dB, 1.0f);
+    public boolean isDrawing() {
+        return isDrawing;
     }
 
-    public void drawHexRect(float x, float y, float w, float h, int hexColor, float alpha) {
-        float r = ((hexColor >> 16) & 0xFF) / 255f;
-        float g = ((hexColor >> 8) & 0xFF) / 255f;
-        float b = (hexColor & 0xFF) / 255f;
-        drawRect(x, y, w, h, r, g, b, alpha);
+    public int getWhiteTextureId() {
+        return whiteTextureId;
     }
 
-    public void drawTexturedQuad(int textureId, float x, float y, float w, float h, float u0, float v0, float u1, float v1, float r, float g, float b, float a) {
-        guiShader.setUniform("uUseTexture", 1);
-        guiShader.setUniform("uTexture", 0);
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureId);
-
-        vertexBuffer.clear();
-        putVertex(x, y, u0, v0, r, g, b, a);
-        putVertex(x + w, y, u1, v0, r, g, b, a);
-        putVertex(x + w, y + h, u1, v1, r, g, b, a);
-
-        putVertex(x, y, u0, v0, r, g, b, a);
-        putVertex(x + w, y + h, u1, v1, r, g, b, a);
-        putVertex(x, y + h, u0, v1, r, g, b, a);
-        vertexBuffer.flip();
-
-        drawBuffer();
-        glBindTexture(GL_TEXTURE_2D, 0);
+    public int getDrawCallCount() {
+        return drawCallCount;
     }
 
-    public void drawTexturedQuadArbitrary(int textureId,
-                                          float x0, float y0, float u0, float v0,
-                                          float x1, float y1, float u1, float v1,
-                                          float x2, float y2, float u2, float v2,
-                                          float x3, float y3, float u3, float v3,
-                                          float r, float g, float b, float a) {
-        guiShader.setUniform("uUseTexture", 1);
-        guiShader.setUniform("uTexture", 0);
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureId);
-
-        vertexBuffer.clear();
-        putVertex(x0, y0, u0, v0, r, g, b, a);
-        putVertex(x1, y1, u1, v1, r, g, b, a);
-        putVertex(x2, y2, u2, v2, r, g, b, a);
-
-        putVertex(x0, y0, u0, v0, r, g, b, a);
-        putVertex(x2, y2, u2, v2, r, g, b, a);
-        putVertex(x3, y3, u3, v3, r, g, b, a);
-        vertexBuffer.flip();
-
-        drawBuffer();
-        glBindTexture(GL_TEXTURE_2D, 0);
+    public int getTotalQuadCount() {
+        return totalQuadCount;
     }
 
-    private void putVertex(float x, float y, float u, float v, float r, float g, float b, float a) {
-        vertexBuffer.put(x).put(y).put(u).put(v).put(r).put(g).put(b).put(a);
-    }
-
-    private void drawBuffer() {
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, vertexBuffer, GL_DYNAMIC_DRAW);
-
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+    public void resetMetrics() {
+        drawCallCount = 0;
+        totalQuadCount = 0;
     }
 
     public void cleanup() {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
+
+        if (isDrawing) {
+            end();
+        }
         if (guiShader != null) guiShader.cleanup();
-        if (vbo != 0) glDeleteBuffers(vbo);
-        if (vao != 0) glDeleteVertexArrays(vao);
+        if (vbo != 0) {
+            glDeleteBuffers(vbo);
+            vbo = 0;
+        }
+        if (vao != 0) {
+            glDeleteVertexArrays(vao);
+            vao = 0;
+        }
+        if (whiteTextureId != 0) {
+            glDeleteTextures(whiteTextureId);
+            whiteTextureId = 0;
+        }
         MemoryUtil.memFree(vertexBuffer);
     }
 }

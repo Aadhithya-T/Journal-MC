@@ -189,28 +189,34 @@ public class GameRenderer {
             // 5. In-Game HUD
             if (!screenManager.hasScreen()) {
                 guiRenderer.begin(window.getWidth(), window.getHeight());
-                int renderedCount = (chunkRenderer != null) ? chunkRenderer.getLastRenderedChunks() : 0;
-                int loadedCount = (chunkRenderer != null) ? chunkRenderer.getLoadedMeshCount() : 0;
-                hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(),
-                        worldSession.getCurrentBiome(), atlas != null ? atlas.getTextureId() : 0,
-                        currentFps, settings.showFps, renderedCount, loadedCount);
+                try {
+                    int renderedCount = (chunkRenderer != null) ? chunkRenderer.getLastRenderedChunks() : 0;
+                    int loadedCount = (chunkRenderer != null) ? chunkRenderer.getLoadedMeshCount() : 0;
+                    hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(),
+                            worldSession.getCurrentBiome(), atlas != null ? atlas.getTextureId() : 0,
+                            currentFps, settings.showFps, renderedCount, loadedCount);
 
-                // Red damage hurt vignette
-                if (player.hurtTime > 0) {
-                    float hurtFraction = Math.clamp(((float) player.hurtTime - partialTick) / (float) player.maxHurtTime, 0.0f, 1.0f);
-                    if (hurtFraction > 0.0f) {
-                        float alpha = hurtFraction * 0.32f;
-                        guiRenderer.drawRect(0, 0, window.getWidth(), window.getHeight(), 0.90f, 0.05f, 0.05f, alpha);
+                    // Red damage hurt vignette
+                    if (player.hurtTime > 0) {
+                        float hurtFraction = Math.clamp(((float) player.hurtTime - partialTick) / (float) player.maxHurtTime, 0.0f, 1.0f);
+                        if (hurtFraction > 0.0f) {
+                            float alpha = hurtFraction * 0.32f;
+                            guiRenderer.drawRect(0, 0, window.getWidth(), window.getHeight(), 0.90f, 0.05f, 0.05f, alpha);
+                        }
                     }
+                } finally {
+                    guiRenderer.end();
                 }
-                guiRenderer.end();
             }
         } else {
             // Authentic Minecraft dirt background (Title / Menus)
             if (atlas != null) {
                 guiRenderer.begin(window.getWidth(), window.getHeight());
-                guiRenderer.drawDirtBackground(atlas.getTextureId(), window.getWidth(), window.getHeight());
-                guiRenderer.end();
+                try {
+                    guiRenderer.drawDirtBackground(atlas.getTextureId(), window.getWidth(), window.getHeight());
+                } finally {
+                    guiRenderer.end();
+                }
             }
         }
 
