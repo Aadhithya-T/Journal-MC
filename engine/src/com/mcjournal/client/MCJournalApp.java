@@ -252,6 +252,8 @@ public class MCJournalApp {
         return currentFps;
     }
 
+    public com.mcjournal.client.gui.HudRenderer getHudRenderer() { return gameRenderer.getHudRenderer(); }
+
     public TextureAtlas getAtlas() {
         return gameRenderer.getAtlas();
     }

@@ -2,7 +2,8 @@ package com.mcjournal.client;
 
 import com.mcjournal.client.gui.FontRenderer;
 import com.mcjournal.client.gui.GuiRenderer;
-import com.mcjournal.client.gui.HardcoreHUD;
+import com.mcjournal.client.gui.HudRenderer;
+import com.mcjournal.client.gui.GuiScaleManager;
 import org.joml.Vector3f;
 
 import static org.lwjgl.glfw.GLFW.glfwGetTime;
@@ -20,7 +21,7 @@ public class GameRenderer {
     private SkyRenderer skyRenderer;
     private GuiRenderer guiRenderer;
     private FontRenderer fontRenderer;
-    private HardcoreHUD hud;
+    private HudRenderer hudRenderer;
     private BlockSelectionRenderer blockSelectionRenderer;
     private FirstPersonHandRenderer handRenderer;
 
@@ -31,8 +32,8 @@ public class GameRenderer {
         guiRenderer = new GuiRenderer();
         fontRenderer = new FontRenderer();
         fontRenderer.init();
-        hud = new HardcoreHUD();
-        hud.init();
+        hudRenderer = new HudRenderer();
+        hudRenderer.init();
 
         skyRenderer = new SkyRenderer();
         skyRenderer.init();
@@ -49,6 +50,8 @@ public class GameRenderer {
         chunkShader = new ShaderProgram("/shaders/chunk_vertex.glsl", "/shaders/chunk_fragment.glsl");
         atlas.init();
     }
+
+    public HudRenderer getHudRenderer() { return hudRenderer; }
 
     public TextureAtlas getAtlas() {
         return atlas;
@@ -186,24 +189,29 @@ public class GameRenderer {
                         timeSystem.getGroundAmbientColor(), window.getAspectRatio());
             }
 
-            // 5. In-Game HUD
-            if (!screenManager.hasScreen()) {
-                guiRenderer.begin(window.getWidth(), window.getHeight());
+            // 5. In-Game HUD (Rendered in logical GUI coordinates)
+            if (!screenManager.hasScreen() && settings.showHud && hudRenderer != null) {
+                GuiScaleManager scaleManager = screenManager.getScaleManager();
+                scaleManager.update(window.getWidth(), window.getHeight(), window.getWidth(), window.getHeight());
+
+                guiRenderer.begin(scaleManager.getGuiWidth(), scaleManager.getGuiHeight(),
+                        scaleManager.getViewportX(), scaleManager.getViewportY(),
+                        scaleManager.getViewportWidth(), scaleManager.getViewportHeight());
                 try {
                     int renderedCount = (chunkRenderer != null) ? chunkRenderer.getLastRenderedChunks() : 0;
                     int loadedCount = (chunkRenderer != null) ? chunkRenderer.getLoadedMeshCount() : 0;
-                    hud.render(guiRenderer, fontRenderer, player, window.getWidth(), window.getHeight(),
-                            worldSession.getCurrentBiome(), atlas != null ? atlas.getTextureId() : 0,
-                            currentFps, settings.showFps, renderedCount, loadedCount);
+                    Raycast.Hit currentHit = worldSession.getBlockBreakingManager().getCurrentHit();
+                    float breakProgress = worldSession.getBlockBreakingManager().getBreakProgress();
 
-                    // Red damage hurt vignette
-                    if (player.hurtTime > 0) {
-                        float hurtFraction = Math.clamp(((float) player.hurtTime - partialTick) / (float) player.maxHurtTime, 0.0f, 1.0f);
-                        if (hurtFraction > 0.0f) {
-                            float alpha = hurtFraction * 0.32f;
-                            guiRenderer.drawRect(0, 0, window.getWidth(), window.getHeight(), 0.90f, 0.05f, 0.05f, alpha);
-                        }
-                    }
+                    hudRenderer.getContext().update(
+                            player, worldSession, timeSystem, settings,
+                            currentHit, breakProgress,
+                            worldSession.getCurrentBiome(),
+                            atlas != null ? atlas.getTextureId() : 0,
+                            currentFps, renderedCount, loadedCount, (float) partialTick,
+                            scaleManager.getGuiWidth(), scaleManager.getGuiHeight()
+                    );
+                    hudRenderer.render(guiRenderer, fontRenderer, hudRenderer.getContext());
                 } finally {
                     guiRenderer.end();
                 }
@@ -236,6 +244,6 @@ public class GameRenderer {
         if (fontRenderer != null) fontRenderer.cleanup();
         if (blockSelectionRenderer != null) blockSelectionRenderer.cleanup();
         if (handRenderer != null) handRenderer.cleanup();
-        if (hud != null) hud.cleanup();
+        if (hudRenderer != null) hudRenderer.cleanup();
     }
 }
