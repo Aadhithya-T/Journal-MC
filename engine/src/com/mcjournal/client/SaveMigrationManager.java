@@ -213,9 +213,6 @@ public class SaveMigrationManager {
             destSave.playerZ = pz;
             destSave.playerYaw = sourceSave.playerYaw;
             destSave.playerPitch = sourceSave.playerPitch;
-
-            destSave.health = sourceSave.health;
-            destSave.hunger = sourceSave.hunger;
             destSave.selectedSlot = sourceSave.selectedSlot;
             destSave.hotbarBlocks = sourceSave.hotbarBlocks != null ? sourceSave.hotbarBlocks.clone() : new byte[9];
             destSave.hotbarCounts = sourceSave.hotbarCounts != null ? sourceSave.hotbarCounts.clone() : new int[9];

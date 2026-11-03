@@ -606,8 +606,6 @@ public class FiniteTerrainGenerationTest {
         initialSave.playerX = 800.5f;
         initialSave.playerY = 75.0f;
         initialSave.playerZ = 900.5f;
-        initialSave.health = 18;
-        initialSave.hunger = 19;
         initialSave.worldTime = 14000.0;
         initialSave.hotbarBlocks = new byte[9];
         initialSave.hotbarCounts = new int[9];
@@ -625,8 +623,6 @@ public class FiniteTerrainGenerationTest {
         assert Math.abs(player.pos.x - 800.5f) < 0.001f : "Player X must be preserved";
         assert Math.abs(player.pos.y - 75.0f) < 0.001f : "Player Y must be preserved";
         assert Math.abs(player.pos.z - 900.5f) < 0.001f : "Player Z must be preserved";
-        assert player.health == 18 : "Player health must be preserved";
-        assert player.hunger == 19 : "Player hunger must be preserved";
 
         session.saveAndQuit(player, 14000.0);
         session.shutdown(player, 14000.0);

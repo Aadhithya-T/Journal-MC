@@ -47,7 +47,7 @@ public class GuiPhase4VerificationTest {
         testGuiScaleAdherence();
         testViewportResizing();
         testCrosshairCenteringAndTargeting();
-        testHealthAndHungerIndicators();
+        testNonSurvivalPlayerStatus();
         testHotbarInventoryReflection();
         testWorldInfoAccuracyAndCaching();
         testContextualTargetFeedback();
@@ -87,9 +87,9 @@ public class GuiPhase4VerificationTest {
         sm.setScreen(new EscapeMenuScreen(null), null, null);
         assert sm.hasScreen() : "EscapeMenuScreen must be registered as active screen";
 
-        // Setting GameOverScreen must hide HUD
-        sm.setScreen(new GameOverScreen(null), null, null);
-        assert sm.hasScreen() : "GameOverScreen must be registered as active screen";
+        // Setting OptionsScreen must hide HUD
+        sm.setScreen(new OptionsScreen(null, null), null, null);
+        assert sm.hasScreen() : "OptionsScreen must be registered as active screen";
 
         // Closing screens restores gameplay
         sm.setScreen(null, null, null);
@@ -178,27 +178,14 @@ public class GuiPhase4VerificationTest {
     }
 
     // -------------------------------------------------------------------------
-    // 5. Health & Hunger Indicators
+    // 5. Non-Survival Exploration Player Status
     // -------------------------------------------------------------------------
-    private static void testHealthAndHungerIndicators() {
-        System.out.print("[Phase 4.5] Health (20 HP) & Hunger (20) dynamic value reflection... ");
+    private static void testNonSurvivalPlayerStatus() {
+        System.out.print("[Phase 4.5] Non-survival exploration player state validation... ");
 
         Player player = new Player();
-        player.health = 20;
-        player.hunger = 20;
-
-        assert player.getHealth() == 20 : "Default health must be 20";
-        assert player.getHunger() == 20 : "Default hunger must be 20";
-
-        // Simulate taking damage
-        player.takeDamage(5);
-        assert player.getHealth() == 15 : "Health after 5 damage must be 15";
-        assert player.hurtTime > 0 : "Taking damage must trigger hurtTime flash";
-
-        // Simulate lethal damage
-        player.takeDamage(20);
-        assert player.getHealth() == 0 : "Lethal damage must clamp health to 0";
-        assert player.isDead : "0 HP must trigger player.isDead";
+        assert player.getX() >= 0 : "Player position must be valid";
+        assert player.hotbarBlocks.length == 9 : "Hotbar must have 9 slots";
 
         System.out.println("PASSED");
     }
@@ -433,8 +420,6 @@ public class GuiPhase4VerificationTest {
 
             Player player = new Player();
             player.pos.set(1250.0f, 64.0f, 1250.0f);
-            player.health = 18;
-            player.hunger = 16;
             player.selectedSlot = 2; // Iron Pickaxe
             player.hotbarBlocks[3] = (byte) Blocks.DIRT.getLegacyId();
             player.hotbarCounts[3] = 32;

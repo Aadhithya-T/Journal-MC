@@ -36,7 +36,6 @@ public class EngineInstrumentationTest {
         assert Math.abs(EngineConstants.TICK_DURATION_SECONDS - 0.050) < 0.0001 : "TICK_DURATION must be 0.050s";
         assert EngineConstants.GRAVITY == 0.08f : "GRAVITY must be 0.08";
         assert EngineConstants.JUMP_IMPULSE == 0.42f : "JUMP_IMPULSE must be 0.42";
-        assert EngineConstants.FALL_DAMAGE_THRESHOLD == 3.5f : "FALL_DAMAGE_THRESHOLD must be 3.5";
 
         System.out.println("PASSED");
     }

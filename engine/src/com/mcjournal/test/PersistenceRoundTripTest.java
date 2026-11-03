@@ -117,8 +117,6 @@ public class PersistenceRoundTripTest {
         player.pos.set(10.5f, 72.0f, -8.3f);
         player.yaw = 142.5f;
         player.pitch = -15.0f;
-        player.health = 18;
-        player.hunger = 15;
         player.selectedSlot = 2;
         player.hotbarBlocks[0] = Item.IRON_AXE;
         player.hotbarCounts[0] = 1;
@@ -146,8 +144,6 @@ public class PersistenceRoundTripTest {
         assert Math.abs(loaded.playerZ - (-8.3f)) < 0.001f : "Player Z mismatch";
         assert Math.abs(loaded.playerYaw - 142.5f) < 0.001f : "Player Yaw mismatch";
         assert Math.abs(loaded.playerPitch - (-15.0f)) < 0.001f : "Player Pitch mismatch";
-        assert loaded.health == 18 : "Player health mismatch";
-        assert loaded.hunger == 15 : "Player hunger mismatch";
         assert loaded.selectedSlot == 2 : "Selected slot mismatch";
 
         // Verify Inventory contents

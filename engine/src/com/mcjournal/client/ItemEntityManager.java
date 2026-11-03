@@ -100,7 +100,7 @@ public class ItemEntityManager {
             }
 
             // 2. Check Player Magnet Pickup Collection
-            if (player != null && !player.isDead && item.pickupDelay <= 0.0f && player.canAddItem(item.blockType)) {
+            if (player != null && item.pickupDelay <= 0.0f && player.canAddItem(item.blockType)) {
                 float px = player.pos.x;
                 float py = player.pos.y + 0.8f;
                 float pz = player.pos.z;

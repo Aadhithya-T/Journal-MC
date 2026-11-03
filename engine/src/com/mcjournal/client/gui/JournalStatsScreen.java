@@ -73,14 +73,12 @@ public class JournalStatsScreen extends Screen {
         String worldName = "Unknown World";
         String biome = "Plains";
         long seed = 0;
-        long daysSurvived = 0;
+        long days = 0;
         double worldTimeTicks = 6000.0;
         boolean isDay = true;
         float playerX = 1250.0f;
         float playerY = 66.0f;
         float playerZ = 1250.0f;
-        int health = 20;
-        int hunger = 20;
 
         if (app != null) {
             WorldSession ws = app.getWorldSession();
@@ -93,15 +91,13 @@ public class JournalStatsScreen extends Screen {
                 seed = ws.getCurrentSeed();
                 if (atmo != null) {
                     worldTimeTicks = atmo.getWorldTimeTicks();
-                    daysSurvived = (long) (worldTimeTicks / 24000.0);
+                    days = (long) (worldTimeTicks / 24000.0);
                     isDay = atmo.isDay();
                 }
                 if (player != null) {
                     playerX = player.getX();
                     playerY = player.getY();
                     playerZ = player.getZ();
-                    health = player.getHealth();
-                    hunger = player.getHunger();
                 }
             } else {
                 // Fallback to saved world data
@@ -111,14 +107,12 @@ public class JournalStatsScreen extends Screen {
                     biome = saved.biome;
                     seed = saved.seed;
                     worldTimeTicks = saved.worldTime;
-                    daysSurvived = (long) (worldTimeTicks / 24000.0);
+                    days = (long) (worldTimeTicks / 24000.0);
                     long timeOfDay = (long) (worldTimeTicks % 24000.0);
                     isDay = (timeOfDay >= 0 && timeOfDay < 12000);
                     playerX = saved.playerX;
                     playerY = saved.playerY;
                     playerZ = saved.playerZ;
-                    health = saved.health;
-                    hunger = saved.hunger;
                 }
             }
         }
@@ -132,25 +126,24 @@ public class JournalStatsScreen extends Screen {
         int c1H = 46;
         gui.drawBevelBox(cardX, startY, cardW, c1H, 0x18181c, 0x484852, 0x202024);
         font.drawString(gui, "§6World:§r " + worldName + "  (Seed: " + seed + ")", cardX + 8, startY + 6, 0.52f, 0xffffff, false);
-        font.drawString(gui, "§7Biome:§r " + biome + "  |  §7Mode:§r Hardcore", cardX + 8, startY + 19, 0.50f, 0xcccccc, false);
+        font.drawString(gui, "§7Biome:§r " + biome + "  |  §7Mode:§r Exploration", cardX + 8, startY + 19, 0.50f, 0xcccccc, false);
         font.drawString(gui, "§7Boundaries:§r 2500 x 2500 x 256 (Finite)", cardX + 8, startY + 31, 0.48f, 0xaaaaaa, false);
 
-        // --- CARD 2: Survival Timeline ---
+        // --- CARD 2: Solar Timeline ---
         int c2Y = startY + c1H + 6;
         int c2H = 46;
         gui.drawBevelBox(cardX, c2Y, cardW, c2H, 0x18181c, 0x484852, 0x202024);
-        font.drawString(gui, "§eDays Survived:§r " + daysSurvived + " solar cycles", cardX + 8, c2Y + 6, 0.52f, 0xffffff, false);
+        font.drawString(gui, "§eWorld Age:§r " + days + " solar days", cardX + 8, c2Y + 6, 0.52f, 0xffffff, false);
         long timeOfDay = (long) (worldTimeTicks % 24000.0);
         String cycleStatus = isDay ? "Daylight (" + timeOfDay + " ticks)" : "Nightfall (" + timeOfDay + " ticks)";
         font.drawString(gui, "§7Solar Clock:§r " + cycleStatus, cardX + 8, c2Y + 19, 0.50f, 0xcccccc, false);
         font.drawString(gui, "§7Total Simulation Ticks:§r " + String.format("%.0f", worldTimeTicks), cardX + 8, c2Y + 31, 0.48f, 0xaaaaaa, false);
 
-        // --- CARD 3: Adventurer Status ---
+        // --- CARD 3: Explorer Status ---
         int c3Y = c2Y + c2H + 6;
         int c3H = 46;
         gui.drawBevelBox(cardX, c3Y, cardW, c3H, 0x18181c, 0x484852, 0x202024);
-        String hpColor = health <= 6 ? "§c" : "§a";
-        font.drawString(gui, "§cHealth:§r " + hpColor + health + " / 20 HP§r   |   §6Hunger:§r " + hunger + " / 20", cardX + 8, c3Y + 6, 0.52f, 0xffffff, false);
+        font.drawString(gui, "§aExplorer Status:§r Active", cardX + 8, c3Y + 6, 0.52f, 0xffffff, false);
         font.drawString(gui, "§7Position:§r " + String.format("X: %.1f, Y: %.1f, Z: %.1f", playerX, playerY, playerZ), cardX + 8, c3Y + 19, 0.50f, 0xcccccc, false);
         int seaLevelDelta = (int) (playerY - 64.0f);
         String seaStr = (seaLevelDelta >= 0 ? "+" : "") + seaLevelDelta + "m relative to sea level";

@@ -53,7 +53,7 @@ public class GameInputSystem {
     }
 
     public void handleItemDropInput(InputHandler input, Player player, Camera camera, ItemEntityManager itemEntityManager, FirstPersonHandRenderer handRenderer) {
-        if (input == null || player == null || player.isDead || itemEntityManager == null) return;
+        if (input == null || player == null || itemEntityManager == null) return;
 
         boolean qDown = input.isKeyDown(GLFW_KEY_Q);
         if (qDown) {
@@ -76,7 +76,7 @@ public class GameInputSystem {
     }
 
     private void throwHeldItem(InputHandler input, Player player, Camera camera, ItemEntityManager itemEntityManager, FirstPersonHandRenderer handRenderer) {
-        if (player == null || player.isDead || itemEntityManager == null) return;
+        if (player == null || itemEntityManager == null) return;
 
         boolean dropAll = input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || input.isKeyDown(GLFW_KEY_RIGHT_CONTROL);
         int[] dropped = player.dropSelectedItem(dropAll);

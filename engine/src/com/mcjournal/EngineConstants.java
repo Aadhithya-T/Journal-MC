@@ -52,7 +52,6 @@ public final class EngineConstants {
     public static final float GRAVITY = 0.08f;
     public static final float DRAG_Y = 0.98f;
     public static final float JUMP_IMPULSE = 0.42f;
-    public static final float FALL_DAMAGE_THRESHOLD = 3.5f;
 
     // Fluid Dynamics
     public static final int MAX_FLUID_LEVEL = 7; // Level 0 = source, 1..7 = flowing decay

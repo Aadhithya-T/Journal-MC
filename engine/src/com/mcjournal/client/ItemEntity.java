@@ -79,8 +79,8 @@ public class ItemEntity {
             velocity.z *= 0.96f;
         }
 
-        // Magnet attraction toward player (only if player is alive and can accept this item in inventory)
-        if (player != null && !player.isDead && pickupDelay <= 0.0f && player.canAddItem(blockType)) {
+        // Magnet attraction toward player (only if player can accept this item in inventory)
+        if (player != null && pickupDelay <= 0.0f && player.canAddItem(blockType)) {
             float playerCenterX = player.pos.x;
             float playerCenterY = player.pos.y + 0.8f;
             float playerCenterZ = player.pos.z;

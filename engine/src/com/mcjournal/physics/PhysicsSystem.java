@@ -23,11 +23,13 @@ public class PhysicsSystem {
         Vector3f prevPos,
         Vector3f velocity,
         boolean onGround,
-        boolean inWater,
-        float fallDistance,
-        float highestY,
-        int fallDamage
-    ) {}
+        boolean inWater
+    ) {
+        // Compatibility accessors for legacy callers / tests
+        public float fallDistance() { return 0.0f; }
+        public float highestY() { return pos != null ? pos.y : 0.0f; }
+        public int fallDamage() { return 0; }
+    }
 
     /**
      * Executes one fixed-step simulation tick (0.05s = 20 TPS).
@@ -42,8 +44,6 @@ public class PhysicsSystem {
         float stepHeight,
         float eyeHeight,
         boolean onGround,
-        float fallDistance,
-        float highestY,
         float moveX,
         float moveZ,
         float forwardX,
@@ -64,12 +64,8 @@ public class PhysicsSystem {
         );
 
         float friction;
-        float curFallDistance = fallDistance;
-        float curHighestY = highestY;
 
         if (inWater) {
-            curFallDistance = 0; // Water negates fall damage
-            curHighestY = pos.y;
             friction = 0.80f; // Water fluid drag
 
             float baseSpeed = sprint ? 0.035f : (sneak ? 0.015f : 0.024f);
@@ -134,24 +130,36 @@ public class PhysicsSystem {
         vel.x *= friction;
         vel.z *= friction;
 
-        // 4. Fall Damage Calculation
-        int fallDamage = 0;
-        if (newOnGround) {
-            if (curFallDistance > 3.5f) {
-                fallDamage = (int) Math.floor(curFallDistance - 3.5f);
-            }
-            curFallDistance = 0;
-            curHighestY = pos.y;
-        } else {
-            if (pos.y < curHighestY) {
-                curFallDistance = curHighestY - pos.y;
-            } else {
-                curHighestY = pos.y;
-            }
-        }
+        return new PhysicsState(pos, prevPos, vel, newOnGround, inWater);
+    }
 
-        return new PhysicsState(
-            pos, prevPos, vel, newOnGround, inWater, curFallDistance, curHighestY, fallDamage
+    /**
+     * Backward-compatible overload accepting fall distance and highest Y arguments.
+     */
+    public PhysicsState updateEntity(
+        ChunkManager world,
+        Vector3f curPos,
+        Vector3f prevPos,
+        Vector3f curVel,
+        float width,
+        float height,
+        float stepHeight,
+        float eyeHeight,
+        boolean onGround,
+        float fallDistance,
+        float highestY,
+        float moveX,
+        float moveZ,
+        float forwardX,
+        float forwardZ,
+        boolean forward,
+        boolean jump,
+        boolean sprint,
+        boolean sneak
+    ) {
+        return updateEntity(
+            world, curPos, prevPos, curVel, width, height, stepHeight, eyeHeight, onGround,
+            moveX, moveZ, forwardX, forwardZ, forward, jump, sprint, sneak
         );
     }
 }

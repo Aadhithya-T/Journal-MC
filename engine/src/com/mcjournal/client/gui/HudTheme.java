@@ -23,19 +23,6 @@ public final class HudTheme {
     public static final float GOLD_G = 0.78f;
     public static final float GOLD_B = 0.23f;
 
-    // Health Gem / Shield Colors
-    public static final int RUBY_RED = 0xd81e28;
-    public static final int RUBY_DARK = 0x8a1018;
-    public static final int RUBY_SHINE = 0xff6677;
-    public static final int RUBY_HURT_FLASH = 0xfff2ea;
-    public static final int HEALTH_EMPTY_BG = 0x24242c;
-
-    // Hunger Loaf / Amber Roast Colors
-    public static final int HUNGER_AMBER = 0xdd8218;
-    public static final int HUNGER_DARK = 0x824608;
-    public static final int HUNGER_SHINE = 0xffba46;
-    public static final int HUNGER_EMPTY_BG = 0x28221c;
-
     // Hotbar Dimensions & Layout
     public static final int SLOT_SIZE = 22;
     public static final int SLOT_COUNT = 9;

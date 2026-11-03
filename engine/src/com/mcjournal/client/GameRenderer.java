@@ -84,16 +84,7 @@ public class GameRenderer {
 
             Vector3f eyePos = player.getEyePosition(partialTick);
             camera.setPosition(eyePos.x, eyePos.y, eyePos.z);
-
-            // Damage Screen Shake / Hurt Camera Tilt
-            float damageTilt = 0.0f;
-            if (player.hurtTime > 0) {
-                float hurtFraction = Math.clamp(((float) player.hurtTime - partialTick) / (float) player.maxHurtTime, 0.0f, 1.0f);
-                if (hurtFraction > 0.0f) {
-                    damageTilt = (float) Math.sin(hurtFraction * Math.PI) * player.hurtAngle;
-                }
-            }
-            camera.setRoll(damageTilt);
+            camera.setRoll(0.0f);
             camera.updateView();
             frustumCuller.update(camera.getProjectionMatrix(), camera.getViewMatrix());
             chunkRenderer.updateVisibility(frustumCuller, eyePos.x, eyePos.z, worldSession.getChunkManager().getRenderDistance());

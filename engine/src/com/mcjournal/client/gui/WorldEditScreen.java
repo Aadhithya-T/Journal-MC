@@ -148,7 +148,7 @@ public class WorldEditScreen extends Screen {
             gui.drawBevelBox(formX, cardY, formW, cardH, 0x18181c, 0x484852, 0x202024);
 
             String biome = world.biome != null ? world.biome : "Multi-Biome";
-            String modeStr = "Game Mode: Hardcore (" + biome + ")";
+            String modeStr = "Biome: " + biome + " (Exploration)";
             font.drawString(gui, modeStr, formX + 8, cardY + padY, TextStyle.BODY);
 
             String createdDate = (world.createdAt != null && !world.createdAt.isEmpty()) ? world.createdAt : "Saved";

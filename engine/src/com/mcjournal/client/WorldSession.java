@@ -180,8 +180,6 @@ public class WorldSession {
             player.prevPos.set(px, py, pz);
             player.yaw = existingSave.playerYaw;
             player.pitch = existingSave.playerPitch;
-            player.health = existingSave.health;
-            player.hunger = existingSave.hunger;
             player.selectedSlot = Math.clamp(existingSave.selectedSlot, 0, 8);
             if (existingSave.hotbarBlocks != null && existingSave.hotbarCounts != null) {
                 System.arraycopy(existingSave.hotbarBlocks, 0, player.hotbarBlocks, 0, 9);
@@ -201,12 +199,11 @@ public class WorldSession {
             }
 
             player.velocity.set(0, 0, 0);
-            player.isDead = false;
 
             camera.setYaw(player.yaw);
             camera.setPitch(player.pitch);
             System.out.println("[WorldSession] 🚀 Restored player state at (" +
-                    String.format("%.1f, %.1f, %.1f", player.pos.x, player.pos.y, player.pos.z) + ", HP: " + player.health + "/20, Time: " +
+                    String.format("%.1f, %.1f, %.1f", player.pos.x, player.pos.y, player.pos.z) + ", Time: " +
                     String.format("%.0f", atmosphericSystem != null ? atmosphericSystem.getWorldTimeTicks() : 6000.0) + " ticks)!");
         } else {
             if (atmosphericSystem != null) {
@@ -223,8 +220,6 @@ public class WorldSession {
             player.yaw = 0;
             player.pitch = 0;
             player.velocity.set(0, 0, 0);
-            player.health = 20;
-            player.hunger = 20;
             player.selectedSlot = 0;
             Arrays.fill(player.hotbarBlocks, (byte) 0);
             Arrays.fill(player.hotbarCounts, 0);
@@ -234,14 +229,13 @@ public class WorldSession {
             player.hotbarCounts[1] = 1;
             player.hotbarBlocks[2] = Item.IRON_PICKAXE;
             player.hotbarCounts[2] = 1;
-            player.isDead = false;
 
             camera.setYaw(0);
             camera.setPitch(0);
 
             // Immediately save initial state
             save(player, atmosphericSystem != null ? atmosphericSystem.getWorldTimeTicks() : 6000.0);
-            System.out.println("[WorldSession] 🚀 Spawned into fresh Hardcore World at Y=" + spawnY + "!");
+            System.out.println("[WorldSession] 🚀 Spawned into fresh World at Y=" + spawnY + "!");
         }
 
         this.inWorld = true;

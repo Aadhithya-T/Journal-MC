@@ -39,7 +39,7 @@ public class WorldSaveManager {
 
     public static class SavedWorld {
         public int formatVersion = FORMAT_VERSION;
-        public String name = "Hardcore World";
+        public String name = "World";
         public String biome = "Plains";
         public long seed = 12345L;
         public String createdAt = "";
@@ -51,8 +51,6 @@ public class WorldSaveManager {
         public float playerZ = 8.0f;
         public float playerYaw = 0.0f;
         public float playerPitch = 0.0f;
-        public int health = 20;
-        public int hunger = 20;
         public int selectedSlot = 0;
         public byte[] hotbarBlocks = new byte[9];
         public int[] hotbarCounts = new int[9];
@@ -177,8 +175,10 @@ public class WorldSaveManager {
             world.playerYaw = dis.readFloat();
             world.playerPitch = dis.readFloat();
 
-            world.health = dis.readInt();
-            world.hunger = dis.readInt();
+            // Backward compatibility: read and discard obsolete health and hunger ints from v3 and v4 saves
+            dis.readInt();
+            dis.readInt();
+
             world.selectedSlot = dis.readInt();
 
             world.hotbarBlocks = new byte[9];
@@ -279,7 +279,7 @@ public class WorldSaveManager {
                 dos.writeInt(MAGIC);
                 dos.writeInt(version);
 
-                dos.writeUTF(world.name != null ? world.name : "Hardcore World");
+                dos.writeUTF(world.name != null ? world.name : "World");
                 dos.writeUTF(world.biome != null ? world.biome : "Plains");
                 dos.writeLong(world.seed);
                 dos.writeDouble(world.worldTime);
@@ -290,8 +290,10 @@ public class WorldSaveManager {
                 dos.writeFloat(world.playerYaw);
                 dos.writeFloat(world.playerPitch);
 
-                dos.writeInt(world.health);
-                dos.writeInt(world.hunger);
+                // Backward-compatible padding for legacy health and hunger fields
+                dos.writeInt(20);
+                dos.writeInt(20);
+
                 dos.writeInt(world.selectedSlot);
 
                 for (int i = 0; i < 9; i++) {
@@ -350,8 +352,6 @@ public class WorldSaveManager {
             snapshot.playerZ = player.pos.z;
             snapshot.playerYaw = player.yaw;
             snapshot.playerPitch = player.pitch;
-            snapshot.health = player.health;
-            snapshot.hunger = player.hunger;
             snapshot.selectedSlot = player.selectedSlot;
             snapshot.hotbarBlocks = player.hotbarBlocks.clone();
             snapshot.hotbarCounts = player.hotbarCounts.clone();

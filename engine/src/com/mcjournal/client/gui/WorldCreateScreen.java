@@ -168,8 +168,8 @@ public class WorldCreateScreen extends Screen {
         gui.drawBevelBox(formX, card1Y, formW, cardH, 0x18181c, 0x484852, 0x202024);
         int c1Line1Y = card1Y + padY;
         int c1Line2Y = c1Line1Y + bodyH + lineGap;
-        font.drawString(gui, "Game Mode: Hardcore", formX + 8, c1Line1Y, TextStyle.BODY);
-        font.drawString(gui, "One life · Permadeath", formX + 8, c1Line2Y, TextStyle.CAPTION);
+        font.drawString(gui, "Game Mode: Exploration", formX + 8, c1Line1Y, TextStyle.BODY);
+        font.drawString(gui, "Building & Adventure", formX + 8, c1Line2Y, TextStyle.CAPTION);
 
         // Card 2: World Type
         gui.drawBevelBox(formX, card2Y, formW, cardH, 0x18181c, 0x484852, 0x202024);

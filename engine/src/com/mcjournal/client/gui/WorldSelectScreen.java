@@ -196,7 +196,7 @@ public class WorldSelectScreen extends Screen {
 
             // Authentic metadata extracted from currentWorld
             int textX = iconX + iconSize + 10;
-            String worldName = currentWorld.name != null ? currentWorld.name : "Hardcore World";
+            String worldName = currentWorld.name != null ? currentWorld.name : "World";
             font.drawString(gui, worldName, textX, cardY + 8, TextStyle.BODY);
 
             String createdDate = (currentWorld.createdAt != null && !currentWorld.createdAt.isEmpty())
@@ -207,7 +207,7 @@ public class WorldSelectScreen extends Screen {
 
             int wW = currentWorld.worldWidth > 0 ? currentWorld.worldWidth : 2500;
             int wD = currentWorld.worldDepth > 0 ? currentWorld.worldDepth : 2500;
-            String modeStr = "Hardcore Mode · " + wW + " × " + wD + " Finite";
+            String modeStr = wW + " × " + wD + " · Finite World";
             font.drawString(gui, modeStr, textX, cardY + 34, TextStyle.CAPTION.withColor(0xaaaaaa));
         } else {
             // Empty state

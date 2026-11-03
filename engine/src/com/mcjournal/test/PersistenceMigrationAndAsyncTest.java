@@ -69,8 +69,6 @@ public class PersistenceMigrationAndAsyncTest {
         player.pos.set(12.5f, 68.0f, -4.2f);
         player.yaw = 45.0f;
         player.pitch = -15.0f;
-        player.health = 18;
-        player.hunger = 15;
         player.selectedSlot = 2;
         player.hotbarBlocks[0] = Blocks.STONE.getLegacyId();
         player.hotbarCounts[0] = 64;
@@ -97,7 +95,7 @@ public class PersistenceMigrationAndAsyncTest {
         assert Math.abs(loaded.playerX - 12.5f) < 0.001f : "Player X mismatch";
         assert Math.abs(loaded.playerY - 68.0f) < 0.001f : "Player Y mismatch";
         assert Math.abs(loaded.playerZ - (-4.2f)) < 0.001f : "Player Z mismatch";
-        assert loaded.health == 18 && loaded.hunger == 15 && loaded.selectedSlot == 2 : "Player stats mismatch";
+        assert loaded.selectedSlot == 2 : "Player selected slot mismatch";
         assert loaded.hotbarBlocks[0] == Blocks.STONE.getLegacyId() && loaded.hotbarCounts[0] == 64 : "Hotbar mismatch";
 
         // Verify chunk was persisted to .jmc region file and can be read back

@@ -25,9 +25,9 @@ public class PhysicsSimulationTest {
         testFloorAndWallCollision();
         testGravityAcceleration();
         testJumpMechanics();
-        testFallDamageCalculation();
-        testWaterFallDamageNegation();
-        testPlayerFatalFallPermadeath();
+        testFallNonDamaging();
+        testWaterInteraction();
+        testVoidProtectionAndNonFatalState();
 
         System.out.println(">>> ALL PHYSICS SIMULATION TESTS PASSED SUCCESSFULLY! <<<\n");
     }
@@ -141,40 +141,33 @@ public class PhysicsSimulationTest {
         System.out.println("PASSED");
     }
 
-    private static void testFallDamageCalculation() {
-        System.out.print("[P11 - Physics] Fall damage distance threshold calculation... ");
+    private static void testFallNonDamaging() {
+        System.out.print("[P11 - Physics] Non-damaging falls from varying heights... ");
 
         ChunkManager world = createTestWorld();
         PhysicsSystem physics = new PhysicsSystem();
 
-        // 1. Safe fall: 3.0 blocks
+        // 1. Fall from 3.0 blocks
         Vector3f pos = new Vector3f(5.0f, 65.1f, 5.0f);
         Vector3f vel = new Vector3f(0.0f, -0.2f, 0.0f);
         PhysicsSystem.PhysicsState safeState = physics.updateEntity(
             world, pos, pos, vel, Player.WIDTH, Player.HEIGHT, Player.STEP_HEIGHT, Player.EYE_HEIGHT,
-            false, 3.0f, 68.0f, 0, 0, 0, 0, false, false, false, false
+            false, 0, 0, 0, 0, false, false, false, false
         );
-        assert safeState.onGround() && safeState.fallDamage() == 0 : "Fall <= 3.5 blocks must deal 0 damage";
+        assert safeState.onGround() && safeState.fallDamage() == 0 : "Fall must deal 0 damage";
 
-        // 2. Damaging fall: 6.5 blocks -> floor(6.5 - 3.5) = 3 damage
-        PhysicsSystem.PhysicsState damageState = physics.updateEntity(
+        // 2. High fall: 15.0 blocks
+        PhysicsSystem.PhysicsState highState = physics.updateEntity(
             world, pos, pos, vel, Player.WIDTH, Player.HEIGHT, Player.STEP_HEIGHT, Player.EYE_HEIGHT,
-            false, 6.5f, 71.5f, 0, 0, 0, 0, false, false, false, false
+            false, 0, 0, 0, 0, false, false, false, false
         );
-        assert damageState.onGround() && damageState.fallDamage() == 3 : "Fall of 6.5 blocks must deal exactly 3 damage (got " + damageState.fallDamage() + ")";
-
-        // 3. Heavy fall: 15.0 blocks -> floor(15.0 - 3.5) = 11 damage
-        PhysicsSystem.PhysicsState heavyState = physics.updateEntity(
-            world, pos, pos, vel, Player.WIDTH, Player.HEIGHT, Player.STEP_HEIGHT, Player.EYE_HEIGHT,
-            false, 15.0f, 80.0f, 0, 0, 0, 0, false, false, false, false
-        );
-        assert heavyState.onGround() && heavyState.fallDamage() == 11 : "Fall of 15 blocks must deal 11 damage";
+        assert highState.onGround() && highState.fallDamage() == 0 : "Fall of 15 blocks must deal 0 damage in non-survival";
 
         System.out.println("PASSED");
     }
 
-    private static void testWaterFallDamageNegation() {
-        System.out.print("[P11 - Physics] Water fall damage negation... ");
+    private static void testWaterInteraction() {
+        System.out.print("[P11 - Physics] Water fluid contact and buoyancy... ");
 
         ChunkManager world = createTestWorld();
         // Place water pool at y=65
@@ -183,38 +176,31 @@ public class PhysicsSimulationTest {
 
         PhysicsSystem physics = new PhysicsSystem();
 
-        // Plunge into water from 50 blocks high
+        // Plunge into water
         Vector3f pos = new Vector3f(5.5f, 65.5f, 5.5f);
         Vector3f vel = new Vector3f(0.0f, -1.5f, 0.0f);
 
         PhysicsSystem.PhysicsState waterState = physics.updateEntity(
             world, pos, pos, vel, Player.WIDTH, Player.HEIGHT, Player.STEP_HEIGHT, Player.EYE_HEIGHT,
-            false, 50.0f, 115.0f, 0, 0, 0, 0, false, false, false, false
+            false, 0, 0, 0, 0, false, false, false, false
         );
 
         assert waterState.inWater() : "Entity must detect inWater()";
-        assert waterState.fallDamage() == 0 : "Water contact must completely negate fall damage";
-        assert waterState.fallDistance() == 0.0f : "Fall distance must be reset to 0 upon entering water";
+        assert waterState.fallDamage() == 0 : "Water contact must be non-damaging";
 
         System.out.println("PASSED");
     }
 
-    private static void testPlayerFatalFallPermadeath() {
-        System.out.print("[P11 - Physics] Player fatal damage and permadeath state... ");
+    private static void testVoidProtectionAndNonFatalState() {
+        System.out.print("[P11 - Physics] Player void protection and safe state... ");
 
+        ChunkManager world = createTestWorld();
         Player player = new Player();
-        player.health = 20;
-        player.isDead = false;
+        player.pos.set(5.0f, -15.0f, 5.0f); // In void
 
-        // Take non-fatal damage
-        player.takeDamage(10);
-        assert player.health == 10 : "Health should be 10";
-        assert !player.isDead : "Player should not be dead";
-
-        // Take fatal damage
-        player.takeDamage(15);
-        assert player.health == 0 : "Health should be clamped to 0";
-        assert player.isDead : "Player must be dead when health drops to 0";
+        player.updateTick(world, false, false, false, false, false, false, false);
+        assert player.pos.y >= 0.0f : "Player falling into void must be safely relocated above Y=0";
+        assert Math.abs(player.velocity.y) < 0.001f : "Relocated player vertical velocity must be reset to 0";
 
         System.out.println("PASSED");
     }

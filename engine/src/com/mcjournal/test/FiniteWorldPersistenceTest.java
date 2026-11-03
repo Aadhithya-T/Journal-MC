@@ -102,8 +102,6 @@ public class FiniteWorldPersistenceTest {
         world.playerZ = 1250.5f;
         world.playerYaw = 180.0f;
         world.playerPitch = -10.0f;
-        world.health = 19;
-        world.hunger = 17;
         world.selectedSlot = 3;
         world.hotbarBlocks[0] = Blocks.STONE.getLegacyId();
         world.hotbarCounts[0] = 32;
@@ -133,7 +131,7 @@ public class FiniteWorldPersistenceTest {
         assert "NATURAL".equals(loaded.boundaryType) : "Boundary type mismatch";
         assert loaded.spawnX == 1250 && loaded.spawnY == 66 && loaded.spawnZ == 1250 : "Spawn mismatch";
         assert Math.abs(loaded.playerX - 1250.5f) < 1e-4f : "Player X mismatch";
-        assert loaded.health == 19 && loaded.hunger == 17 && loaded.selectedSlot == 3 : "Player stats mismatch";
+        assert loaded.selectedSlot == 3 : "Selected slot mismatch";
         assert loaded.hotbarBlocks[0] == Blocks.STONE.getLegacyId() && loaded.hotbarCounts[0] == 32 : "Hotbar mismatch";
 
         // Configuration object conversion
@@ -544,8 +542,6 @@ public class FiniteWorldPersistenceTest {
         v3Save.playerX = -50.0f;
         v3Save.playerY = 64.0f;
         v3Save.playerZ = -50.0f;
-        v3Save.health = 15;
-        v3Save.hunger = 12;
         v3Save.selectedSlot = 5;
         for (int i = 0; i < 9; i++) {
             v3Save.hotbarBlocks[i] = (byte) (i + 1);
@@ -617,8 +613,7 @@ public class FiniteWorldPersistenceTest {
         // Player should be relocated to default spawn (1250, 66, 1250)
         assert Math.abs(destSave.playerX - 1250.0f) < 1e-4f : "Player X should be relocated to spawn";
         assert Math.abs(destSave.playerZ - 1250.0f) < 1e-4f : "Player Z should be relocated to spawn";
-        // Stats and inventory must be fully preserved!
-        assert destSave.health == 15 && destSave.hunger == 12 : "Player health & hunger must be preserved";
+        // Inventory must be fully preserved!
         assert destSave.selectedSlot == 5 : "Selected slot must be preserved";
         for (int i = 0; i < 9; i++) {
             assert destSave.hotbarBlocks[i] == (byte) (i + 1) : "Hotbar block mismatch at " + i;

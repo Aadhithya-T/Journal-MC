@@ -97,10 +97,9 @@ public class HudRenderer {
             renderCrosshair(gui, width, height, ctx.hasTarget());
         }
 
-        // 2. Hotbar & Health/Hunger Indicators (Bottom Center)
+        // 2. Hotbar (Bottom Center)
         if (ctx.hasPlayer()) {
             renderHotbar(gui, font, ctx, width, height);
-            renderHealthAndHunger(gui, ctx, width, height);
         }
 
         // 3. World Information Panel (Top Left)
@@ -108,12 +107,7 @@ public class HudRenderer {
             renderWorldInfo(gui, font, ctx, width, height);
         }
 
-        // 4. Red Damage Hurt Vignette
-        if (ctx.hasPlayer() && ctx.player.hurtTime > 0) {
-            renderHurtVignette(gui, ctx, width, height);
-        }
-
-        // 5. Ephemeral In-Game Notifications (e.g. Screenshot capture toast)
+        // 4. Ephemeral In-Game Notifications (e.g. Screenshot capture toast)
         if (notificationText != null && notificationTimer > 0.0f) {
             renderNotification(gui, font, width, height);
         }
@@ -246,181 +240,7 @@ public class HudRenderer {
     }
 
     // -------------------------------------------------------------------------
-    // C. Health (Hearts) & Hunger (Drumsticks) Indicators
-    // -------------------------------------------------------------------------
-    private static final String[] HEART_FULL = {
-        ".##...##.",
-        "#RR#.#RR#",
-        "#WRR#RRR#",
-        "#RRRRRRR#",
-        "#RRRRRRR#",
-        ".#RRRRR#.",
-        "..#RRR#..",
-        "...#R#...",
-        "....#...."
-    };
-
-    private static final String[] HEART_HALF = {
-        ".##...##.",
-        "#RR#.#EE#",
-        "#WRR#EEE#",
-        "#RRRREEE#",
-        "#RRRREEE#",
-        ".#RRREE#.",
-        "..#RRE#..",
-        "...#R#...",
-        "....#...."
-    };
-
-    private static final String[] HEART_EMPTY = {
-        ".##...##.",
-        "#EE#.#EE#",
-        "#EEE#EEE#",
-        "#EEEEEEE#",
-        "#EEEEEEE#",
-        ".#EEEEE#.",
-        "..#EEE#..",
-        "...#E#...",
-        "....#...."
-    };
-
-    private static final String[] DRUMSTICK_FULL = {
-        "....###..",
-        "...#MMM#.",
-        "..#MHMMM#",
-        "..#MMMMM#",
-        ".#MMMMS#.",
-        ".#MMSS##.",
-        "#B##.....",
-        "BB#......",
-        "##......."
-    };
-
-    private static final String[] DRUMSTICK_HALF = {
-        "....###..",
-        "...#EEE#.",
-        "..#EEEEE#",
-        "..#MMMEE#",
-        ".#MMMMS#.",
-        ".#MMSS##.",
-        "#B##.....",
-        "BB#......",
-        "##......."
-    };
-
-    private static final String[] DRUMSTICK_EMPTY = {
-        "....###..",
-        "...#EEE#.",
-        "..#EEEEE#",
-        "..#EEEEE#",
-        ".#EEEEE#.",
-        ".#EEEE##.",
-        "#b##.....",
-        "bb#......",
-        "##......."
-    };
-
-    private void renderHealthAndHunger(GuiRenderer gui, HudContext ctx, int width, int height) {
-        Player player = ctx.player;
-        int hotbarW = HudTheme.HOTBAR_WIDTH;
-        int hx = GuiLayout.centerX(width, hotbarW);
-        int indicatorsY = height - HudTheme.HOTBAR_HEIGHT - 15;
-
-        // 1. Health Bar (Left: 10 Hearts = 20 HP)
-        int hp = Math.clamp(player.health, 0, 20);
-        boolean isHurt = player.hurtTime > 0;
-        int iconSize = HudTheme.ICON_SIZE;
-        int gap = HudTheme.ICON_GAP;
-
-        for (int i = 0; i < 10; i++) {
-            int px = hx + 1 + i * (iconSize + gap);
-            int pipValue = hp - (i * 2);
-            renderHeart(gui, px, indicatorsY, pipValue, isHurt);
-        }
-
-        // 2. Hunger Bar (Right: 10 Roasted Drumsticks = 20 Hunger)
-        int hunger = Math.clamp(player.hunger, 0, 20);
-        int hungerStartX = hx + hotbarW - HudTheme.STATUS_BAR_WIDTH - 1;
-
-        for (int i = 0; i < 10; i++) {
-            // Right-to-left layout: Pip 9 is furthest right
-            int px = hungerStartX + (9 - i) * (iconSize + gap);
-            int pipValue = hunger - (i * 2);
-            renderHungerDrumstick(gui, px, indicatorsY, pipValue);
-        }
-    }
-
-    private void renderHeart(GuiRenderer gui, int x, int y, int pipValue, boolean isHurt) {
-        String[] sprite;
-        if (pipValue <= 0) {
-            sprite = HEART_EMPTY;
-        } else if (pipValue == 1) {
-            sprite = HEART_HALF;
-        } else {
-            sprite = HEART_FULL;
-        }
-
-        for (int dy = 0; dy < 9; dy++) {
-            String row = sprite[dy];
-            for (int dx = 0; dx < 9; dx++) {
-                char c = row.charAt(dx);
-                if (c == '.') continue;
-
-                float r, g, b, a;
-                switch (c) {
-                    case '#' -> { r = 0.08f; g = 0.06f; b = 0.06f; a = 1.0f; } // Dark heart outline
-                    case 'R' -> {
-                        if (isHurt) {
-                            r = 1.0f; g = 1.0f; b = 1.0f; a = 1.0f; // White hurt flash
-                        } else if (dy >= 6) {
-                            r = 0.65f; g = 0.06f; b = 0.06f; a = 1.0f; // Shaded bottom red
-                        } else {
-                            r = 0.92f; g = 0.12f; b = 0.12f; a = 1.0f; // Vibrant Minecraft red
-                        }
-                    }
-                    case 'W' -> { r = 1.0f; g = 1.0f; b = 1.0f; a = 1.0f; } // Specular glint
-                    case 'E' -> { r = 0.20f; g = 0.12f; b = 0.12f; a = 0.88f; } // Empty heart cavity
-                    default  -> { continue; }
-                }
-                gui.drawRect(x + dx, y + dy, 1, 1, r, g, b, a);
-            }
-        }
-    }
-
-    private void renderHungerDrumstick(GuiRenderer gui, int x, int y, int pipValue) {
-        String[] sprite;
-        if (pipValue <= 0) {
-            sprite = DRUMSTICK_EMPTY;
-        } else if (pipValue == 1) {
-            sprite = DRUMSTICK_HALF;
-        } else {
-            sprite = DRUMSTICK_FULL;
-        }
-
-        for (int dy = 0; dy < 9; dy++) {
-            String row = sprite[dy];
-            for (int dx = 0; dx < 9; dx++) {
-                char c = row.charAt(dx);
-                if (c == '.') continue;
-
-                float r, g, b, a;
-                switch (c) {
-                    case '#' -> { r = 0.20f; g = 0.09f; b = 0.03f; a = 1.0f; } // Dark roasted outline
-                    case 'M' -> { r = 0.86f; g = 0.44f; b = 0.08f; a = 1.0f; } // Golden roasted meat
-                    case 'H' -> { r = 0.98f; g = 0.72f; b = 0.24f; a = 1.0f; } // Cooked glaze highlight
-                    case 'S' -> { r = 0.50f; g = 0.22f; b = 0.03f; a = 1.0f; } // Deep roasted shadow
-                    case 'B' -> { r = 0.94f; g = 0.92f; b = 0.86f; a = 1.0f; } // Ivory chicken bone
-                    case 'b' -> { r = 0.38f; g = 0.35f; b = 0.30f; a = 0.85f; } // Dim empty bone
-                    case 'E' -> { r = 0.20f; g = 0.14f; b = 0.10f; a = 0.85f; } // Empty cavity
-                    default  -> { continue; }
-                }
-                gui.drawRect(x + dx, y + dy, 1, 1, r, g, b, a);
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // D. World Information Overlay (Authentic Vanilla F3 Style Lines)
+    // C. World Information Overlay (Authentic Vanilla F3 Style Lines)
     // -------------------------------------------------------------------------
     private void renderWorldInfo(GuiRenderer gui, FontRenderer font, HudContext ctx, int width, int height) {
         int x = 2;
@@ -489,17 +309,8 @@ public class HudRenderer {
     }
 
     // -------------------------------------------------------------------------
-    // E. Red Hurt Vignette
+    // D. In-Game Notifications
     // -------------------------------------------------------------------------
-    private void renderHurtVignette(GuiRenderer gui, HudContext ctx, int width, int height) {
-        Player player = ctx.player;
-        float hurtFraction = Math.clamp(((float) player.hurtTime - ctx.partialTick) / (float) player.maxHurtTime, 0.0f, 1.0f);
-        if (hurtFraction > 0.0f) {
-            float alpha = hurtFraction * 0.32f;
-            gui.drawRect(0, 0, width, height, 0.90f, 0.05f, 0.05f, alpha);
-        }
-    }
-
     private void renderNotification(GuiRenderer gui, FontRenderer font, int width, int height) {
         float scale = 0.46f;
         float textW = font.getStringWidth(notificationText, scale);

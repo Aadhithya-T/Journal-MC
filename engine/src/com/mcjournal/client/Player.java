@@ -33,19 +33,6 @@ public class Player {
     public boolean isSprinting = false;
     public boolean isSneaking = false;
 
-    // Hardcore Survival Stats
-    public int health = 20; // 10 Hardcore Hearts
-    public int maxHealth = 20;
-    public int hunger = 20; // 10 Drumsticks
-    public float fallDistance = 0;
-    public float highestY = 16.0f;
-    public boolean isDead = false;
-
-    // Damage, Screen Shake & Hurt Camera Tilt
-    public int hurtTime = 0;
-    public int maxHurtTime = 10;
-    public float hurtAngle = 0; // In degrees
-
     // Selected hotbar slot (0..8)
     public int selectedSlot = 0;
 
@@ -60,8 +47,6 @@ public class Player {
     public float getX() { return pos.x; }
     public float getY() { return pos.y; }
     public float getZ() { return pos.z; }
-    public int getHealth() { return health; }
-    public int getHunger() { return hunger; }
 
     public byte getSelectedBlock() {
         int slot = Math.clamp(selectedSlot, 0, 8);
@@ -178,8 +163,6 @@ public class Player {
     }
 
     public void updateTick(ChunkManager world, boolean forward, boolean backward, boolean left, boolean right, boolean jump, boolean sprint, boolean sneak) {
-        if (isDead) return;
-
         prevPos.set(pos);
         this.isSprinting = sprint && !sneak;
         this.isSneaking = sneak;
@@ -216,8 +199,6 @@ public class Player {
             STEP_HEIGHT,
             EYE_HEIGHT,
             onGround,
-            fallDistance,
-            highestY,
             moveX,
             moveZ,
             forwardX,
@@ -231,35 +212,13 @@ public class Player {
         pos.set(state.pos());
         velocity.set(state.velocity());
         onGround = state.onGround();
-        fallDistance = state.fallDistance();
-        highestY = state.highestY();
 
-        // 3. Fall Damage Resolution
-        if (state.fallDamage() > 0) {
-            takeDamage(state.fallDamage());
-            System.out.println("[Hardcore] Player took " + state.fallDamage() + " fall damage! (HP: " + health + "/20)");
-        }
-
-        // 4. Hurt animation timer decay
-        if (hurtTime > 0) {
-            hurtTime--;
-        }
-
-        // 5. Void Damage
-        if (pos.y < -10) {
-            takeDamage(20);
-        }
-    }
-
-    public void takeDamage(int amount) {
-        if (amount <= 0) return;
-        health -= amount;
-        hurtTime = maxHurtTime;
-        hurtAngle = (Math.random() < 0.5) ? -14.0f : 14.0f;
-        if (health <= 0) {
-            health = 0;
-            isDead = true;
-            System.out.println("[Hardcore] ☠ PLAYER HAS DIED! PERMADEATH TRIGGERED.");
+        // 3. Void Containment: prevent player from falling into an infinite abyss
+        if (pos.y < -10.0f) {
+            pos.set(1250.0f, 66.0f, 1250.0f);
+            prevPos.set(pos);
+            velocity.set(0.0f, 0.0f, 0.0f);
+            onGround = true;
         }
     }
 

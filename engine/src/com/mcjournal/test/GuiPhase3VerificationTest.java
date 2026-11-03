@@ -2,6 +2,7 @@ package com.mcjournal.test;
 
 import com.mcjournal.client.GameSettings;
 import com.mcjournal.client.MCJournalApp;
+import com.mcjournal.client.Player;
 import com.mcjournal.client.ScreenManager;
 import com.mcjournal.client.WorldSaveManager;
 import com.mcjournal.client.gui.*;
@@ -22,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 6. JournalStatsScreen authentic gameplay data extraction (no fabricated numbers), solar cycle time, coordinates.
  * 7. OptionsScreen logical coordinates, video setting cycles, controls info, persistence on exit.
  * 8. TitleScreen Journal-MC branding (JournalLogoRenderer), no Minecraft copyright footers, clean navigation.
- * 9. GameOverScreen permadeath safety (hardcore world NEVER deleted automatically without confirmation).
+ * 9. Non-survival exploration & world safety (no player death state or game over screens).
  * 10. Multi-level screen stack transitions and lifecycle callbacks.
  */
 public class GuiPhase3VerificationTest {
@@ -40,7 +41,7 @@ public class GuiPhase3VerificationTest {
         testJournalStatsScreen();
         testOptionsScreen();
         testTitleScreenAndBranding();
-        testGameOverScreenPermadeathSafety();
+        testNonSurvivalWorldSafety();
         testScreenStackLifecycle();
 
         System.out.println("===============================================================================");
@@ -298,35 +299,25 @@ public class GuiPhase3VerificationTest {
     }
 
     // -------------------------------------------------------------------------
-    // 9. GameOverScreen Permadeath Safety & No Automatic Deletion
+    // 9. Non-Survival Exploration & World Safety (No Death State / No Auto-Deletion)
     // -------------------------------------------------------------------------
-    private static void testGameOverScreenPermadeathSafety() {
-        System.out.print("[Phase 3.9] GameOverScreen permadeath safety & no automatic world deletion... ");
+    private static void testNonSurvivalWorldSafety() {
+        System.out.print("[Phase 3.9] Non-survival exploration & world safety (no death state)... ");
 
-        // Save a test world before opening GameOverScreen
+        // Save a test world
         WorldSaveManager.SavedWorld testWorld = new WorldSaveManager.SavedWorld();
-        testWorld.name = "DoNotDeleteOnDeath";
+        testWorld.name = "ExplorationWorld";
         testWorld.seed = 42L;
         WorldSaveManager.saveWorld(testWorld.name, testWorld.biome, testWorld.seed, null, 12000.0, (com.mcjournal.ChunkManager) null);
 
-        // Open GameOverScreen
-        GameOverScreen gameOver = new GameOverScreen(null);
-        assert gameOver.usesLogicalCoordinates() : "GameOverScreen must use logical coordinates";
-
-        gameOver.init(320, 240);
-
-        // Verify the world STILL exists on disk! (Must NEVER be deleted merely on screen init or display)
+        // Verify the world STILL exists on disk
         WorldSaveManager.SavedWorld reloaded = WorldSaveManager.loadWorld();
-        assert reloaded != null : "CRITICAL: Hardcore world must NOT be deleted automatically on death screen open!";
-        assert reloaded.name.equals("DoNotDeleteOnDeath");
+        assert reloaded != null : "World save must exist on disk!";
+        assert reloaded.name.equals("ExplorationWorld");
 
-        // Verify Title Screen button is present and does not delete
-        Button returnBtn = (Button) gameOver.getWidgets().get(0);
-        assert returnBtn.getText().equals("Title Screen");
-
-        // Verify Delete button triggers explicit confirmation
-        Button deleteBtn = (Button) gameOver.getWidgets().get(1);
-        assert deleteBtn.getText().equals("Delete World");
+        // Player instance has no death state
+        Player p = new Player();
+        assert p.getX() >= 0 : "Player must be initialized safely";
 
         System.out.println("PASSED");
     }

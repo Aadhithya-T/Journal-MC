@@ -44,7 +44,7 @@ public class MCJournalApp {
     private double fpsTimer = 0.0;
 
     public MCJournalApp() {
-        this.window = new Window("Journal-MC: Native Hardcore Edition", 1280, 760);
+        this.window = new Window("Journal-MC", 1280, 760);
         this.input = new InputHandler();
         this.camera = new Camera();
         this.player = new Player();
@@ -68,7 +68,7 @@ public class MCJournalApp {
 
         setScreen(new TitleScreen(this));
         lastFrameTime = glfwGetTime();
-        System.out.println("[MCJournalApp] Native OpenGL 3.3 Hardcore Engine Ready!");
+        System.out.println("[MCJournalApp] Native OpenGL 3.3 Engine Ready!");
     }
 
     private void loop() {
@@ -142,11 +142,6 @@ public class MCJournalApp {
 
     public void tick() {
         if (!worldSession.isInWorld() || screenManager.hasScreen()) {
-            return;
-        }
-
-        if (player.isDead) {
-            setScreen(new GameOverScreen(this));
             return;
         }
 
