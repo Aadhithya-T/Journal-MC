@@ -161,11 +161,11 @@ public class GameRenderer {
             chunkShader.unbind();
             atlas.unbind();
 
-            // 3. Render Block Cracking Overlay & Selection Outline
+            // 3. Render Block Selection Outline
             if (!screenManager.hasScreen()) {
-                Raycast.Hit hit = worldSession.getBlockBreakingManager().getCurrentHit();
+                Raycast.Hit hit = worldSession.getBlockPlacementManager().getCurrentHit();
                 if (hit != null) {
-                    blockSelectionRenderer.render(camera, hit.bx, hit.by, hit.bz, worldSession.getBlockBreakingManager().getBreakProgress());
+                    blockSelectionRenderer.render(camera, hit.bx, hit.by, hit.bz);
                 }
             }
 
@@ -191,12 +191,11 @@ public class GameRenderer {
                 try {
                     int renderedCount = (chunkRenderer != null) ? chunkRenderer.getLastRenderedChunks() : 0;
                     int loadedCount = (chunkRenderer != null) ? chunkRenderer.getLoadedMeshCount() : 0;
-                    Raycast.Hit currentHit = worldSession.getBlockBreakingManager().getCurrentHit();
-                    float breakProgress = worldSession.getBlockBreakingManager().getBreakProgress();
+                    Raycast.Hit currentHit = worldSession.getBlockPlacementManager().getCurrentHit();
 
                     hudRenderer.getContext().update(
                             player, worldSession, timeSystem, settings,
-                            currentHit, breakProgress,
+                            currentHit, 0.0f,
                             worldSession.getCurrentBiome(),
                             atlas != null ? atlas.getTextureId() : 0,
                             currentFps, renderedCount, loadedCount, (float) partialTick,

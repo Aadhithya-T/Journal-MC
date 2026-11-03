@@ -1,8 +1,8 @@
 package com.mcjournal.client.gui;
 
-import com.mcjournal.Item;
 import com.mcjournal.block.BlockStateRegistry;
 import com.mcjournal.block.BlockType;
+import com.mcjournal.block.Blocks;
 import com.mcjournal.client.Player;
 import com.mcjournal.client.TextureAtlas;
 
@@ -223,19 +223,12 @@ public class HudRenderer {
             return;
         }
 
-        if (Item.isTool(itemId)) {
-            // Render 2D tool sprite from atlas
-            int tile = Item.getItemTile(itemId);
+        // Render block face tile from atlas
+        BlockType blockType = BlockStateRegistry.getBlockType(itemId);
+        if (blockType != null && blockType != Blocks.AIR) {
+            int tile = blockType.getDisplayFaceTile();
             float[] uv = TextureAtlas.getTileUV(tile);
             gui.drawTexturedQuad(ctx.atlasTextureId, x, y, size, size, uv[0], uv[3], uv[1], uv[2], 1.0f, 1.0f, 1.0f, 1.0f);
-        } else {
-            // Render block face tile from atlas
-            BlockType blockType = BlockStateRegistry.getBlockType(itemId);
-            if (blockType != null) {
-                int tile = blockType.getDisplayFaceTile();
-                float[] uv = TextureAtlas.getTileUV(tile);
-                gui.drawTexturedQuad(ctx.atlasTextureId, x, y, size, size, uv[0], uv[3], uv[1], uv[2], 1.0f, 1.0f, 1.0f, 1.0f);
-            }
         }
     }
 

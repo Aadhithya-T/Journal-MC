@@ -36,13 +36,9 @@ public class Player {
     // Selected hotbar slot (0..8)
     public int selectedSlot = 0;
 
-    // 9-Slot Hotbar Inventory (Slot 0: Iron Axe, Slot 1: Iron Shovel, Slot 2: Iron Pickaxe)
-    public final byte[] hotbarBlocks = new byte[]{
-        Item.IRON_AXE, Item.IRON_SHOVEL, Item.IRON_PICKAXE, 0, 0, 0, 0, 0, 0
-    };
-    public final int[] hotbarCounts = new int[]{
-        1, 1, 1, 0, 0, 0, 0, 0, 0
-    };
+    // 9-Slot Hotbar Inventory (initialized empty: exploration & journaling mode)
+    public final byte[] hotbarBlocks = new byte[9];
+    public final int[] hotbarCounts = new int[9];
 
     public float getX() { return pos.x; }
     public float getY() { return pos.y; }
@@ -60,7 +56,7 @@ public class Player {
 
     public void consumeSelected() {
         int slot = Math.clamp(selectedSlot, 0, 8);
-        if (hotbarCounts[slot] > 0 && !Item.isTool(hotbarBlocks[slot])) {
+        if (hotbarCounts[slot] > 0) {
             hotbarCounts[slot]--;
             if (hotbarCounts[slot] == 0) {
                 hotbarBlocks[slot] = 0;
@@ -69,42 +65,18 @@ public class Player {
     }
 
     /**
-     * Drops item(s) from the currently selected hotbar slot.
+     * Checks whether the player's hotbar has capacity to receive at least one item of the specified block type.
      *
-     * @param dropAll If true, drops the entire stack; if false, drops a single item.
-     * @return An array [byte blockType, int countDropped], or null if slot was empty.
-     */
-    public int[] dropSelectedItem(boolean dropAll) {
-        int slot = Math.clamp(selectedSlot, 0, 8);
-        if (hotbarCounts[slot] > 0 && hotbarBlocks[slot] != 0) {
-            byte type = hotbarBlocks[slot];
-            int countToDrop = (dropAll || Item.isTool(type)) ? hotbarCounts[slot] : 1;
-            hotbarCounts[slot] -= countToDrop;
-            if (hotbarCounts[slot] <= 0) {
-                hotbarCounts[slot] = 0;
-                hotbarBlocks[slot] = 0;
-            }
-            return new int[]{type, countToDrop};
-        }
-        return null;
-    }
-
-    /**
-     * Checks whether the player's hotbar has capacity to receive at least one item of the specified block/item type.
-     *
-     * @param blockType The block or item byte ID to check.
+     * @param blockType The block byte ID to check.
      * @return true if there is an existing non-full stack for this item or an empty hotbar slot available.
      */
     public boolean canAddItem(byte blockType) {
         if (blockType == 0) return false;
-        boolean tool = Item.isTool(blockType);
 
-        // 1. If not a tool, check if it can merge into an existing non-full stack
-        if (!tool) {
-            for (int i = 0; i < 9; i++) {
-                if (hotbarBlocks[i] == blockType && hotbarCounts[i] > 0 && hotbarCounts[i] < 64) {
-                    return true;
-                }
+        // 1. Check if it can merge into an existing non-full stack
+        for (int i = 0; i < 9; i++) {
+            if (hotbarBlocks[i] == blockType && hotbarCounts[i] > 0 && hotbarCounts[i] < 64) {
+                return true;
             }
         }
 
@@ -129,18 +101,15 @@ public class Player {
     public int addItem(byte blockType, int count) {
         if (blockType == 0 || count <= 0) return 0;
         int remaining = count;
-        boolean tool = Item.isTool(blockType);
 
-        // 1. Fill existing matching stacks (non-tools only)
-        if (!tool) {
-            for (int i = 0; i < 9; i++) {
-                if (hotbarBlocks[i] == blockType && hotbarCounts[i] > 0 && hotbarCounts[i] < 64) {
-                    int space = 64 - hotbarCounts[i];
-                    int toAdd = Math.min(remaining, space);
-                    hotbarCounts[i] += toAdd;
-                    remaining -= toAdd;
-                    if (remaining == 0) return 0;
-                }
+        // 1. Fill existing matching stacks
+        for (int i = 0; i < 9; i++) {
+            if (hotbarBlocks[i] == blockType && hotbarCounts[i] > 0 && hotbarCounts[i] < 64) {
+                int space = 64 - hotbarCounts[i];
+                int toAdd = Math.min(remaining, space);
+                hotbarCounts[i] += toAdd;
+                remaining -= toAdd;
+                if (remaining == 0) return 0;
             }
         }
 
@@ -148,7 +117,7 @@ public class Player {
         for (int i = 0; i < 9; i++) {
             if (hotbarBlocks[i] == 0 || hotbarCounts[i] <= 0) {
                 hotbarBlocks[i] = blockType;
-                int toAdd = tool ? 1 : Math.min(remaining, 64);
+                int toAdd = Math.min(remaining, 64);
                 hotbarCounts[i] = toAdd;
                 remaining -= toAdd;
                 if (remaining == 0) return 0;

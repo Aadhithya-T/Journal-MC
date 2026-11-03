@@ -23,7 +23,7 @@ public class WorldSession {
     private static final double TICK_DURATION = 0.050; // 50ms = 20 TPS
 
     private ChunkManager chunkManager;
-    private final BlockBreakingManager blockBreakingManager;
+    private final BlockPlacementManager blockPlacementManager;
     private final FluidPhysicsManager fluidPhysicsManager;
     private final ItemEntityManager itemEntityManager;
     private final ParticleManager particleManager;
@@ -34,7 +34,7 @@ public class WorldSession {
     private boolean inWorld = false;
 
     public WorldSession() {
-        this.blockBreakingManager = new BlockBreakingManager();
+        this.blockPlacementManager = new BlockPlacementManager();
         this.fluidPhysicsManager = new FluidPhysicsManager();
         this.itemEntityManager = new ItemEntityManager();
         this.particleManager = new ParticleManager();
@@ -53,8 +53,8 @@ public class WorldSession {
         return chunkManager;
     }
 
-    public BlockBreakingManager getBlockBreakingManager() {
-        return blockBreakingManager;
+    public BlockPlacementManager getBlockPlacementManager() {
+        return blockPlacementManager;
     }
 
     public FluidPhysicsManager getFluidPhysicsManager() {
@@ -185,17 +185,15 @@ public class WorldSession {
                 System.arraycopy(existingSave.hotbarBlocks, 0, player.hotbarBlocks, 0, 9);
                 System.arraycopy(existingSave.hotbarCounts, 0, player.hotbarCounts, 0, 9);
                 for (int i = 0; i < 9; i++) {
-                    if (Item.isTool(player.hotbarBlocks[i])) {
-                        player.hotbarCounts[i] = Math.min(player.hotbarCounts[i], 1);
+                    if (Item.isLegacyTool(player.hotbarBlocks[i])) {
+                        // Safely sanitize legacy tool items from older save files
+                        player.hotbarBlocks[i] = 0;
+                        player.hotbarCounts[i] = 0;
                     }
                 }
             } else {
-                player.hotbarBlocks[0] = Item.IRON_AXE;
-                player.hotbarCounts[0] = 1;
-                player.hotbarBlocks[1] = Item.IRON_SHOVEL;
-                player.hotbarCounts[1] = 1;
-                player.hotbarBlocks[2] = Item.IRON_PICKAXE;
-                player.hotbarCounts[2] = 1;
+                Arrays.fill(player.hotbarBlocks, (byte) 0);
+                Arrays.fill(player.hotbarCounts, 0);
             }
 
             player.velocity.set(0, 0, 0);
@@ -223,12 +221,6 @@ public class WorldSession {
             player.selectedSlot = 0;
             Arrays.fill(player.hotbarBlocks, (byte) 0);
             Arrays.fill(player.hotbarCounts, 0);
-            player.hotbarBlocks[0] = Item.IRON_AXE;
-            player.hotbarCounts[0] = 1;
-            player.hotbarBlocks[1] = Item.IRON_SHOVEL;
-            player.hotbarCounts[1] = 1;
-            player.hotbarBlocks[2] = Item.IRON_PICKAXE;
-            player.hotbarCounts[2] = 1;
 
             camera.setYaw(0);
             camera.setPitch(0);
@@ -262,15 +254,9 @@ public class WorldSession {
         Vector3f look = camera.getLookDirection();
         chunkManager.updatePlayerPosition(playerCx, playerCz, look.x, look.z);
 
-        // Throw held item (Q key)
-        if (inputSystem != null) {
-            inputSystem.handleItemDropInput(input, player, camera, itemEntityManager, handRenderer);
-        }
-
-        // Mine blocks (LMB) & Place blocks (RMB) with particles and fluid physics
-        boolean lmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_1);
+        // Place blocks (RMB) from inventory with fluid physics
         boolean rmb = input.isMouseButtonDown(GLFW_MOUSE_BUTTON_2);
-        blockBreakingManager.update(chunkManager, chunkRenderer, particleManager, itemEntityManager, fluidPhysicsManager, handRenderer, player, camera, lmb, rmb);
+        blockPlacementManager.update(chunkManager, chunkRenderer, particleManager, fluidPhysicsManager, handRenderer, player, camera, rmb);
 
         // Update Fluid Physics Simulation (Water flows, cascades, and fills cavities)
         fluidPhysicsManager.updateTicks(chunkManager, chunkRenderer, particleManager);

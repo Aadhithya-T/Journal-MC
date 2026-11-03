@@ -1,7 +1,6 @@
 package com.mcjournal.test;
 
 import com.mcjournal.Chunk;
-import com.mcjournal.Item;
 import com.mcjournal.TerrainGenerator;
 import com.mcjournal.block.BlockProperties;
 import com.mcjournal.block.BlockState;
@@ -17,7 +16,6 @@ public class TreeFoliageAndNewTreesTest {
     public static void main(String[] args) {
         testBlockPropertiesAndRegistration();
         testAxisOrientationsAndDrops();
-        testToolEffectiveness();
         testTextureAtlasFoliagePalettes();
         testTreeHeightsAndSpruceDominance();
         testWorldGenerationTreeSpecies();
@@ -80,21 +78,6 @@ public class TreeFoliageAndNewTreesTest {
         assert Blocks.SPRUCE_LEAVES.getTextureSlot(Blocks.SPRUCE_LEAVES.getDefaultState(), 0) == 25 : "Spruce leaves slot mismatch";
         assert Blocks.DARK_OAK_LEAVES.getTextureSlot(Blocks.DARK_OAK_LEAVES.getDefaultState(), 0) == 28 : "Dark oak leaves slot mismatch";
         assert Blocks.OAK_LEAVES.getTextureSlot(Blocks.OAK_LEAVES.getDefaultState(), 0) == 9 : "Oak leaves slot mismatch";
-    }
-
-    private static void testToolEffectiveness() {
-        assert Item.isAxeEffective(Blocks.OAK_LOG) : "Axe should be effective on Oak Log";
-        assert Item.isAxeEffective(Blocks.BIRCH_LOG) : "Axe should be effective on Birch Log";
-        assert Item.isAxeEffective(Blocks.SPRUCE_LOG) : "Axe should be effective on Spruce Log";
-        assert Item.isAxeEffective(Blocks.DARK_OAK_LOG) : "Axe should be effective on Dark Oak Log";
-
-        assert Item.isAxeEffective(Blocks.OAK_LEAVES) : "Axe should be effective on Oak Leaves";
-        assert Item.isAxeEffective(Blocks.BIRCH_LEAVES) : "Axe should be effective on Birch Leaves";
-        assert Item.isAxeEffective(Blocks.SPRUCE_LEAVES) : "Axe should be effective on Spruce Leaves";
-        assert Item.isAxeEffective(Blocks.DARK_OAK_LEAVES) : "Axe should be effective on Dark Oak Leaves";
-
-        assert !Item.isAxeEffective(Blocks.STONE) : "Axe should not be effective on Stone";
-        assert !Item.isAxeEffective(Blocks.DIRT) : "Axe should not be effective on Dirt";
     }
 
     private static void testTextureAtlasFoliagePalettes() {

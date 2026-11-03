@@ -205,18 +205,18 @@ public class GuiPhase4VerificationTest {
         assert player.hotbarBlocks.length == 9 : "Hotbar must have exactly 9 slots";
         assert player.hotbarCounts.length == 9 : "Hotbar counts must have 9 slots";
 
-        // Initial default hotbar items: Iron Axe, Shovel, Pickaxe
-        assert player.hotbarBlocks[0] == Item.IRON_AXE;
-        assert player.hotbarBlocks[1] == Item.IRON_SHOVEL;
-        assert player.hotbarBlocks[2] == Item.IRON_PICKAXE;
-        assert player.hotbarCounts[0] == 1;
+        // Initial default hotbar items: initialized empty for exploration
+        assert player.hotbarBlocks[0] == 0;
+        assert player.hotbarBlocks[1] == 0;
+        assert player.hotbarBlocks[2] == 0;
+        assert player.hotbarCounts[0] == 0;
 
-        // Slot selection
+        // Slot selection on empty hotbar
         player.selectedSlot = 0;
-        assert player.getSelectedBlock() == Item.IRON_AXE;
+        assert player.getSelectedBlock() == 0;
 
         player.selectedSlot = 2;
-        assert player.getSelectedBlock() == Item.IRON_PICKAXE;
+        assert player.getSelectedBlock() == 0;
 
         // Custom stack count
         player.hotbarBlocks[3] = (byte) Blocks.DIRT.getLegacyId();

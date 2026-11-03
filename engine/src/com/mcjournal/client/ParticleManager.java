@@ -123,21 +123,21 @@ public class ParticleManager {
         spawnBlockBreakParticles(bx, by, bz, BlockStateRegistry.getDefaultState(blockType));
     }
 
-    public void spawnMiningHitParticles(int bx, int by, int bz, BlockState state, int normalX, int normalY, int normalZ) {
+    public void spawnWaterSplashParticles(int bx, int by, int bz, BlockState state) {
         if (state == null) return;
         Vector4f baseColor = parseHexColor(state.getBlock().getColorHex());
         int count = 3;
 
         for (int i = 0; i < count; i++) {
             Particle p = new Particle();
-            float rx = bx + 0.5f + normalX * 0.52f + (random.nextFloat() - 0.5f) * 0.4f;
-            float ry = by + 0.5f + normalY * 0.52f + (random.nextFloat() - 0.5f) * 0.4f;
-            float rz = bz + 0.5f + normalZ * 0.52f + (random.nextFloat() - 0.5f) * 0.4f;
+            float rx = bx + 0.5f + (random.nextFloat() - 0.5f) * 0.4f;
+            float ry = by + 0.8f + (random.nextFloat() - 0.5f) * 0.2f;
+            float rz = bz + 0.5f + (random.nextFloat() - 0.5f) * 0.4f;
             p.pos.set(rx, ry, rz);
 
-            float vx = normalX * 1.5f + (random.nextFloat() - 0.5f) * 1.5f;
-            float vy = Math.max(0.5f, normalY * 1.5f + random.nextFloat() * 2.0f);
-            float vz = normalZ * 1.5f + (random.nextFloat() - 0.5f) * 1.5f;
+            float vx = (random.nextFloat() - 0.5f) * 1.5f;
+            float vy = Math.max(0.5f, 1.2f + random.nextFloat() * 1.5f);
+            float vz = (random.nextFloat() - 0.5f) * 1.5f;
             p.velocity.set(vx, vy, vz);
 
             float shade = 0.8f + random.nextFloat() * 0.3f;
@@ -149,6 +149,11 @@ public class ParticleManager {
 
             particles.add(p);
         }
+    }
+
+    @Deprecated
+    public void spawnMiningHitParticles(int bx, int by, int bz, BlockState state, int normalX, int normalY, int normalZ) {
+        spawnWaterSplashParticles(bx, by, bz, state);
     }
 
     public void spawnMiningHitParticles(int bx, int by, int bz, byte blockType, int normalX, int normalY, int normalZ) {

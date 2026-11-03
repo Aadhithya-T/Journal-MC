@@ -118,12 +118,12 @@ public class PersistenceRoundTripTest {
         player.yaw = 142.5f;
         player.pitch = -15.0f;
         player.selectedSlot = 2;
-        player.hotbarBlocks[0] = Item.IRON_AXE;
-        player.hotbarCounts[0] = 1;
+        player.hotbarBlocks[0] = (byte) Blocks.DIRT.getLegacyId();
+        player.hotbarCounts[0] = 12;
         player.hotbarBlocks[1] = (byte) Blocks.STONE.getDefaultState().getStateId();
         player.hotbarCounts[1] = 64;
-        player.hotbarBlocks[2] = Item.IRON_PICKAXE;
-        player.hotbarCounts[2] = 1;
+        player.hotbarBlocks[2] = (byte) Blocks.COBBLESTONE.getLegacyId();
+        player.hotbarCounts[2] = 48;
 
         // Save World
         WorldSaveManager.saveWorld(worldName, biome, seed, player, worldTime, cm);
@@ -147,9 +147,9 @@ public class PersistenceRoundTripTest {
         assert loaded.selectedSlot == 2 : "Selected slot mismatch";
 
         // Verify Inventory contents
-        assert loaded.hotbarBlocks[0] == Item.IRON_AXE && loaded.hotbarCounts[0] == 1;
+        assert loaded.hotbarBlocks[0] == (byte) Blocks.DIRT.getLegacyId() && loaded.hotbarCounts[0] == 12;
         assert loaded.hotbarBlocks[1] == (byte) Blocks.STONE.getDefaultState().getStateId() && loaded.hotbarCounts[1] == 64;
-        assert loaded.hotbarBlocks[2] == Item.IRON_PICKAXE && loaded.hotbarCounts[2] == 1;
+        assert loaded.hotbarBlocks[2] == (byte) Blocks.COBBLESTONE.getLegacyId() && loaded.hotbarCounts[2] == 48;
 
         // Clean up test files
         cm.shutdown();

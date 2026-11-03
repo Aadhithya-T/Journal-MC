@@ -1,7 +1,6 @@
 package com.mcjournal.test;
 
 import com.mcjournal.Chunk;
-import com.mcjournal.Item;
 import com.mcjournal.TerrainGenerator;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.block.BlockType;
@@ -10,7 +9,6 @@ public class NewBlocksWorldGenTest {
 
     public static void main(String[] args) {
         testBlockPropertiesAndDrops();
-        testToolEffectivenessAndHarvest();
         testTerrainGenerationDistribution();
         System.out.println("All NewBlocksWorldGenTest assertions passed!");
     }
@@ -30,25 +28,6 @@ public class NewBlocksWorldGenTest {
         assert Blocks.ANDESITE.getDrop(Blocks.ANDESITE.getDefaultState()) == Blocks.ANDESITE : "Andesite drop mismatch";
         assert Blocks.DIORITE.getDrop(Blocks.DIORITE.getDefaultState()) == Blocks.DIORITE : "Diorite drop mismatch";
         assert Blocks.STONE.getDrop(Blocks.STONE.getDefaultState()) == Blocks.COBBLESTONE : "Stone should drop Cobblestone";
-    }
-
-    private static void testToolEffectivenessAndHarvest() {
-        // Shovel
-        assert Item.isShovelEffective(Blocks.GRAVEL) : "Shovel should be effective on Gravel";
-        assert !Item.isShovelEffective(Blocks.ANDESITE) : "Shovel should not be effective on Andesite";
-
-        // Pickaxe
-        assert Item.isPickaxeEffective(Blocks.STONE) : "Pickaxe should be effective on Stone";
-        assert Item.isPickaxeEffective(Blocks.ANDESITE) : "Pickaxe should be effective on Andesite";
-        assert Item.isPickaxeEffective(Blocks.DIORITE) : "Pickaxe should be effective on Diorite";
-        assert !Item.isPickaxeEffective(Blocks.GRAVEL) : "Pickaxe should not be effective on Gravel";
-
-        // Harvest checks with pickaxe vs bare hands
-        assert Item.canHarvest(Item.IRON_PICKAXE, Blocks.ANDESITE) : "Pickaxe should harvest Andesite";
-        assert Item.canHarvest(Item.IRON_PICKAXE, Blocks.DIORITE) : "Pickaxe should harvest Diorite";
-        assert !Item.canHarvest((byte) 0, Blocks.ANDESITE) : "Bare hands should not harvest Andesite";
-        assert !Item.canHarvest((byte) 0, Blocks.DIORITE) : "Bare hands should not harvest Diorite";
-        assert Item.canHarvest((byte) 0, Blocks.GRAVEL) : "Bare hands can harvest Gravel";
     }
 
     private static void testTerrainGenerationDistribution() {

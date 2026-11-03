@@ -18,7 +18,6 @@ public class ScreenManager {
     private FontRenderer lastFontRenderer = null;
     private final GuiScaleManager scaleManager = new GuiScaleManager();
     private Window window;
-    private BlockBreakingManager breakingManager;
 
     public void setFontRenderer(FontRenderer fontRenderer) {
         this.lastFontRenderer = fontRenderer;
@@ -51,9 +50,8 @@ public class ScreenManager {
     /**
      * Sets or replaces the current root screen, closing all previous screens on the stack.
      */
-    public void setScreen(Screen screen, Window window, BlockBreakingManager breakingManager) {
+    public void setScreen(Screen screen, Window window) {
         this.window = window;
-        this.breakingManager = breakingManager;
 
         // Cleanly close previous screen stack
         while (!screenStack.isEmpty()) {
@@ -73,10 +71,14 @@ public class ScreenManager {
             int initH = screen.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getHeight() : scaleManager.getFramebufferHeight());
             screen.init(initW, initH, lastFontRenderer);
             screen.onOpened();
-            if (breakingManager != null) breakingManager.resetBreak();
         } else {
             if (window != null) window.lockCursor(true);
         }
+    }
+
+    @Deprecated
+    public void setScreen(Screen screen, Window window, Object unused) {
+        setScreen(screen, window);
     }
 
     /**
@@ -101,8 +103,6 @@ public class ScreenManager {
         int initH = child.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getHeight() : scaleManager.getFramebufferHeight());
         child.init(initW, initH, lastFontRenderer);
         child.onOpened();
-
-        if (breakingManager != null) breakingManager.resetBreak();
     }
 
     /**

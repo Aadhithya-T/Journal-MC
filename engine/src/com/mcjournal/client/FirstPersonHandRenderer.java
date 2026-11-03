@@ -29,21 +29,6 @@ public class FirstPersonHandRenderer {
     private int armVbo;
     private int armVertexCount = 0;
 
-    // Iron Axe Held Mesh
-    private int axeHandVao;
-    private int axeHandVbo;
-    private int axeHandVertexCount = 0;
-
-    // Iron Shovel Held Mesh
-    private int shovelHandVao;
-    private int shovelHandVbo;
-    private int shovelHandVertexCount = 0;
-
-    // Iron Pickaxe Held Mesh
-    private int pickaxeHandVao;
-    private int pickaxeHandVbo;
-    private int pickaxeHandVertexCount = 0;
-
     // Dynamic Held Block Mesh
     private int heldBlockVao;
     private int heldBlockVbo;
@@ -57,8 +42,6 @@ public class FirstPersonHandRenderer {
     // Animation states
     private float swingProgress = 0.0f;       // 0.0 to 1.0
     private boolean isSwinging = false;
-    private boolean isMining = false;         // Continuous block breaking
-    private float miningTimer = 0.0f;
     private float bobTimer = 0.0f;            // Walk view-bobbing
     private float bobAmount = 0.0f;
     private float idleTime = 0.0f;
@@ -67,21 +50,17 @@ public class FirstPersonHandRenderer {
         handShader = new ShaderProgram("/shaders/hand_vertex.glsl", "/shaders/hand_fragment.glsl");
         generateSteveSkinTexture();
         buildSteveArmMesh();
-        buildAxeHandMesh();
-        buildShovelHandMesh();
-        buildPickaxeHandMesh();
     }
 
     /**
      * Generates an authentic Minecraft skin texture for Steve's Arm
-     * featuring a crisp white shirt sleeve, tanned skin, and Iron Axe tool textures.
+     * featuring a crisp white shirt sleeve and tanned skin.
      */
     private void generateSteveSkinTexture() {
         ByteBuffer buffer = MemoryUtil.memAlloc(TEX_SIZE * TEX_SIZE * 4);
         int[] pixels = new int[TEX_SIZE * TEX_SIZE];
 
         // Color definitions (ARGB)
-        // White Shirt Sleeve Colors
         int w0 = 0xFFFFFFFF; // Pure white
         int w1 = 0xFFF2F2F2; // High white
         int w2 = 0xFFE5E5E5; // Mid white
@@ -128,10 +107,10 @@ public class FirstPersonHandRenderer {
             {s1, s0, sH, s0},
             {s0, s1, s0, s1},
             {s1, s0, s1, s0},
-            {sW, s1, sW, s1},
+            {s1, sW, s1, sW},
             {s0, s1, s0, s1},
-            {sF, sF, sF, sF},
-            {sD, sD, sD, sD}
+            {sF, sD, sF, sD},
+            {s1, s2, s1, s2}
         };
 
         // 3. Inside Face (x: 8..11, y: 4..15)
@@ -139,96 +118,67 @@ public class FirstPersonHandRenderer {
             {w1, w0, w1, w2},
             {w2, w1, w2, w3},
             {w3, w2, w3, w4},
-            {wc, w3, wc, w4}
+            {w4, wc, w4, wc}
         };
         int[][] insideSkin = {
-            {s0, s1, s0, sH},
-            {sH, s0, s1, s0},
-            {s1, s2, s1, s0},
+            {s0, s1, s0, s1},
+            {s1, s2, s1, s2},
+            {s1, s0, s1, s2},
             {s2, s1, s2, s1},
-            {sW, s2, sW, s1},
-            {s2, s1, s2, s1},
-            {sD, sF, sD, sF},
-            {sF, s2, sF, s2}
-        };
-
-        // 4. Back Face (x: 12..15, y: 4..15)
-        int[][] backSleeve = {
-            {w2, w1, w0, w1},
-            {w3, w2, w1, w2},
-            {w4, w3, w2, w3},
-            {wc, w4, wc, w4}
-        };
-        int[][] backSkin = {
-            {s1, s0, s1, s0},
-            {s0, s1, s0, sH},
+            {sW, s2, sW, s2},
             {s1, s2, s1, s0},
             {s0, s1, s0, s1},
-            {s1, sW, s1, sW},
+            {s1, s0, s1, s0}
+        };
+
+        // 4. Back Face (x: 12..15, y: 4..16)
+        int[][] backSleeve = {
+            {w1, w2, w1, w0},
+            {w2, w3, w2, w1},
+            {w3, w4, w3, w2},
+            {w4, wc, w4, wc}
+        };
+        int[][] backSkin = {
+            {s1, s2, s1, s0},
+            {s2, s1, s2, s1},
+            {s1, s0, s1, s2},
+            {s0, s1, s0, s1},
+            {s2, sW, s2, sW},
             {s1, s0, s1, s0},
-            {sF, sD, sF, sD},
-            {sD, sF, sD, sF}
+            {s0, s1, s0, s1},
+            {s1, s0, s1, s0}
         };
 
-        // 5. Top Shoulder Face (x: 4..7, y: 0..3)
-        int[][] topSleeve = {
-            {w0, w1, w0, w2},
-            {w1, w0, w2, w1},
-            {w2, w1, w3, w2},
-            {w1, w2, w2, w3}
+        // 5. Top Shoulder End (x: 4..7, y: 0..3)
+        int[][] topShoulder = {
+            {w0, w1, w0, w1},
+            {w1, w2, w1, w2},
+            {w0, w1, w0, w1},
+            {w1, w2, w1, w2}
         };
 
-        // 6. Bottom Fist Face (x: 8..11, y: 0..3)
-        int[][] bottomFist = {
-            {sF, sD, sF, sD},
-            {sD, sF, sD, sF},
-            {sF, sD, sF, sD},
-            {sD, sF, sD, sF}
+        // 6. Bottom Palm End (x: 8..11, y: 0..3)
+        int[][] bottomPalm = {
+            {s0, s1, s0, s1},
+            {s1, s2, s1, s2},
+            {s0, s1, s0, s1},
+            {sF, sD, sF, sD}
         };
 
-        // Blit arrays into pixel buffer
+        blitGrid(pixels, topShoulder, 4, 0);
+        blitGrid(pixels, bottomPalm, 8, 0);
+
         blitGrid(pixels, outsideSleeve, 0, 4);
         blitGrid(pixels, outsideSkin, 0, 8);
+
         blitGrid(pixels, frontSleeve, 4, 4);
         blitGrid(pixels, frontSkin, 4, 8);
+
         blitGrid(pixels, insideSleeve, 8, 4);
         blitGrid(pixels, insideSkin, 8, 8);
+
         blitGrid(pixels, backSleeve, 12, 4);
         blitGrid(pixels, backSkin, 12, 8);
-        blitGrid(pixels, topSleeve, 4, 0);
-        blitGrid(pixels, bottomFist, 8, 0);
-
-        // 7. Iron Axe Wood Handle (x: 16..19, y: 0..15)
-        int wLight = 0xFFB8824A;
-        int wMid   = 0xFF8F6030;
-        int wDark  = 0xFF65411D;
-        for (int y = 0; y < 16; y++) {
-            pixels[y * TEX_SIZE + 16] = (y % 3 == 0) ? wDark : wMid;
-            pixels[y * TEX_SIZE + 17] = (y % 2 == 0) ? wLight : wMid;
-            pixels[y * TEX_SIZE + 18] = (y % 4 == 0) ? wDark : wMid;
-            pixels[y * TEX_SIZE + 19] = (y % 3 == 1) ? wDark : wMid;
-        }
-
-        // 8. Iron Axe Metallic Head (x: 20..31, y: 0..15)
-        int iDark  = 0xFF3D3D3D; // Dark steel outline
-        int iShade = 0xFF7D7D7D; // Shaded iron
-        int iBase  = 0xFFB8B8B8; // Base iron
-        int iLight = 0xFFEDEDED; // Polished silver
-        int iGlint = 0xFFFFFFFF; // Razor cutting edge
-
-        for (int y = 0; y < 16; y++) {
-            for (int x = 20; x < 32; x++) {
-                if (x == 31 || y == 0 || y == 15) {
-                    pixels[y * TEX_SIZE + x] = (x == 31 && y >= 2 && y <= 13) ? iGlint : iLight;
-                } else if (x >= 28) {
-                    pixels[y * TEX_SIZE + x] = (y % 2 == 0) ? iLight : iBase;
-                } else if (x >= 24) {
-                    pixels[y * TEX_SIZE + x] = (y % 3 == 0) ? iBase : iShade;
-                } else {
-                    pixels[y * TEX_SIZE + x] = (x == 20) ? iDark : iShade;
-                }
-            }
-        }
 
         for (int argb : pixels) {
             byte a = (byte) ((argb >> 24) & 0xFF);
@@ -268,24 +218,22 @@ public class FirstPersonHandRenderer {
         float yBottom = -0.48f; // Shoulder end
         float yTop = 0.18f;      // Arm base extended past viewport edge
 
-        // 6 faces * 6 vertices = 36 vertices, 11 floats each
         FloatBuffer buffer = MemoryUtil.memAllocFloat(36 * 11);
-
         float inv = 1.0f / TEX_SIZE;
 
-        // 1. Top Face (Shoulder Base, +Y) -> UV: (4..8, 0..4) [White shirt sleeve]
+        // 1. Top Face (Shoulder Base, +Y) -> UV: (4..8, 0..4)
         putTexturedQuad(buffer,
                 -hw, yTop, -hd,   hw, yTop, -hd,   hw, yTop, hd,   -hw, yTop, hd,
                 4 * inv, 0 * inv,  8 * inv, 4 * inv,
                 0, 1, 0);
 
-        // 2. Bottom Face (Fist End, -Y) -> UV: (8..12, 0..4) [Knuckles/Palm]
+        // 2. Bottom Face (Fist End, -Y) -> UV: (8..12, 0..4)
         putTexturedQuad(buffer,
                 -hw, yBottom, hd,   hw, yBottom, hd,   hw, yBottom, -hd,   -hw, yBottom, -hd,
                 8 * inv, 0 * inv,  12 * inv, 4 * inv,
                 0, -1, 0);
 
-        // 3. Front Face (+Z) -> UV: (4..8, 4..16) [yBottom: Knuckles, yTop: Sleeve]
+        // 3. Front Face (+Z) -> UV: (4..8, 4..16)
         putTexturedQuad(buffer,
                 -hw, yBottom, hd,   hw, yBottom, hd,   hw, yTop, hd,   -hw, yTop, hd,
                 4 * inv, 4 * inv,   8 * inv, 16 * inv,
@@ -317,308 +265,6 @@ public class FirstPersonHandRenderer {
 
         glBindVertexArray(armVao);
         glBindBuffer(GL_ARRAY_BUFFER, armVbo);
-        glBufferData(GL_ARRAY_BUFFER, buffer, GL_STATIC_DRAW);
-
-        setupVertexAttributes();
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-
-        MemoryUtil.memFree(buffer);
-    }
-
-    private void buildAxeHandMesh() {
-        // Arm + 3D Iron Axe Mesh (Bold, Prominent Proportions)
-        FloatBuffer buffer = MemoryUtil.memAllocFloat(256 * 11);
-        float inv = 1.0f / TEX_SIZE;
-
-        float hw = 0.08f;
-        float hd = 0.08f;
-        float yBottom = -0.48f;
-        float yTop = 0.18f;
-
-        // 1. Arm Faces (6 faces)
-        putTexturedQuad(buffer, -hw, yTop, -hd, hw, yTop, -hd, hw, yTop, hd, -hw, yTop, hd, 4 * inv, 0 * inv, 8 * inv, 4 * inv, 0, 1, 0);
-        putTexturedQuad(buffer, -hw, yBottom, hd, hw, yBottom, hd, hw, yBottom, -hd, -hw, yBottom, -hd, 8 * inv, 0 * inv, 12 * inv, 4 * inv, 0, -1, 0);
-        putTexturedQuad(buffer, -hw, yBottom, hd, hw, yBottom, hd, hw, yTop, hd, -hw, yTop, hd, 4 * inv, 4 * inv, 8 * inv, 16 * inv, 0, 0, 1);
-        putTexturedQuad(buffer, hw, yBottom, -hd, -hw, yBottom, -hd, -hw, yTop, -hd, hw, yTop, -hd, 12 * inv, 4 * inv, 16 * inv, 16 * inv, 0, 0, -1);
-        putTexturedQuad(buffer, -hw, yBottom, -hd, -hw, yBottom, hd, -hw, yTop, hd, -hw, yTop, -hd, 8 * inv, 4 * inv, 12 * inv, 16 * inv, -1, 0, 0);
-        putTexturedQuad(buffer, hw, yBottom, hd, hw, yBottom, -hd, hw, yTop, -hd, hw, yTop, hd, 0 * inv, 4 * inv, 4 * inv, 16 * inv, 1, 0, 0);
-
-        // 2. Iron Axe Wooden Shaft (Robust oak handle through fist on far end)
-        float hx = 0.024f;
-        float hz = 0.024f;
-        float hy0 = -0.88f;
-        float hy1 = -0.20f;
-        float hu0 = 16 * inv;
-        float hu1 = 19 * inv;
-        float hv0 = 0 * inv;
-        float hv1 = 15 * inv;
-
-        // Shaft: Front (+Z), Back (-Z), Left (-X), Right (+X), Top (+Y), Bottom (-Y)
-        putTexturedQuad(buffer, -hx, hy0, hz, hx, hy0, hz, hx, hy1, hz, -hx, hy1, hz, hu0, hv0, hu1, hv1, 0, 0, 1);
-        putTexturedQuad(buffer, hx, hy0, -hz, -hx, hy0, -hz, -hx, hy1, -hz, hx, hy1, -hz, hu0, hv0, hu1, hv1, 0, 0, -1);
-        putTexturedQuad(buffer, -hx, hy0, -hz, -hx, hy0, hz, -hx, hy1, hz, -hx, hy1, -hz, hu0, hv0, hu1, hv1, -1, 0, 0);
-        putTexturedQuad(buffer, hx, hy0, hz, hx, hy0, -hz, hx, hy1, -hz, hx, hy1, hz, hu0, hv0, hu1, hv1, 1, 0, 0);
-        putTexturedQuad(buffer, -hx, hy1, -hz, hx, hy1, -hz, hx, hy1, hz, -hx, hy1, hz, hu0, hv0, hu1, 4 * inv, 0, 1, 0);
-        putTexturedQuad(buffer, -hx, hy0, hz, hx, hy0, hz, hx, hy0, -hz, -hx, hy0, -hz, hu0, hv0, hu1, 4 * inv, 0, -1, 0);
-
-        // 3. Iron Axe Socket (Head base collar)
-        float sx = 0.038f;
-        float sz = 0.055f;
-        float sy0 = -0.80f;
-        float sy1 = -0.56f;
-        float su0 = 20 * inv;
-        float su1 = 24 * inv;
-        float sv0 = 0 * inv;
-        float sv1 = 8 * inv;
-
-        putTexturedQuad(buffer, -sx, sy0, sz, sx, sy0, sz, sx, sy1, sz, -sx, sy1, sz, su0, sv0, su1, sv1, 0, 0, 1);
-        putTexturedQuad(buffer, sx, sy0, -sz, -sx, sy0, -sz, -sx, sy1, -sz, sx, sy1, -sz, su0, sv0, su1, sv1, 0, 0, -1);
-        putTexturedQuad(buffer, -sx, sy0, -sz, -sx, sy0, sz, -sx, sy1, sz, -sx, sy1, -sz, su0, sv0, su1, sv1, -1, 0, 0);
-        putTexturedQuad(buffer, sx, sy0, sz, sx, sy0, -sz, sx, sy1, -sz, sx, sy1, sz, su0, sv0, su1, sv1, 1, 0, 0);
-        putTexturedQuad(buffer, -sx, sy1, -sz, sx, sy1, -sz, sx, sy1, sz, -sx, sy1, sz, su0, sv0, su1, sv1, 0, 1, 0);
-        putTexturedQuad(buffer, -sx, sy0, sz, sx, sy0, sz, sx, sy0, -sz, -sx, sy0, -sz, su0, sv0, su1, sv1, 0, -1, 0);
-
-        // 4. Iron Axe Cutting Blade (Large curved iron blade reaching forward in -Z direction)
-        float bx = 0.024f;
-        float bz0 = -0.045f;
-        float bz1 = -0.32f; // Prominent forward blade reach
-        float by0 = -0.84f;  // Lower beard
-        float by1 = -0.44f;  // Upper blade edge
-        float bu0 = 24 * inv;
-        float bu1 = 31 * inv;
-        float bv0 = 0 * inv;
-        float bv1 = 15 * inv;
-
-        putTexturedQuad(buffer, -bx, by0, bz0, -bx, by0, bz1, -bx, by1, bz1, -bx, by1, bz0, bu0, bv0, bu1, bv1, -1, 0, 0); // Left blade face
-        putTexturedQuad(buffer, bx, by0, bz1, bx, by0, bz0, bx, by1, bz0, bx, by1, bz1, bu0, bv0, bu1, bv1, 1, 0, 0);   // Right blade face
-        putTexturedQuad(buffer, -bx, by0, bz1, bx, by0, bz1, bx, by1, bz1, -bx, by1, bz1, 31 * inv, bv0, 32 * inv, bv1, 0, 0, -1); // Front razor edge (Bright White Glint)
-        putTexturedQuad(buffer, -bx, by1, bz1, bx, by1, bz1, bx, by1, bz0, -bx, by1, bz0, bu0, bv0, bu1, 4 * inv, 0, 1, 0);  // Top blade slope
-        putTexturedQuad(buffer, -bx, by0, bz0, bx, by0, bz0, bx, by0, bz1, -bx, by0, bz1, bu0, bv0, bu1, 4 * inv, 0, -1, 0); // Bottom beard slope
-
-        // 5. Iron Axe Back Spur / Poll (Protrudes back in +Z direction)
-        float px = 0.032f;
-        float pz0 = 0.045f;
-        float pz1 = 0.14f;
-        float py0 = -0.76f;
-        float py1 = -0.60f;
-
-        putTexturedQuad(buffer, -px, py0, pz1, px, py0, pz1, px, py1, pz1, -px, py1, pz1, su0, sv0, su1, sv1, 0, 0, 1);
-        putTexturedQuad(buffer, -px, py0, pz0, -px, py0, pz1, -px, py1, pz1, -px, py1, pz0, su0, sv0, su1, sv1, -1, 0, 0);
-        putTexturedQuad(buffer, px, py0, pz1, px, py0, pz0, px, py1, pz0, px, py1, pz1, su0, sv0, su1, sv1, 1, 0, 0);
-        putTexturedQuad(buffer, -px, py1, pz0, px, py1, pz0, px, py1, pz1, -px, py1, pz1, su0, sv0, su1, sv1, 0, 1, 0);
-        putTexturedQuad(buffer, -px, py0, pz1, px, py0, pz1, px, py0, pz0, -px, py0, pz0, su0, sv0, su1, sv1, 0, -1, 0);
-
-        buffer.flip();
-        axeHandVertexCount = buffer.limit() / 11;
-
-        axeHandVao = glGenVertexArrays();
-        axeHandVbo = glGenBuffers();
-
-        glBindVertexArray(axeHandVao);
-        glBindBuffer(GL_ARRAY_BUFFER, axeHandVbo);
-        glBufferData(GL_ARRAY_BUFFER, buffer, GL_STATIC_DRAW);
-
-        setupVertexAttributes();
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-
-        MemoryUtil.memFree(buffer);
-    }
-
-    private void buildShovelHandMesh() {
-        // Arm + 3D Iron Shovel Mesh (Bold, Prominent Scoop)
-        FloatBuffer buffer = MemoryUtil.memAllocFloat(256 * 11);
-        float inv = 1.0f / TEX_SIZE;
-
-        float hw = 0.08f;
-        float hd = 0.08f;
-        float yBottom = -0.48f;
-        float yTop = 0.18f;
-
-        // 1. Arm Faces (6 faces)
-        putTexturedQuad(buffer, -hw, yTop, -hd, hw, yTop, -hd, hw, yTop, hd, -hw, yTop, hd, 4 * inv, 0 * inv, 8 * inv, 4 * inv, 0, 1, 0);
-        putTexturedQuad(buffer, -hw, yBottom, hd, hw, yBottom, hd, hw, yBottom, -hd, -hw, yBottom, -hd, 8 * inv, 0 * inv, 12 * inv, 4 * inv, 0, -1, 0);
-        putTexturedQuad(buffer, -hw, yBottom, hd, hw, yBottom, hd, hw, yTop, hd, -hw, yTop, hd, 4 * inv, 4 * inv, 8 * inv, 16 * inv, 0, 0, 1);
-        putTexturedQuad(buffer, hw, yBottom, -hd, -hw, yBottom, -hd, -hw, yTop, -hd, hw, yTop, -hd, 12 * inv, 4 * inv, 16 * inv, 16 * inv, 0, 0, -1);
-        putTexturedQuad(buffer, -hw, yBottom, -hd, -hw, yBottom, hd, -hw, yTop, hd, -hw, yTop, -hd, 8 * inv, 4 * inv, 12 * inv, 16 * inv, -1, 0, 0);
-        putTexturedQuad(buffer, hw, yBottom, hd, hw, yBottom, -hd, hw, yTop, -hd, hw, yTop, hd, 0 * inv, 4 * inv, 4 * inv, 16 * inv, 1, 0, 0);
-
-        // 2. Iron Shovel Wooden Shaft (Long slender oak handle through fist on far end)
-        float hx = 0.024f;
-        float hz = 0.024f;
-        float hy0 = -0.90f;
-        float hy1 = -0.20f;
-        float hu0 = 16 * inv;
-        float hu1 = 19 * inv;
-        float hv0 = 0 * inv;
-        float hv1 = 15 * inv;
-
-        putTexturedQuad(buffer, -hx, hy0, hz, hx, hy0, hz, hx, hy1, hz, -hx, hy1, hz, hu0, hv0, hu1, hv1, 0, 0, 1);
-        putTexturedQuad(buffer, hx, hy0, -hz, -hx, hy0, -hz, -hx, hy1, -hz, hx, hy1, -hz, hu0, hv0, hu1, hv1, 0, 0, -1);
-        putTexturedQuad(buffer, -hx, hy0, -hz, -hx, hy0, hz, -hx, hy1, hz, -hx, hy1, -hz, hu0, hv0, hu1, hv1, -1, 0, 0);
-        putTexturedQuad(buffer, hx, hy0, hz, hx, hy0, -hz, hx, hy1, -hz, hx, hy1, hz, hu0, hv0, hu1, hv1, 1, 0, 0);
-        putTexturedQuad(buffer, -hx, hy1, -hz, hx, hy1, -hz, hx, hy1, hz, -hx, hy1, hz, hu0, hv0, hu1, 4 * inv, 0, 1, 0);
-        putTexturedQuad(buffer, -hx, hy0, hz, hx, hy0, hz, hx, hy0, -hz, -hx, hy0, -hz, hu0, hv0, hu1, 4 * inv, 0, -1, 0);
-
-        // 3. Shovel Socket Collar
-        float sx = 0.036f;
-        float sz = 0.036f;
-        float sy0 = -0.84f;
-        float sy1 = -0.68f;
-        float su0 = 20 * inv;
-        float su1 = 24 * inv;
-        float sv0 = 0 * inv;
-        float sv1 = 8 * inv;
-
-        putTexturedQuad(buffer, -sx, sy0, sz, sx, sy0, sz, sx, sy1, sz, -sx, sy1, sz, su0, sv0, su1, sv1, 0, 0, 1);
-        putTexturedQuad(buffer, sx, sy0, -sz, -sx, sy0, -sz, -sx, sy1, -sz, sx, sy1, -sz, su0, sv0, su1, sv1, 0, 0, -1);
-        putTexturedQuad(buffer, -sx, sy0, -sz, -sx, sy0, sz, -sx, sy1, sz, -sx, sy1, -sz, su0, sv0, su1, sv1, -1, 0, 0);
-        putTexturedQuad(buffer, sx, sy0, sz, sx, sy0, -sz, sx, sy1, -sz, sx, sy1, sz, su0, sv0, su1, sv1, 1, 0, 0);
-
-        // 4. Shovel Spade Blade (Large curved metallic scoop)
-        float bx = 0.065f;
-        float bz0 = 0.020f;
-        float bz1 = -0.16f;
-        float by0 = -1.10f;
-        float by1 = -0.74f;
-        float bu0 = 24 * inv;
-        float bu1 = 31 * inv;
-        float bv0 = 0 * inv;
-        float bv1 = 15 * inv;
-
-        putTexturedQuad(buffer, -bx, by0, bz0, bx, by0, bz0, bx, by1, bz1, -bx, by1, bz1, bu0, bv0, bu1, bv1, 0, 0, 1);   // Back spade scoop
-        putTexturedQuad(buffer, bx, by0, bz0, -bx, by0, bz0, -bx, by1, bz1, bx, by1, bz1, bu0, bv0, bu1, bv1, 0, 0, -1);  // Front spade scoop
-        putTexturedQuad(buffer, -bx, by0, bz0, -bx, by1, bz1, bx, by1, bz1, bx, by0, bz0, 31 * inv, bv0, 32 * inv, bv1, 0, 1, 0); // Top scoop edge (Glint)
-        putTexturedQuad(buffer, -bx, by0, bz0, bx, by0, bz0, bx, by1, bz1, -bx, by1, bz1, bu0, bv0, bu1, 4 * inv, 0, -1, 0);
-
-        buffer.flip();
-        shovelHandVertexCount = buffer.limit() / 11;
-
-        shovelHandVao = glGenVertexArrays();
-        shovelHandVbo = glGenBuffers();
-
-        glBindVertexArray(shovelHandVao);
-        glBindBuffer(GL_ARRAY_BUFFER, shovelHandVbo);
-        glBufferData(GL_ARRAY_BUFFER, buffer, GL_STATIC_DRAW);
-
-        setupVertexAttributes();
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-
-        MemoryUtil.memFree(buffer);
-    }
-
-    private void buildPickaxeHandMesh() {
-        // Arm + 3D Iron Pickaxe Mesh (Bold, Prominent Arch)
-        FloatBuffer buffer = MemoryUtil.memAllocFloat(384 * 11);
-        float inv = 1.0f / TEX_SIZE;
-
-        float hw = 0.08f;
-        float hd = 0.08f;
-        float yBottom = -0.48f;
-        float yTop = 0.18f;
-
-        // 1. Arm Faces (6 faces)
-        putTexturedQuad(buffer, -hw, yTop, -hd, hw, yTop, -hd, hw, yTop, hd, -hw, yTop, hd, 4 * inv, 0 * inv, 8 * inv, 4 * inv, 0, 1, 0);
-        putTexturedQuad(buffer, -hw, yBottom, hd, hw, yBottom, hd, hw, yBottom, -hd, -hw, yBottom, -hd, 8 * inv, 0 * inv, 12 * inv, 4 * inv, 0, -1, 0);
-        putTexturedQuad(buffer, -hw, yBottom, hd, hw, yBottom, hd, hw, yTop, hd, -hw, yTop, hd, 4 * inv, 4 * inv, 8 * inv, 16 * inv, 0, 0, 1);
-        putTexturedQuad(buffer, hw, yBottom, -hd, -hw, yBottom, -hd, -hw, yTop, -hd, hw, yTop, -hd, 12 * inv, 4 * inv, 16 * inv, 16 * inv, 0, 0, -1);
-        putTexturedQuad(buffer, -hw, yBottom, -hd, -hw, yBottom, hd, -hw, yTop, hd, -hw, yTop, -hd, 8 * inv, 4 * inv, 12 * inv, 16 * inv, -1, 0, 0);
-        putTexturedQuad(buffer, hw, yBottom, hd, hw, yBottom, -hd, hw, yTop, -hd, hw, yTop, hd, 0 * inv, 4 * inv, 4 * inv, 16 * inv, 1, 0, 0);
-
-        // 2. Wooden Handle Shaft (Long slender oak stick through fist on far end)
-        float hx = 0.024f;
-        float hz = 0.024f;
-        float hy0 = -0.88f;
-        float hy1 = -0.20f;
-        float hu0 = 16 * inv;
-        float hu1 = 19 * inv;
-        float hv0 = 0 * inv;
-        float hv1 = 15 * inv;
-
-        putTexturedQuad(buffer, -hx, hy0, hz, hx, hy0, hz, hx, hy1, hz, -hx, hy1, hz, hu0, hv0, hu1, hv1, 0, 0, 1);
-        putTexturedQuad(buffer, hx, hy0, -hz, -hx, hy0, -hz, -hx, hy1, -hz, hx, hy1, -hz, hu0, hv0, hu1, hv1, 0, 0, -1);
-        putTexturedQuad(buffer, -hx, hy0, -hz, -hx, hy0, hz, -hx, hy1, hz, -hx, hy1, -hz, hu0, hv0, hu1, hv1, -1, 0, 0);
-        putTexturedQuad(buffer, hx, hy0, hz, hx, hy0, -hz, hx, hy1, -hz, hx, hy1, hz, hu0, hv0, hu1, hv1, 1, 0, 0);
-        putTexturedQuad(buffer, -hx, hy1, -hz, hx, hy1, -hz, hx, hy1, hz, -hx, hy1, hz, hu0, hv0, hu1, 4 * inv, 0, 1, 0);
-        putTexturedQuad(buffer, -hx, hy0, hz, hx, hy0, hz, hx, hy0, -hz, -hx, hy0, -hz, hu0, hv0, hu1, 4 * inv, 0, -1, 0);
-
-        // 3. Central Socket Collar
-        float sx = 0.040f;
-        float sz = 0.040f;
-        float sy0 = -0.84f;
-        float sy1 = -0.68f;
-        float su0 = 20 * inv;
-        float su1 = 24 * inv;
-        float sv0 = 0 * inv;
-        float sv1 = 8 * inv;
-
-        putTexturedQuad(buffer, -sx, sy0, sz, sx, sy0, sz, sx, sy1, sz, -sx, sy1, sz, su0, sv0, su1, sv1, 0, 0, 1);
-        putTexturedQuad(buffer, sx, sy0, -sz, -sx, sy0, -sz, -sx, sy1, -sz, sx, sy1, -sz, su0, sv0, su1, sv1, 0, 0, -1);
-        putTexturedQuad(buffer, -sx, sy0, -sz, -sx, sy0, sz, -sx, sy1, sz, -sx, sy1, -sz, su0, sv0, su1, sv1, -1, 0, 0);
-        putTexturedQuad(buffer, sx, sy0, sz, sx, sy0, -sz, sx, sy1, -sz, sx, sy1, sz, su0, sv0, su1, sv1, 1, 0, 0);
-        putTexturedQuad(buffer, -sx, sy1, -sz, sx, sy1, -sz, sx, sy1, sz, -sx, sy1, sz, su0, sv0, su1, sv1, 0, 1, 0);
-
-        // 4. Front Curved Pick Horn (Extending forward -Z with sharp pointed downward tip)
-        float px = 0.032f;
-        float pz0 = -0.015f;
-        float pz1 = -0.26f;
-        float py0 = -0.84f;
-        float py1 = -0.70f;
-        float bu0 = 24 * inv;
-        float bu1 = 31 * inv;
-        float bv0 = 0 * inv;
-        float bv1 = 15 * inv;
-
-        putTexturedQuad(buffer, -px, py0, pz0, px, py0, pz0, px, py1, pz1, -px, py1, pz1, bu0, bv0, bu1, bv1, 0, 0, 1);
-        putTexturedQuad(buffer, px, py0, pz0, -px, py0, pz0, -px, py1, pz1, px, py1, pz1, bu0, bv0, bu1, bv1, 0, 0, -1);
-        putTexturedQuad(buffer, -px, py1, pz0, px, py1, pz0, px, py1, pz1, -px, py1, pz1, bu0, bv0, bu1, bv1, 0, 1, 0);
-        putTexturedQuad(buffer, -px, py0, pz1, px, py0, pz1, px, py0, pz0, -px, py0, pz0, bu0, bv0, bu1, bv1, 0, -1, 0);
-
-        // Front Sharp Tip (-Z curved downwards)
-        float tx = 0.022f;
-        float tz0 = -0.26f;
-        float tz1 = -0.38f;
-        float ty0 = -0.80f;
-        float ty1 = -0.64f;
-        float gu0 = 31 * inv;
-        float gu1 = 32 * inv;
-
-        putTexturedQuad(buffer, -tx, ty0, tz0, tx, ty0, tz0, tx, ty1, tz1, -tx, ty1, tz1, gu0, bv0, gu1, bv1, 0, 0, 1);
-        putTexturedQuad(buffer, tx, ty0, tz0, -tx, ty0, tz0, -tx, ty1, tz1, tx, ty1, tz1, gu0, bv0, gu1, bv1, 0, 0, -1);
-        putTexturedQuad(buffer, -tx, ty1, tz0, tx, ty1, tz0, tx, ty1, tz1, -tx, ty1, tz1, gu0, bv0, gu1, bv1, 0, 1, 0);
-        putTexturedQuad(buffer, -tx, ty0, tz1, tx, ty0, tz1, tx, ty0, tz0, -tx, ty0, tz0, gu0, bv0, gu1, bv1, 0, -1, 0);
-
-        // 5. Back Curved Pick Horn (Extending backward +Z with sharp downward tip)
-        float bpz0 = 0.015f;
-        float bpz1 = 0.26f;
-
-        putTexturedQuad(buffer, -px, py0, bpz1, px, py0, bpz1, px, py1, bpz0, -px, py1, bpz0, bu0, bv0, bu1, bv1, 0, 0, 1);
-        putTexturedQuad(buffer, px, py0, bpz1, -px, py0, bpz1, -px, py1, bpz0, px, py1, bpz0, bu0, bv0, bu1, bv1, 0, 0, -1);
-        putTexturedQuad(buffer, -px, py1, bpz1, px, py1, bpz1, px, py1, bpz0, -px, py1, bpz0, bu0, bv0, bu1, bv1, 0, 1, 0);
-        putTexturedQuad(buffer, -px, py0, bpz0, px, py0, bpz0, px, py0, bpz1, -px, py0, bpz1, bu0, bv0, bu1, bv1, 0, -1, 0);
-
-        // Back Sharp Tip (+Z curved downwards)
-        float btz0 = 0.26f;
-        float btz1 = 0.38f;
-
-        putTexturedQuad(buffer, -tx, ty0, btz1, tx, ty0, btz1, tx, ty1, btz0, -tx, ty1, btz0, gu0, bv0, gu1, bv1, 0, 0, 1);
-        putTexturedQuad(buffer, tx, ty0, btz1, -tx, ty0, btz1, -tx, ty1, btz0, tx, ty1, btz0, gu0, bv0, gu1, bv1, 0, 0, -1);
-        putTexturedQuad(buffer, -tx, ty1, btz1, tx, ty1, btz1, tx, ty1, btz0, -tx, ty1, btz0, gu0, bv0, gu1, bv1, 0, 1, 0);
-        putTexturedQuad(buffer, -tx, ty0, btz0, tx, ty0, btz0, tx, ty0, btz1, -tx, ty0, btz1, gu0, bv0, gu1, bv1, 0, -1, 0);
-
-        buffer.flip();
-        pickaxeHandVertexCount = buffer.limit() / 11;
-
-        pickaxeHandVao = glGenVertexArrays();
-        pickaxeHandVbo = glGenBuffers();
-
-        glBindVertexArray(pickaxeHandVao);
-        glBindBuffer(GL_ARRAY_BUFFER, pickaxeHandVbo);
         glBufferData(GL_ARRAY_BUFFER, buffer, GL_STATIC_DRAW);
 
         setupVertexAttributes();
@@ -679,40 +325,21 @@ public class FirstPersonHandRenderer {
         this.isSwinging = true;
     }
 
-    public void setMining(boolean mining) {
-        this.isMining = mining;
-    }
-
-    public void resetMiningAnimation() {
-        this.miningTimer = 0.0f;
-        this.swingProgress = 0.0f;
-    }
-
     public void update(float deltaTime, Player player) {
         idleTime += deltaTime;
 
-        // 1. Continuous Block Breaking Animation (Faster chopping/digging/mining arc when holding Tools)
-        byte heldItem = player.getSelectedBlock();
-        boolean isHoldingTool = Item.isTool(heldItem);
-        float chopRate = isHoldingTool ? 6.5f : 4.8f;
-
-        if (isMining) {
-            miningTimer += deltaTime * chopRate;
-            swingProgress = miningTimer % 1.0f;
-        } else if (isSwinging) {
-            // 2. Single Attack / Punch Swing Animation
-            float swingRate = isHoldingTool ? 5.2f : 4.4f;
-            swingProgress += deltaTime * swingRate;
+        // Swing animation
+        if (isSwinging) {
+            swingProgress += deltaTime * 4.4f;
             if (swingProgress >= 1.0f) {
                 swingProgress = 0.0f;
                 isSwinging = false;
             }
         } else {
             swingProgress = 0.0f;
-            miningTimer = 0.0f;
         }
 
-        // 3. Walk & Sprint View-Bobbing
+        // Walk & Sprint View-Bobbing
         float horizSpeed = (float) Math.sqrt(player.velocity.x * player.velocity.x + player.velocity.z * player.velocity.z);
         boolean isMoving = player.onGround && horizSpeed > 0.02f;
 
@@ -730,7 +357,7 @@ public class FirstPersonHandRenderer {
         if (blockType == currentHeldBlockType && heldBlockVao != 0) return;
         currentHeldBlockType = blockType;
 
-        if (blockType == 0 || Item.isTool(blockType)) {
+        if (blockType == 0 || Item.isLegacyTool(blockType)) {
             heldBlockVertexCount = 0;
             return;
         }
@@ -739,14 +366,13 @@ public class FirstPersonHandRenderer {
         BlockType type = BlockStateRegistry.getBlockType(blockType);
 
         if (type.isPlant()) {
-            // Render 2D crossed quads in fist for flowers & tall grass on the far end
             int tile = type.getDisplayFaceTile();
             float[] uv = TextureAtlas.getTileUV(tile);
             float u0 = uv[0], u1 = uv[1], v0 = uv[2], v1 = uv[3];
 
-            float s = 0.22f;
+            float s = 0.20f;
             float hs = s / 2.0f;
-            float by0 = -0.66f;
+            float by0 = -0.62f;
             float by1 = by0 + s;
             float bz = 0.0f;
 
@@ -758,8 +384,8 @@ public class FirstPersonHandRenderer {
             putTexturedQuad(buffer, -hs, by0, bz + hs, hs, by0, bz - hs, hs, by1, bz - hs, -hs, by1, bz + hs, u0, v0, u1, v1, 0, 1, 0);
             putTexturedQuad(buffer, hs, by0, bz - hs, -hs, by0, bz + hs, -hs, by1, bz + hs, hs, by1, bz - hs, u0, v0, u1, v1, 0, 1, 0);
         } else {
-            // Render authentic 3D miniature block cube held right in Steve's fist on the far end (Slightly larger, bold proportions)
-            float s = 0.11f; // half size -> 0.22 width block
+            // Render miniature 3D block cube held in fist
+            float s = 0.11f;
             float cx = -0.01f;
             float cy = -0.56f;
             float cz = -0.03f;
@@ -770,25 +396,18 @@ public class FirstPersonHandRenderer {
 
             BlockState defaultState = type.getDefaultState();
 
-            // 6 Faces with authentic Block TextureAtlas UVs
             for (int face = 0; face < 6; face++) {
                 int slot = defaultState.getFaceTextureSlot(face);
                 float[] uv = TextureAtlas.getTileUV(slot);
                 float u0 = uv[0], u1 = uv[1], v0 = uv[2], v1 = uv[3];
 
                 switch (face) {
-                    case 0 -> // East (+X)
-                        putTexturedQuad(buffer, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, u0, v0, u1, v1, 1, 0, 0);
-                    case 1 -> // West (-X)
-                        putTexturedQuad(buffer, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, u0, v0, u1, v1, -1, 0, 0);
-                    case 2 -> // Top (+Y)
-                        putTexturedQuad(buffer, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0, u0, v0, u1, v1, 0, 1, 0);
-                    case 3 -> // Bottom (-Y)
-                        putTexturedQuad(buffer, x0, y0, z1, x0, y0, z0, x1, y0, z0, x1, y0, z1, u0, v0, u1, v1, 0, -1, 0);
-                    case 4 -> // South (+Z)
-                        putTexturedQuad(buffer, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, u0, v0, u1, v1, 0, 0, 1);
-                    case 5 -> // North (-Z)
-                        putTexturedQuad(buffer, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, u0, v0, u1, v1, 0, 0, -1);
+                    case 0 -> putTexturedQuad(buffer, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, u0, v0, u1, v1, 1, 0, 0);
+                    case 1 -> putTexturedQuad(buffer, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, u0, v0, u1, v1, -1, 0, 0);
+                    case 2 -> putTexturedQuad(buffer, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0, u0, v0, u1, v1, 0, 1, 0);
+                    case 3 -> putTexturedQuad(buffer, x0, y0, z1, x0, y0, z0, x1, y0, z0, x1, y0, z1, u0, v0, u1, v1, 0, -1, 0);
+                    case 4 -> putTexturedQuad(buffer, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, u0, v0, u1, v1, 0, 0, 1);
+                    case 5 -> putTexturedQuad(buffer, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, u0, v0, u1, v1, 0, 0, -1);
                 }
             }
         }
@@ -813,30 +432,26 @@ public class FirstPersonHandRenderer {
 
     public void render(Camera camera, Player player, TextureAtlas atlas, Vector3f sunDir, Vector3f directLightColor, Vector3f skyAmbientColor, Vector3f groundAmbientColor, float aspectRatio) {
         byte heldItem = player.getSelectedBlock();
-        boolean isHoldingAxe = (heldItem == Item.IRON_AXE);
-        boolean isHoldingShovel = (heldItem == Item.IRON_SHOVEL);
-        boolean isHoldingPickaxe = (heldItem == Item.IRON_PICKAXE);
-        boolean isHoldingTool = isHoldingAxe || isHoldingShovel || isHoldingPickaxe;
-        boolean isHoldingBlock = (heldItem != 0 && !isHoldingTool);
+        boolean isHoldingBlock = (heldItem != 0 && !Item.isLegacyTool(heldItem));
 
         if (isHoldingBlock) {
             updateHeldBlockMesh(heldItem);
         }
 
-        // Base Viewmodel Anchor Position (Refined framing in first-person view to prevent screen obstruction)
-        float baseX = isHoldingTool ? 0.38f : (isHoldingBlock ? 0.40f : 0.44f);
-        float baseY = isHoldingTool ? -0.34f : (isHoldingBlock ? -0.36f : -0.42f);
-        float baseZ = isHoldingTool ? -0.48f : (isHoldingBlock ? -0.50f : -0.56f);
+        // Base Viewmodel Anchor Position
+        float baseX = isHoldingBlock ? 0.40f : 0.44f;
+        float baseY = isHoldingBlock ? -0.36f : -0.42f;
+        float baseZ = isHoldingBlock ? -0.50f : -0.56f;
 
-        // 1. Calculate Idle Breathing Bob
+        // 1. Idle Breathing Bob
         float idleY = (float) Math.sin(idleTime * 1.8f) * 0.003f;
 
-        // 2. Calculate Walk View-Bobbing
+        // 2. Walk View-Bobbing
         float bobX = (float) Math.sin(bobTimer) * 0.028f * bobAmount;
         float bobY = -(float) Math.abs(Math.cos(bobTimer)) * 0.028f * bobAmount + idleY;
         float bobRoll = (float) Math.sin(bobTimer) * 3.0f * bobAmount;
 
-        // 3. Calculate Swing / Breaking Animation Offsets & Rotations (Vanilla Minecraft Math)
+        // 3. Swing Animation Offsets & Rotations
         float animX = 0, animY = 0, animZ = 0;
         float animPitch = 0, animYaw = 0, animRoll = 0;
 
@@ -845,43 +460,32 @@ public class FirstPersonHandRenderer {
             float f1 = (float) Math.sin(t * t * Math.PI);
             float f2 = (float) Math.sin(Math.sqrt(t) * Math.PI);
 
-            // Forward-down chopping/digging/mining translation
-            animX = -f1 * 0.18f; // Inward sweep towards crosshair center
-            animY = -f2 * 0.18f; // Downward punch/chop trajectory
-            animZ = -f2 * 0.22f; // Forward extension into target block
+            animX = -f1 * 0.18f;
+            animY = -f2 * 0.18f;
+            animZ = -f2 * 0.22f;
 
-            // Downward and forward chopping/mining arc (Positive pitch swings forward-down)
             animPitch = f2 * 68.0f;
             animYaw = f1 * 26.0f;
             animRoll = -f2 * 22.0f;
         }
 
-        // Setup Projection & View Matrices for First-Person Viewmodel
         viewmodelProjection.identity();
         viewmodelProjection.perspective((float) Math.toRadians(66.0f), aspectRatio, 0.01f, 20.0f);
 
-        viewmodelView.identity(); // Anchored directly in front of eye camera
+        viewmodelView.identity();
 
-        // Build Model Matrix matching screenshot orientation
         modelMatrix.identity();
-
-        // Translate to Hand Position
         modelMatrix.translate(baseX + bobX + animX, baseY + bobY + animY, baseZ + animZ);
 
-        // Apply Rotations: Base Inward Yaw, Pitch, Roll + Active Animations
-        float baseYaw = isHoldingTool ? -50.0f : (isHoldingBlock ? -48.0f : -45.0f);
-        float basePitch = isHoldingTool ? 30.0f : (isHoldingBlock ? 28.0f : 24.0f);
-        float baseRoll = isHoldingTool ? -34.0f : (isHoldingBlock ? -32.0f : -32.0f);
+        float baseYaw = isHoldingBlock ? -48.0f : -45.0f;
+        float basePitch = isHoldingBlock ? 28.0f : 24.0f;
+        float baseRoll = isHoldingBlock ? -32.0f : -32.0f;
 
-        modelMatrix.rotate((float) Math.toRadians(baseYaw + animYaw), new Vector3f(0, 1, 0));       // Yaw inward
-        modelMatrix.rotate((float) Math.toRadians(basePitch + animPitch), new Vector3f(1, 0, 0));     // Pitch forward
-        modelMatrix.rotate((float) Math.toRadians(baseRoll + bobRoll + animRoll), new Vector3f(0, 0, 1)); // Roll tilt
+        modelMatrix.rotate((float) Math.toRadians(baseYaw + animYaw), new Vector3f(0, 1, 0));
+        modelMatrix.rotate((float) Math.toRadians(basePitch + animPitch), new Vector3f(1, 0, 0));
+        modelMatrix.rotate((float) Math.toRadians(baseRoll + bobRoll + animRoll), new Vector3f(0, 0, 1));
+        modelMatrix.scale(0.85f);
 
-        // Scaled to prevent held item/tool from dominating the screen
-        float viewmodelScale = isHoldingTool ? 0.82f : 0.85f;
-        modelMatrix.scale(viewmodelScale);
-
-        // Render Hand with GL_DEPTH_TEST and depth buffer clearing so hand never clips into voxels
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
         glClear(GL_DEPTH_BUFFER_BIT);
@@ -895,32 +499,16 @@ public class FirstPersonHandRenderer {
         handShader.setUniform("uSkyAmbientColor", skyAmbientColor);
         handShader.setUniform("uGroundAmbientColor", groundAmbientColor);
 
-        // 1. Draw Steve Arm / Hand or Tool Mesh
+        // 1. Draw Steve Arm Mesh
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, textureId);
         handShader.setUniform("uTexture", 0);
 
-        int currentVao;
-        int currentCount;
-        if (isHoldingAxe) {
-            currentVao = axeHandVao;
-            currentCount = axeHandVertexCount;
-        } else if (isHoldingShovel) {
-            currentVao = shovelHandVao;
-            currentCount = shovelHandVertexCount;
-        } else if (isHoldingPickaxe) {
-            currentVao = pickaxeHandVao;
-            currentCount = pickaxeHandVertexCount;
-        } else {
-            currentVao = armVao;
-            currentCount = armVertexCount;
-        }
-
-        glBindVertexArray(currentVao);
-        glDrawArrays(GL_TRIANGLES, 0, currentCount);
+        glBindVertexArray(armVao);
+        glDrawArrays(GL_TRIANGLES, 0, armVertexCount);
         glBindVertexArray(0);
 
-        // 2. If holding a Block, draw the 3D Held Block in Steve's fist using the TextureAtlas
+        // 2. If holding a Block, draw the 3D Held Block in fist using TextureAtlas
         if (isHoldingBlock && heldBlockVertexCount > 0 && atlas != null) {
             glBindTexture(GL_TEXTURE_2D, atlas.getTextureId());
             glBindVertexArray(heldBlockVao);
@@ -937,12 +525,6 @@ public class FirstPersonHandRenderer {
         if (textureId != 0) glDeleteTextures(textureId);
         if (armVbo != 0) glDeleteBuffers(armVbo);
         if (armVao != 0) glDeleteVertexArrays(armVao);
-        if (axeHandVbo != 0) glDeleteBuffers(axeHandVbo);
-        if (axeHandVao != 0) glDeleteVertexArrays(axeHandVao);
-        if (shovelHandVbo != 0) glDeleteBuffers(shovelHandVbo);
-        if (shovelHandVao != 0) glDeleteVertexArrays(shovelHandVao);
-        if (pickaxeHandVbo != 0) glDeleteBuffers(pickaxeHandVbo);
-        if (pickaxeHandVao != 0) glDeleteVertexArrays(pickaxeHandVao);
         if (heldBlockVbo != 0) glDeleteBuffers(heldBlockVbo);
         if (heldBlockVao != 0) glDeleteVertexArrays(heldBlockVao);
     }

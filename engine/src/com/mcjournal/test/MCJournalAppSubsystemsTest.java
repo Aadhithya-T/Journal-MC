@@ -65,7 +65,7 @@ public class MCJournalAppSubsystemsTest {
         assert !session.isInWorld() : "Session should start not in world";
         assert session.getCurrentBiome() != null : "Biome must not be null";
         assert session.getCurrentWorldName() != null : "World name must not be null";
-        assert session.getBlockBreakingManager() != null : "BlockBreakingManager must be initialized";
+        assert session.getBlockPlacementManager() != null : "BlockPlacementManager must be initialized";
         assert session.getFluidPhysicsManager() != null : "FluidPhysicsManager must be initialized";
         assert session.getItemEntityManager() != null : "ItemEntityManager must be initialized";
         assert session.getParticleManager() != null : "ParticleManager must be initialized";

@@ -198,7 +198,7 @@ public class MCJournalApp {
     }
 
     public void setScreen(Screen screen) {
-        screenManager.setScreen(screen, window, worldSession.getBlockBreakingManager());
+        screenManager.setScreen(screen, window);
     }
 
     public void pushScreen(Screen child) {

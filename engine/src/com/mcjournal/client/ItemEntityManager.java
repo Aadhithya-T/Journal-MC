@@ -69,13 +69,6 @@ public class ItemEntityManager {
         }
     }
 
-    public void spawnThrownItem(byte blockType, int count, float x, float y, float z, float vx, float vy, float vz) {
-        if (blockType == 0 || count <= 0) return;
-        synchronized (spawnQueue) {
-            spawnQueue.add(new ItemEntity(blockType, count, x, y, z, vx, vy, vz, 1.2f));
-        }
-    }
-
     public void update(double deltaTime, ChunkManager world, Player player) {
         float dt = (float) deltaTime;
 
@@ -155,38 +148,8 @@ public class ItemEntityManager {
             float s = ItemEntity.SIZE;
             float halfS = s / 2.0f;
 
-            if (Item.isTool(item.blockType)) {
-                // Render Single Flat Double-Sided Spinning Sprite for Tools (Authentic Minecraft Item Entity)
-                int tile = Item.getItemTile(item.blockType);
-                float[] uv = TextureAtlas.getTileUV(tile);
-                float uMin = uv[0]; float uMax = uv[1];
-                float vMin = uv[2]; float vMax = uv[3];
-
-                float itemSize = ItemEntity.SIZE * 1.25f;
-                float halfItem = itemSize / 2.0f;
-
-                // Front Face (Facing +Z in local rotated frame)
-                putRotatedVertex(vertexBuffer, -halfItem, 0, 0, uMin, vMin, 0, 0, 1, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfItem, 0, 0, uMax, vMin, 0, 0, 1, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfItem, itemSize, 0, uMax, vMax, 0, 0, 1, cos, sin, ix, iy, iz);
-
-                putRotatedVertex(vertexBuffer, -halfItem, 0, 0, uMin, vMin, 0, 0, 1, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfItem, itemSize, 0, uMax, vMax, 0, 0, 1, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer, -halfItem, itemSize, 0, uMin, vMax, 0, 0, 1, cos, sin, ix, iy, iz);
-
-                // Back Face (Facing -Z in local rotated frame - horizontally mirrored UV for correct appearance from both sides)
-                putRotatedVertex(vertexBuffer,  halfItem, 0, 0, uMin, vMin, 0, 0, -1, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer, -halfItem, 0, 0, uMax, vMin, 0, 0, -1, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer, -halfItem, itemSize, 0, uMax, vMax, 0, 0, -1, cos, sin, ix, iy, iz);
-
-                putRotatedVertex(vertexBuffer,  halfItem, 0, 0, uMin, vMin, 0, 0, -1, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer, -halfItem, itemSize, 0, uMax, vMax, 0, 0, -1, cos, sin, ix, iy, iz);
-                putRotatedVertex(vertexBuffer,  halfItem, itemSize, 0, uMin, vMax, 0, 0, -1, cos, sin, ix, iy, iz);
-
-                totalVertices += 12;
-            } else {
-                BlockType itemType = BlockStateRegistry.getBlockType(item.blockType);
-                if (itemType.isPlant()) {
+            BlockType itemType = BlockStateRegistry.getBlockType(item.blockType);
+            if (itemType.isPlant()) {
                     // Render crossed 2-quad foliage for flowers & tall grass (X-cross)
                     int tile = itemType.getDisplayFaceTile();
                     float[] uv = TextureAtlas.getTileUV(tile);
@@ -298,7 +261,6 @@ public class ItemEntityManager {
                     totalVertices += 6;
                 }
             }
-        }
 
             if (totalVertices + VERTICES_PER_CUBE >= BUFFER_CAPACITY / FLOATS_PER_VERTEX) {
                 break; // Buffer safety clamp
