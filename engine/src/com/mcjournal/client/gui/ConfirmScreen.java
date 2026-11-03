@@ -3,6 +3,8 @@ package com.mcjournal.client.gui;
 import com.mcjournal.client.MCJournalApp;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -74,27 +76,21 @@ public class ConfirmScreen extends Screen {
     public void init(int width, int height) {
         super.init(width, height);
 
-        int dialogW = Math.min(320, width - 24);
-        int dialogH = 140;
-        int dialogX = GuiLayout.centerX(width, dialogW);
-        int dialogY = GuiLayout.centerY(height, dialogH);
-
-        int btnGap = 8;
-        int btnW = (dialogW - 24 - btnGap) / 2;
-        int btnH = 20;
-        int btnY = dialogY + dialogH - btnH - 12;
-        int confirmX = dialogX + 12;
-        int cancelX = confirmX + btnW + btnGap;
+        // Content column and button row matching WorldCreateScreen & WorldEditScreen
+        GuiLayout.Column col = GuiLayout.contentColumn(width, 320, GuiLayout.MARGIN);
+        int btnH = GuiLayout.ROW_HEIGHT;
+        int btnY = height - GuiLayout.BOTTOM_MARGIN;
+        GuiLayout.ButtonSlot[] slots = GuiLayout.distributeRow(col.x, col.width, 2, 8);
 
         // 1. Confirm Button
-        Button confirmBtn = new Button(1, confirmText, confirmX, btnY, btnW, btnH, this::handleConfirm);
+        Button confirmBtn = new Button(1, confirmText, slots[0].x(), btnY, slots[0].width(), btnH, this::handleConfirm);
         addWidget(confirmBtn);
 
         // 2. Cancel Button
-        Button cancelBtn = new Button(2, cancelText, cancelX, btnY, btnW, btnH, this::handleCancel);
+        Button cancelBtn = new Button(2, cancelText, slots[1].x(), btnY, slots[1].width(), btnH, this::handleCancel);
         addWidget(cancelBtn);
 
-        // Focus confirm by default unless dangerMode, where Cancel is focused for safety
+        // Focus cancel by default in dangerMode for safety; otherwise confirm
         if (dangerMode) {
             focusManager.setFocus(cancelBtn);
         } else {
@@ -118,41 +114,96 @@ public class ConfirmScreen extends Screen {
         }
     }
 
+    private List<String> getWrappedLines(FontRenderer font, float maxLineWidth) {
+        List<String> wrapped = new ArrayList<>();
+        if (message == null || message.isEmpty()) return wrapped;
+        String[] rawLines = message.split("\n", -1);
+        for (String raw : rawLines) {
+            String trimmed = raw.trim();
+            if (trimmed.isEmpty()) {
+                wrapped.add("");
+                continue;
+            }
+            float w = font != null ? font.getStringWidth(trimmed, 1.0f) : (trimmed.length() * 6.0f);
+            if (w <= maxLineWidth) {
+                wrapped.add(trimmed);
+                continue;
+            }
+            // Word wrap at natural word boundaries
+            String[] words = trimmed.split(" ");
+            StringBuilder sb = new StringBuilder();
+            for (String word : words) {
+                if (sb.length() == 0) {
+                    sb.append(word);
+                } else {
+                    String test = sb + " " + word;
+                    float testW = font != null ? font.getStringWidth(test, 1.0f) : (test.length() * 6.0f);
+                    if (testW <= maxLineWidth) {
+                        sb.append(" ").append(word);
+                    } else {
+                        wrapped.add(sb.toString());
+                        sb = new StringBuilder(word);
+                    }
+                }
+            }
+            if (sb.length() > 0) {
+                wrapped.add(sb.toString());
+            }
+        }
+        return wrapped;
+    }
+
     @Override
     public void render(GuiRenderer gui, FontRenderer font, double mouseX, double mouseY, float deltaTime) {
-        // 1. Semi-transparent dark overlay darkening the underlying screen
-        gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.70f);
+        // 1. Background overlay & menu header/footer strips (consistent with all menu screens)
+        gui.drawRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.45f);
+        gui.drawMenuHeaderFooterStrips(width, height, 36, 44);
 
-        // 2. Centered Modal Dialog Card
-        int dialogW = Math.min(320, width - 24);
-        int dialogH = 140;
-        int dialogX = GuiLayout.centerX(width, dialogW);
-        int dialogY = GuiLayout.centerY(height, dialogH);
+        // 2. Header Title
+        font.drawCentered(gui, title, width / 2.0f, GuiLayout.TITLE_Y, TextStyle.TITLE);
 
-        // Dialog background panel with beveled edge
-        int borderLight = dangerMode ? 0x882222 : 0x555560;
-        int borderDark = dangerMode ? 0x441111 : 0x222226;
-        gui.drawBevelBox(dialogX, dialogY, dialogW, dialogH, 0x18181c, borderLight, borderDark);
+        // 3. Compute dynamic wrapped lines & card geometry
+        float maxAllowedTextW = Math.max(260.0f, width - 64.0f);
+        List<String> lines = getWrappedLines(font, Math.min(360.0f, maxAllowedTextW));
 
-        // Top accent line if danger
-        if (dangerMode) {
-            gui.drawRect(dialogX + 2, dialogY + 2, dialogW - 4, 2, 0.85f, 0.15f, 0.15f, 1.0f);
+        float maxLineW = 0.0f;
+        for (String line : lines) {
+            if (!line.isEmpty()) {
+                maxLineW = Math.max(maxLineW, font.getStringWidth(line, 1.0f));
+            }
         }
 
-        // 3. Title Text
-        int titleColor = dangerMode ? 0xff5555 : 0xffffff;
-        float titleScale = 2.0f;
-        float titleW = font.getStringWidth(title, titleScale);
-        font.drawString(gui, title, GuiLayout.centerX(width, (int) titleW), dialogY + 14, titleScale, titleColor, true);
+        int padX = 24;
+        int cardW = Math.min(width - 24, Math.max(300, (int) Math.ceil(maxLineW) + padX * 2));
+        int cardX = (width - cardW) / 2;
 
-        // 4. Message Text (Supports multi-line \n)
-        String[] lines = message.split("\n");
-        float lineY = dialogY + 36;
-        float textScale = 1.0f;
-        for (String line : lines) {
-            float lineW = font.getStringWidth(line, textScale);
-            font.drawString(gui, line, GuiLayout.centerX(width, (int) lineW), lineY, textScale, 0xcccccc, false);
-            lineY += font.getFontHeight(textScale) + 3;
+        int bodyH = (int) Math.round(font.getLineHeight(TextStyle.BODY));
+        int padY = 12;
+        int lineGap = 6;
+        int cardH = padY * 2 + lines.size() * bodyH + Math.max(0, lines.size() - 1) * lineGap;
+        int cardY = 36 + Math.max(8, (height - 80 - cardH) / 2);
+
+        gui.drawBevelBox(cardX, cardY, cardW, cardH, 0x18181c, 0x484852, 0x202024);
+
+        // 4. Message Lines
+        int textY = cardY + padY;
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (!line.isEmpty()) {
+                if (line.startsWith("'") && (line.endsWith("'") || line.endsWith("'?") || line.contains("'"))) {
+                    // Highlighted world / target entity name in soft gold
+                    font.drawCentered(gui, line, width / 2.0f, textY, TextStyle.BODY.withColor(0xffe066));
+                } else if (i == 0) {
+                    // Primary prompt / question in clean white
+                    font.drawCentered(gui, line, width / 2.0f, textY, TextStyle.BODY);
+                } else if (line.toLowerCase().contains("undone") || line.toLowerCase().contains("erase") || dangerMode) {
+                    // Warning / consequence details in soft danger red
+                    font.drawCentered(gui, line, width / 2.0f, textY, TextStyle.CAPTION.withColor(dangerMode ? 0xff7777 : 0xaaaaaa));
+                } else {
+                    font.drawCentered(gui, line, width / 2.0f, textY, TextStyle.BODY.withColor(0xdddddd));
+                }
+            }
+            textY += bodyH + lineGap;
         }
 
         // 5. Render Buttons and Tooltips

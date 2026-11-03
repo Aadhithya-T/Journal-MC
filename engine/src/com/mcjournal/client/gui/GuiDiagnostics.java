@@ -97,6 +97,16 @@ public class GuiDiagnostics {
             // Two-Line Option Cards
             elements.add(new ElementBounds("card-mode", "Game Mode Card", wcs.getFormX(), wcs.getCard1Y(), wcs.getFormW(), wcs.getCardH()));
             elements.add(new ElementBounds("card-type", "World Type Card", wcs.getFormX(), wcs.getCard2Y(), wcs.getFormW(), wcs.getCardH()));
+        } else if (screen instanceof WorldEditScreen wes) {
+            int titleH = font != null ? Math.round(font.getLineHeight(TextStyle.TITLE)) : 20;
+            float titleW = font != null ? font.width("Edit World", TextStyle.TITLE) : 100;
+            int titleX = Math.round((screenW - titleW) / 2.0f);
+            elements.add(new ElementBounds("header-title", "Edit World", titleX, GuiLayout.TITLE_Y, Math.round(titleW), titleH));
+
+            int labelH = font != null ? Math.round(font.getLineHeight(TextStyle.BODY)) : 10;
+            elements.add(new ElementBounds("lbl-name", "World Name", wes.getFormX(), wes.getNameLabelY(), 100, labelH));
+
+            elements.add(new ElementBounds("world-card", "World Info Card", wes.getFormX(), wes.getCardY(), wes.getFormW(), wes.getCardH()));
         }
 
         // 3. Containment check: x >= 0, y >= 0, x + w <= screenW, y + h <= screenH

@@ -34,13 +34,22 @@ public class MinecraftLogoRenderer {
         Font mcFontLarge = null;
         Font mcFontSmall = null;
 
-        try (InputStream is = MinecraftLogoRenderer.class.getResourceAsStream("/fonts/minecraft.ttf")) {
-            if (is != null) {
+        InputStream stream = MinecraftLogoRenderer.class.getResourceAsStream("/fonts/Monocraft.ttf");
+        if (stream == null) {
+            java.io.File file = new java.io.File("engine/resources/fonts/Monocraft.ttf");
+            if (file.exists()) {
+                try {
+                    stream = new java.io.FileInputStream(file);
+                } catch (Exception ignored) {}
+            }
+        }
+        if (stream != null) {
+            try (InputStream is = stream) {
                 Font baseFont = Font.createFont(Font.TRUETYPE_FONT, is);
                 mcFontLarge = baseFont.deriveFont(Font.BOLD, 58.0f);
                 mcFontSmall = baseFont.deriveFont(Font.BOLD, 18.0f);
-            }
-        } catch (Exception ignored) {}
+            } catch (Exception ignored) {}
+        }
 
         if (mcFontLarge == null) {
             mcFontLarge = new Font("Dialog", Font.BOLD, 54);

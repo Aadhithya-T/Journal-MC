@@ -211,7 +211,7 @@ public class GreedySliceMesher {
                 }
                 BlockState block = BlockStateRegistry.getStateById(stateId);
                 // Exclude plants, leaves, and water from solid mesh pass
-                if (block.isPlant() || block.is(Blocks.WATER) || block.is(Blocks.OAK_LEAVES) || block.is(Blocks.BIRCH_LEAVES)) {
+                if (block.isPlant() || block.is(Blocks.WATER) || block.isLeaves()) {
                     mask[idx] = 0;
                     continue;
                 }
@@ -295,7 +295,7 @@ public class GreedySliceMesher {
                     continue;
                 }
                 BlockState block = BlockStateRegistry.getStateById(stateId);
-                if (block.isPlant() || block.is(Blocks.WATER) || block.is(Blocks.OAK_LEAVES) || block.is(Blocks.BIRCH_LEAVES)) {
+                if (block.isPlant() || block.is(Blocks.WATER) || block.isLeaves()) {
                     mask[idx] = 0;
                     continue;
                 }
@@ -378,7 +378,7 @@ public class GreedySliceMesher {
                     continue;
                 }
                 BlockState block = BlockStateRegistry.getStateById(stateId);
-                if (block.isPlant() || block.is(Blocks.WATER) || block.is(Blocks.OAK_LEAVES) || block.is(Blocks.BIRCH_LEAVES)) {
+                if (block.isPlant() || block.is(Blocks.WATER) || block.isLeaves()) {
                     mask[idx] = 0;
                     continue;
                 }

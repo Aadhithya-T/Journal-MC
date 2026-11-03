@@ -398,7 +398,7 @@ public class WorldSaveManager {
 
     public static void saveWorld(String name, String biome, long seed, Player player, double worldTime, ChunkManager chunkManager) {
         try {
-            saveWorldAsync(name, biome, seed, player, worldTime, chunkManager).get(5, TimeUnit.SECONDS);
+            saveWorldAsync(name, biome, seed, player, worldTime, chunkManager).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             System.err.println("[WorldSaveManager] Synchronous world save failed: " + e.getMessage());
         }

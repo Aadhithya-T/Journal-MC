@@ -1,7 +1,7 @@
 package com.mcjournal.client.gui;
 
 /**
- * Reusable, lightweight, allocation-free layout helpers for positioning GUI widgets
+ * Reusable, lightweight layout helpers for positioning GUI widgets
  * and screen elements within logical coordinates.
  */
 public final class GuiLayout {
@@ -11,6 +11,9 @@ public final class GuiLayout {
     public static final int ROW_HEIGHT = 20;
     public static final int GUTTER = 4;
     public static final int MARGIN = 12;
+    public static final int HEADER_HEIGHT = 32;
+    public static final int TITLE_Y = 8;
+    public static final int BOTTOM_MARGIN = 28;
 
     /**
      * Immutable content column geometry holding X coordinate and width.
@@ -39,18 +42,41 @@ public final class GuiLayout {
     }
 
     /**
+     * An individual slot in a distributed button row.
+     */
+    public record ButtonSlot(int x, int width) {
+        public int right() {
+            return x + width;
+        }
+    }
+
+    /**
+     * Distributes totalWidth across count buttons separated by gutter,
+     * spreading any integer division remainder across the slots so that the row
+     * exactly spans from startX to startX + totalWidth without rounding drift or manual adjustment.
+     */
+    public static ButtonSlot[] distributeRow(int startX, int totalWidth, int count, int gutter) {
+        if (count <= 0) return new ButtonSlot[0];
+        ButtonSlot[] slots = new ButtonSlot[count];
+        int availableWidth = totalWidth - (count - 1) * gutter;
+        int baseWidth = availableWidth / count;
+        int remainder = availableWidth % count;
+
+        int currentX = startX;
+        for (int i = 0; i < count; i++) {
+            int slotWidth = baseWidth + (i < remainder ? 1 : 0);
+            slots[i] = new ButtonSlot(currentX, slotWidth);
+            currentX += slotWidth + gutter;
+        }
+        return slots;
+    }
+
+    /**
      * Calculates the width of each button in an equal-width row sharing a uniform gutter.
      */
     public static int buttonWidth(int totalWidth, int count, int gutter) {
         if (count <= 0) return 0;
         return (totalWidth - (count - 1) * gutter) / count;
-    }
-
-    /**
-     * Calculates the X coordinate of an item at index in a row with uniform gutter.
-     */
-    public static int buttonX(int startX, int index, int buttonWidth, int gutter) {
-        return startX + index * (buttonWidth + gutter);
     }
 
     /**
@@ -98,20 +124,6 @@ public final class GuiLayout {
     }
 
     /**
-     * Calculates screen-relative horizontal position based on a fractional factor (0.0 to 1.0).
-     */
-    public static int relativeX(int containerWidth, float fraction, int elementWidth) {
-        return (int) (containerWidth * fraction) - elementWidth / 2;
-    }
-
-    /**
-     * Calculates screen-relative vertical position based on a fractional factor (0.0 to 1.0).
-     */
-    public static int relativeY(int containerHeight, float fraction, int elementHeight) {
-        return (int) (containerHeight * fraction) - elementHeight / 2;
-    }
-
-    /**
      * Total width of a horizontal row of count items of itemWidth separated by gap.
      */
     public static int rowTotalWidth(int count, int itemWidth, int gap) {
@@ -119,9 +131,6 @@ public final class GuiLayout {
         return count * itemWidth + (count - 1) * gap;
     }
 
-    /**
-     * Total height of a vertical column of count items of itemHeight separated by gap.
-     */
     public static int columnTotalHeight(int count, int itemHeight, int gap) {
         if (count <= 0) return 0;
         return count * itemHeight + (count - 1) * gap;
@@ -132,36 +141,5 @@ public final class GuiLayout {
      */
     public static int rowItemX(int startX, int itemWidth, int gap, int index) {
         return startX + index * (itemWidth + gap);
-    }
-
-    /**
-     * Calculates the Y coordinate of an item at index in a vertical column.
-     */
-    public static int columnItemY(int startY, int itemHeight, int gap, int index) {
-        return startY + index * (itemHeight + gap);
-    }
-
-    /**
-     * Calculates the start X coordinate for a horizontal row of items centered in a container.
-     */
-    public static int centeredRowStartX(int containerWidth, int count, int itemWidth, int gap) {
-        int totalWidth = rowTotalWidth(count, itemWidth, gap);
-        return centerX(containerWidth, totalWidth);
-    }
-
-    /**
-     * Calculates the start Y coordinate for a vertical column of items centered in a container.
-     */
-    public static int centeredColumnStartY(int containerHeight, int count, int itemHeight, int gap) {
-        int totalHeight = columnTotalHeight(count, itemHeight, gap);
-        return centerY(containerHeight, totalHeight);
-    }
-
-    /**
-     * Splits a given total row width into equal button widths across columns separated by gap.
-     */
-    public static int splitWidth(int totalWidth, int gap, int columns) {
-        if (columns <= 1) return totalWidth;
-        return (totalWidth - (columns - 1) * gap) / columns;
     }
 }

@@ -15,9 +15,18 @@ import java.util.Deque;
 public class ScreenManager {
     private final Deque<Screen> screenStack = new ArrayDeque<>();
     private Screen currentScreen = null;
+    private FontRenderer lastFontRenderer = null;
     private final GuiScaleManager scaleManager = new GuiScaleManager();
     private Window window;
     private BlockBreakingManager breakingManager;
+
+    public void setFontRenderer(FontRenderer fontRenderer) {
+        this.lastFontRenderer = fontRenderer;
+    }
+
+    public FontRenderer getLastFontRenderer() {
+        return lastFontRenderer;
+    }
 
     public GuiScaleManager getScaleManager() {
         return scaleManager;
@@ -62,7 +71,7 @@ public class ScreenManager {
             }
             int initW = screen.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : (window != null ? window.getWidth() : scaleManager.getFramebufferWidth());
             int initH = screen.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getHeight() : scaleManager.getFramebufferHeight());
-            screen.init(initW, initH);
+            screen.init(initW, initH, lastFontRenderer);
             screen.onOpened();
             if (breakingManager != null) breakingManager.resetBreak();
         } else {
@@ -90,7 +99,7 @@ public class ScreenManager {
 
         int initW = child.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : (window != null ? window.getWidth() : scaleManager.getFramebufferWidth());
         int initH = child.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getHeight() : scaleManager.getFramebufferHeight());
-        child.init(initW, initH);
+        child.init(initW, initH, lastFontRenderer);
         child.onOpened();
 
         if (breakingManager != null) breakingManager.resetBreak();
@@ -191,14 +200,15 @@ public class ScreenManager {
         scaleManager.update(width, height, width, height);
         for (Screen screen : screenStack) {
             if (screen.usesLogicalCoordinates()) {
-                screen.init(scaleManager.getGuiWidth(), scaleManager.getGuiHeight());
+                screen.init(scaleManager.getGuiWidth(), scaleManager.getGuiHeight(), lastFontRenderer);
             } else {
-                screen.init(width, height);
+                screen.init(width, height, lastFontRenderer);
             }
         }
     }
 
     public void render(GuiRenderer guiRenderer, FontRenderer fontRenderer, InputHandler input, float deltaTime, int width, int height) {
+        this.lastFontRenderer = fontRenderer;
         if (currentScreen != null && guiRenderer != null && fontRenderer != null && input != null) {
             scaleManager.update(width, height, width, height);
             if (currentScreen.usesLogicalCoordinates()) {

@@ -244,7 +244,7 @@ public class GuiPhase1VerificationTest {
         assert GuiLayout.rowItemX(50, 100, 10, 2) == 270;
 
         // Split calculation: total 200, gap 4, 2 columns -> (200 - 4)/2 = 98
-        assert GuiLayout.splitWidth(200, 4, 2) == 98;
+        assert GuiLayout.buttonWidth(200, 2, 4) == 98;
 
         System.out.println("PASSED (All layout primitives verified)");
     }

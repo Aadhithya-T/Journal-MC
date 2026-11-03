@@ -199,7 +199,7 @@ public class ChunkNeighborhood {
         int stateId = getStateId(lx, y, lz);
         if (stateId == 0) return false;
         BlockState state = BlockStateRegistry.getStateById(stateId);
-        return state.isSolid() && !state.is(Blocks.OAK_LEAVES) && !state.is(Blocks.BIRCH_LEAVES);
+        return state.isSolid() && !state.isLeaves();
     }
 
     /**

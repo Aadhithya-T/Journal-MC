@@ -59,6 +59,16 @@ public class ProceduralTextureGenerator {
             case 16 -> renderSpriteToTile(tile, IRON_AXE_SPRITE, TOOL_PALETTE);
             case 17 -> renderSpriteToTile(tile, IRON_SHOVEL_SPRITE, TOOL_PALETTE);
             case 18 -> renderSpriteToTile(tile, IRON_PICKAXE_SPRITE, TOOL_PALETTE);
+            case 19 -> generateGravel(tile, rand);
+            case 20 -> generateAndesite(tile, rand);
+            case 21 -> generateDiorite(tile, rand);
+            case 22 -> generateBirchLeaves(tile, rand);
+            case 23 -> generateSpruceLogSide(tile, rand);
+            case 24 -> generateSpruceLogTop(tile, rand);
+            case 25 -> generateSpruceLeaves(tile, rand);
+            case 26 -> generateDarkOakLogSide(tile, rand);
+            case 27 -> generateDarkOakLogTop(tile, rand);
+            case 28 -> generateDarkOakLeaves(tile, rand);
             default -> fillSolid(tile, 0, 0, 0, 0);
         }
 
@@ -260,75 +270,109 @@ public class ProceduralTextureGenerator {
         }
     }
 
-    // 3: Stone (Natural slate gray with mineral cleavage planes and quartz flecks)
+    // 3: Stone (Authentic monolithic rock mantle: 16x16 pixel-art macro texels, uniform 4x4 clusters, no sub-pixel noise)
     private static void generateStone(byte[] tile, Random rand) {
         final int[][] PALETTE = {
-            {88, 88, 92},    // 0: Deep fissure shadow
-            {106, 106, 110}, // 1: Dark slate gray
-            {126, 126, 128}, // 2: Neutral stone base
-            {144, 144, 148}, // 3: Light mineral grain
-            {164, 164, 170}  // 4: Quartz highlight fleck
+            {106, 106, 106}, // 0: Deep fissure shadow (#6a6a6a)
+            {116, 116, 116}, // 1: Dark rock body (#747474)
+            {125, 125, 125}, // 2: Standard neutral stone base (#7d7d7d)
+            {135, 135, 135}, // 3: Light rock facet (#878787)
+            {146, 146, 146}  // 4: Subtle quartz highlight (#929292)
         };
 
-        for (int y = 0; y < TILE_SIZE; y++) {
-            for (int x = 0; x < TILE_SIZE; x++) {
-                int bx = x / 4;
-                int by = y / 4;
+        for (int by = 0; by < 16; by++) {
+            for (int bx = 0; bx < 16; bx++) {
+                // 1. Toroidally-wrapped smooth clustering (16x16 macro texels)
+                long hCenter = (long) hash(bx, by, 5151);
+                long hLeft   = (long) hash((bx + 15) % 16, by, 5151);
+                long hRight  = (long) hash((bx + 1) % 16, by, 5151);
+                long hDown   = (long) hash(bx, (by + 15) % 16, 5151);
+                long hUp     = (long) hash(bx, (by + 1) % 16, 5151);
+                int smooth   = (int) (((hCenter * 2 + hLeft + hRight + hDown + hUp) / 6) % 100);
 
-                // Macro mineral distribution
-                int macro = hash(bx, by, 1717) % 100;
-                int baseTone = 2;
-                if (macro < 24) baseTone = 1;
-                else if (macro > 76) baseTone = 3;
+                int tone = 2; // Standard neutral stone base
+                if (smooth < 26) {
+                    tone = 1;
+                } else if (smooth > 74) {
+                    tone = 3;
+                }
 
-                // Micro rock granularity
-                int micro = hash(x, y, 1818) % 100;
-                int tone = baseTone;
-                if (micro < 18) tone = Math.max(0, baseTone - 1);
-                else if (micro > 82) tone = Math.min(4, baseTone + 1);
-
-                // Subtle sedimentary fracture lines (subtle diagonal rock cleavage)
-                if ((x + y * 2) % 16 == 0 && (hash(x, y, 1919) % 10 < 7)) {
+                // 2. Subtle horizontal strata bedding (toroidally continuous)
+                int strata = hash((bx / 2) * 2, by, 6262) % 100;
+                if (strata < 16) {
                     tone = Math.max(0, tone - 1);
-                } else if ((x + y * 2) % 16 == 1 && (hash(x, y, 2020) % 10 < 6)) {
+                } else if (strata > 84) {
                     tone = Math.min(4, tone + 1);
                 }
 
+                // 3. Rare organic mineral flecks
+                int fleck = hash(bx, by, 7373) % 100;
+                if (fleck < 4) {
+                    tone = 0;
+                } else if (fleck > 95) {
+                    tone = 4;
+                }
+
+                // 4. Fill uniform 4x4 texel footprint (NO sub-pixel noise to prevent gravel effect)
                 int[] rgb = PALETTE[tone];
-                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
-            }
-        }
-
-        // Scatter embedded mineral patches & quartz speckles
-        for (int m = 0; m < 24; m++) {
-            int mx = hash(m, 23, 2121) % (TILE_SIZE - 3);
-            int my = hash(m, 47, 2222) % (TILE_SIZE - 3);
-            int mType = hash(m, 67, 2323) % 2;
-
-            if (mType == 0) {
-                // Quartz sparkle
-                setPixel(tile, mx, my, 164, 164, 170, 255);
-                setPixel(tile, mx + 1, my, 144, 144, 148, 255);
-                setPixel(tile, mx, my - 1, 88, 88, 92, 255);
-            } else {
-                // Dark basalt mineral cluster
-                setPixel(tile, mx, my, 88, 88, 92, 255);
-                setPixel(tile, mx + 1, my, 106, 106, 110, 255);
-                setPixel(tile, mx, my + 1, 106, 106, 110, 255);
+                for (int dy = 0; dy < 4; dy++) {
+                    for (int dx = 0; dx < 4; dx++) {
+                        setPixel(tile, bx * 4 + dx, by * 4 + dy, rgb[0], rgb[1], rgb[2], 255);
+                    }
+                }
             }
         }
     }
 
-    // 4: Cobblestone (Masonry stones separated by dark mortar)
-    private static void generateCobblestone(byte[] tile, Random rand) {
-        generateStone(tile, rand);
+    // 4: Cobblestone (Authentic chunky interlocking cobblestones with 3D directional bevels and 1-texel crevice seams)
+    private static final String[] COBBLESTONE_PIXEL_ART = {
+        "M M S D # H L M M S D # H L M S", // 0
+        "S D D D # H L L M S D # H L L M", // 1
+        "D D # # # H L M S D D # # M S D", // 2
+        "# # H L M M S D # # H L M M S #", // 3
+        "S D # H L M M S D # H L M M S D", // 4
+        "D # H L L M S D D # H L L M S D", // 5
+        "# # H L M S D D # # H L M S D D", // 6
+        "H L M S D # # # H L M S D D # #", // 7
+        "L M M S D # H L M M S S D # H L", // 8
+        "M M S D D # H L L M M S D # H L", // 9
+        "S D D # # # H L M S D D D # M S", // 10
+        "# # # H L M M S D # # # H L M M", // 11
+        "M S D # H L M M S D # H L M S D", // 12
+        "S D D # H L L M S D # H L L M S", // 13
+        "D # # # H L M S D D # # M S D D", // 14
+        "# H L M M S D # # H L M M S D #"  // 15
+    };
 
-        for (int y = 0; y < TILE_SIZE; y++) {
-            for (int x = 0; x < TILE_SIZE; x++) {
-                boolean mortar = (y % 16 == 0 && ((y / 16) % 2 == 0 ? x % 16 == 0 : (x + 8) % 16 == 0))
-                              || (y % 16 == 0) || (x % 32 == 0);
-                if (mortar) {
-                    setPixel(tile, x, y, 68, 68, 72, 255);
+    private static void generateCobblestone(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {66, 66, 66},   // '#': Mortar crevice seam
+            {82, 82, 82},   // 'D': Shaded stone rim / bevel
+            {100, 100, 100}, // 'S': Lower stone face
+            {118, 118, 118}, // 'M': Midtone stone body
+            {136, 136, 136}, // 'L': Upper stone face
+            {154, 154, 154}  // 'H': Top-left sunlit highlight rim
+        };
+
+        int scale = TILE_SIZE / 16; // 64 / 16 = 4x pixel scaling
+        for (int by = 0; by < 16; by++) {
+            String row = COBBLESTONE_PIXEL_ART[by].replace(" ", "");
+            for (int bx = 0; bx < 16; bx++) {
+                char c = row.charAt(bx);
+                int[] rgb = switch (c) {
+                    case '#' -> PALETTE[0];
+                    case 'D' -> PALETTE[1];
+                    case 'S' -> PALETTE[2];
+                    case 'M' -> PALETTE[3];
+                    case 'L' -> PALETTE[4];
+                    case 'H' -> PALETTE[5];
+                    default  -> PALETTE[3];
+                };
+
+                for (int dy = 0; dy < scale; dy++) {
+                    for (int dx = 0; dx < scale; dx++) {
+                        setPixel(tile, bx * scale + dx, by * scale + dy, rgb[0], rgb[1], rgb[2], 255);
+                    }
                 }
             }
         }
@@ -910,6 +954,501 @@ public class ProceduralTextureGenerator {
                         tile[idx + 1] = (byte) g;
                         tile[idx + 2] = (byte) b;
                         tile[idx + 3] = (byte) a;
+                    }
+                }
+            }
+        }
+    }
+
+    // 19: Gravel (Warm taupe-gray granular composite of interlocking micro-pebbles and silt crevices)
+    private static void generateGravel(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {82, 78, 76},    // 0: Deep pebble crevice shadow
+            {102, 98, 95},   // 1: Dark taupe-gray grain
+            {126, 122, 120}, // 2: Base warm taupe gravel body
+            {148, 142, 138}, // 3: Highlight pebble facet
+            {170, 164, 160}  // 4: Bright flint/limestone pebble highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int bx = x / 4;
+                int by = y / 4;
+
+                // Macro pebble cluster variation (4x4 texels)
+                int macro = hash(bx, by, 3131) % 100;
+                int baseTone = 2;
+                if (macro < 26) baseTone = 1;
+                else if (macro > 74) baseTone = 3;
+
+                // Micro pebble granularity (individual 1x1 & 2x2 stones)
+                int micro = hash(x, y, 3232) % 100;
+                int tone = baseTone;
+                if (micro < 22) tone = Math.max(0, baseTone - 1);
+                else if (micro > 78) tone = Math.min(4, baseTone + 1);
+
+                // Irregular pebble boundaries & rounded silt crevices
+                boolean isCrevice = (hash(x / 2, y / 2, 3333) % 15 == 0) ||
+                                    ((x % 8 == 0 || y % 8 == 0) && (hash(x, y, 3434) % 10 < 4));
+                if (isCrevice) {
+                    tone = Math.max(0, tone - 2);
+                }
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+
+        // Scatter distinctive rounded pebble highlights and flint chips
+        for (int p = 0; p < 36; p++) {
+            int px = hash(p, 19, 3535) % (TILE_SIZE - 4);
+            int py = hash(p, 53, 3636) % (TILE_SIZE - 4);
+            int pw = 2 + (hash(p, 71, 3737) % 3);
+            int ph = 2 + (hash(p, 89, 3838) % 2);
+
+            for (int dy = 0; dy < ph; dy++) {
+                for (int dx = 0; dx < pw; dx++) {
+                    int x = px + dx;
+                    int y = py + dy;
+                    if (dx == 0 && dy == 0) {
+                        setPixel(tile, x, y, PALETTE[4][0], PALETTE[4][1], PALETTE[4][2], 255);
+                    } else if (dx == pw - 1 || dy == ph - 1) {
+                        setPixel(tile, x, y, PALETTE[0][0], PALETTE[0][1], PALETTE[0][2], 255);
+                    } else {
+                        setPixel(tile, x, y, PALETTE[3][0], PALETTE[3][1], PALETTE[3][2], 255);
+                    }
+                }
+            }
+        }
+    }
+
+    // 20: Andesite (Cool volcanic gray igneous rock with mottled slate texture and fine mineral flecks)
+    private static void generateAndesite(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {94, 96, 98},    // 0: Deep volcanic fissure
+            {112, 114, 116}, // 1: Dark slate-gray matrix
+            {130, 132, 134}, // 2: Neutral andesite body
+            {148, 150, 154}, // 3: Pale mineral grain
+            {170, 172, 176}  // 4: Cool feldspar/quartz grain highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int bx = x / 4;
+                int by = y / 4;
+
+                // Macro volcanic flow patches
+                int macro = hash(bx, by, 4141) % 100;
+                int baseTone = 2;
+                if (macro < 28) baseTone = 1;
+                else if (macro > 72) baseTone = 3;
+
+                // Micro basaltic grain
+                int micro = hash(x, y, 4242) % 100;
+                int tone = baseTone;
+                if (micro < 20) tone = Math.max(0, baseTone - 1);
+                else if (micro > 80) tone = Math.min(4, baseTone + 1);
+
+                // Distinctive mottled volcanic noise (rougher and more speckled than smooth stone)
+                int mottle = hash(x / 3, y / 3, 4343) % 10;
+                if (mottle < 2) {
+                    tone = Math.max(0, tone - 1);
+                } else if (mottle > 7) {
+                    tone = Math.min(4, tone + 1);
+                }
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+
+        // Scatter fine feldspar and pyroxene crystals
+        for (int m = 0; m < 48; m++) {
+            int mx = hash(m, 17, 4444) % TILE_SIZE;
+            int my = hash(m, 31, 4545) % TILE_SIZE;
+            if (m % 2 == 0) {
+                setPixel(tile, mx, my, PALETTE[4][0], PALETTE[4][1], PALETTE[4][2], 255); // Pale speckle
+            } else {
+                setPixel(tile, mx, my, PALETTE[0][0], PALETTE[0][1], PALETTE[0][2], 255); // Dark crystal
+            }
+        }
+    }
+
+    // 21: Diorite (High-contrast coarse intrusive rock with stark white/pale feldspar and dark hornblende chunks)
+    private static void generateDiorite(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {55, 55, 58},    // 0: Dark hornblende / pyroxene spot
+            {92, 92, 96},    // 1: Medium gray shadow ring
+            {152, 152, 156}, // 2: Light gray transition
+            {190, 190, 195}, // 3: Stark white/off-white plagioclase feldspar
+            {228, 228, 232}  // 4: Brilliant white quartz highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int bx = x / 4;
+                int by = y / 4;
+
+                // High-contrast feldspar field (predominantly bright tone 3 and 4)
+                int macro = hash(bx, by, 5151) % 100;
+                int baseTone = 3;
+                if (macro < 20) baseTone = 2;
+                else if (macro > 65) baseTone = 4;
+
+                int micro = hash(x, y, 5252) % 100;
+                int tone = baseTone;
+                if (micro < 15) tone = Math.max(2, baseTone - 1);
+                else if (micro > 80) tone = Math.min(4, baseTone + 1);
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+
+        // Prominent dark hornblende mineral clusters (2x2 to 3x3 black/dark gray flecks)
+        for (int c = 0; c < 32; c++) {
+            int cx = hash(c, 13, 5353) % (TILE_SIZE - 3);
+            int cy = hash(c, 29, 5454) % (TILE_SIZE - 3);
+            int size = 1 + (hash(c, 41, 5555) % 3);
+
+            for (int dy = 0; dy < size; dy++) {
+                for (int dx = 0; dx < size; dx++) {
+                    int x = cx + dx;
+                    int y = cy + dy;
+                    if (dx == 0 && dy == 0 && size > 1) {
+                        setPixel(tile, x, y, PALETTE[1][0], PALETTE[1][1], PALETTE[1][2], 255);
+                    } else {
+                        setPixel(tile, x, y, PALETTE[0][0], PALETTE[0][1], PALETTE[0][2], 255);
+                    }
+                }
+            }
+        }
+    }
+
+    // 22: Birch Leaves (Luminous, delicate, light yellowish-green fluttering broadleaf foliage)
+    private static void generateBirchLeaves(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {52, 92, 28},    // 0: Deep olive shadow
+            {74, 128, 42},   // 1: Dark leaf body
+            {102, 168, 56},  // 2: Base luminous birch green
+            {132, 198, 72},  // 3: Sunlit yellow-green fleck
+            {160, 224, 94}   // 4: Bright golden-green highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int bx = x / 4;
+                int by = y / 4;
+
+                // Fine, fluttery leaf clump structure
+                int clump = hash(bx, by, 6161) % 100;
+                int baseTone = 2;
+                if (clump < 22) baseTone = 1;
+                else if (clump > 70) baseTone = 3;
+
+                int micro = hash(x, y, 6262) % 100;
+                int tone = baseTone;
+                if (micro < 18) tone = Math.max(0, baseTone - 1);
+                else if (micro > 78) tone = Math.min(4, baseTone + 1);
+
+                // Sunlit leaf fluttering variation
+                if ((x + y) % 3 == 0 && (hash(x, y, 6363) % 10 < 6)) {
+                    tone = Math.min(4, tone + 1);
+                }
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+
+        // Delicate, fluttery canopy cutouts (~14% transparent holes)
+        for (int by = 0; by < 16; by++) {
+            for (int bx = 0; bx < 16; bx++) {
+                int holeHash = hash(bx, by, 6464) % 100;
+                if (holeHash < 17) {
+                    int holeW = 2 + (holeHash % 2);
+                    int holeH = 2 + ((holeHash / 2) % 2);
+                    for (int dy = 0; dy < holeH; dy++) {
+                        for (int dx = 0; dx < holeW; dx++) {
+                            int px = (bx * 4 + dx) % TILE_SIZE;
+                            int py = (by * 4 + dy) % TILE_SIZE;
+                            setPixel(tile, px, py, 0, 0, 0, 0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 23: Spruce Log Side (Coarse, reddish-brown fibrous conifer bark with deep charcoal fissures)
+    private static void generateSpruceLogSide(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {38, 24, 14},   // 0: Deep bark fissure
+            {54, 34, 20},   // 1: Dark pine bark shadow
+            {74, 48, 28},   // 2: Base reddish-brown spruce bark
+            {96, 64, 38},   // 3: Warm amber pine ridge
+            {118, 82, 50}   // 4: Sunlit bark highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int wander = (hash(y / 5, 13, 6565) % 3) - 1;
+                int col = (x + wander + TILE_SIZE) % 8;
+
+                int tone = 2;
+                if (col == 0) tone = 0; // Deep vertical crack
+                else if (col == 1) tone = 4; // Sharp illuminated ridge
+                else if (col == 7) tone = 1; // Crevice shadow
+                else {
+                    int scaly = hash(x / 2, y / 3, 6666) % 100;
+                    if (scaly < 25) tone = 1;
+                    else if (scaly > 75) tone = 3;
+                }
+
+                int micro = hash(x, y, 6767) % 100;
+                if (micro < 12) tone = Math.max(0, tone - 1);
+                else if (micro > 88) tone = Math.min(4, tone + 1);
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+    }
+
+    // 24: Spruce Log Top (Concentric conifer growth rings with rich amber heartwood & dark bark rim)
+    private static void generateSpruceLogTop(byte[] tile, Random rand) {
+        int cx = TILE_SIZE / 2;
+        int cy = TILE_SIZE / 2;
+
+        final int[][] WOOD_PALETTE = {
+            {108, 70, 36},  // 0: Dark annual ring
+            {132, 88, 48},  // 1: Caramel heartwood shadow
+            {154, 106, 60}, // 2: Base amber spruce wood
+            {178, 126, 74}, // 3: Light sapwood grain
+            {198, 146, 92}  // 4: Amber ring highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int dx = x - cx;
+                int dy = y - cy;
+                double dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist >= 27.5) {
+                    // Outer dark conifer bark rim
+                    int bTone = (hash(x, y, 6868) % 100 < 40) ? 0 : 2;
+                    int[] bRgb = (bTone == 0) ? new int[]{38, 24, 14} : new int[]{74, 48, 28};
+                    setPixel(tile, x, y, bRgb[0], bRgb[1], bRgb[2], 255);
+                } else if (dist >= 25.5) {
+                    setPixel(tile, x, y, 54, 34, 20, 255);
+                } else {
+                    int ringVal = (int)(dist + (hash(dx / 4, dy / 4, 6969) % 3) * 0.5);
+                    int tone = 2;
+
+                    if (ringVal % 4 == 0) {
+                        tone = 0;
+                    } else if (ringVal % 4 == 1) {
+                        tone = 4;
+                    } else if (dist < 4.0) {
+                        tone = 1;
+                    } else {
+                        int grain = hash(x, y, 7070) % 100;
+                        if (grain < 20) tone = 1;
+                        else if (grain > 80) tone = 3;
+                    }
+
+                    int[] rgb = WOOD_PALETTE[tone];
+                    setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+                }
+            }
+        }
+    }
+
+    // 25: Spruce Leaves (Coniferous evergreen pine needles with cool blue-green hue & needle hatching)
+    private static void generateSpruceLeaves(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {24, 48, 30},   // 0: Deep boreal pine shadow
+            {34, 68, 44},   // 1: Dark needle body
+            {48, 92, 60},   // 2: Base cool evergreen spruce green
+            {68, 120, 80},  // 3: Blue-green needle highlight
+            {92, 148, 102}  // 4: Frosty needle tip
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int bx = x / 4;
+                int by = y / 4;
+
+                int clump = hash(bx, by, 7171) % 100;
+                int baseTone = 2;
+                if (clump < 30) baseTone = 1;
+                else if (clump > 70) baseTone = 3;
+
+                // Conifer needle texture: diagonal linear strokes (needle clusters)
+                int needleHatch = (x * 2 + y) % 5;
+                int tone = baseTone;
+                if (needleHatch == 0) tone = Math.min(4, baseTone + 1);
+                else if (needleHatch == 3) tone = Math.max(0, baseTone - 1);
+
+                int micro = hash(x, y, 7272) % 100;
+                if (micro < 15) tone = Math.max(0, tone - 1);
+                else if (micro > 85) tone = Math.min(4, tone + 1);
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+
+        // Needle cluster cutouts (~10% transparent gaps)
+        for (int by = 0; by < 16; by++) {
+            for (int bx = 0; bx < 16; bx++) {
+                int holeHash = hash(bx, by, 7373) % 100;
+                if (holeHash < 12) {
+                    int holeW = 2;
+                    int holeH = 2 + (holeHash % 2);
+                    for (int dy = 0; dy < holeH; dy++) {
+                        for (int dx = 0; dx < holeW; dx++) {
+                            int px = (bx * 4 + dx) % TILE_SIZE;
+                            int py = (by * 4 + dy) % TILE_SIZE;
+                            setPixel(tile, px, py, 0, 0, 0, 0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 26: Dark Oak Log Side (Massive, rugged charcoal-brown bark with deep furrowed grooves)
+    private static void generateDarkOakLogSide(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {22, 14, 10},   // 0: Deep void fissure
+            {34, 22, 14},   // 1: Charcoal shadow
+            {48, 32, 22},   // 2: Base dark umber bark
+            {66, 46, 32},   // 3: Weathered dark oak ridge
+            {84, 60, 42}    // 4: Subtle brown highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int wander = (hash(y / 6, 19, 7474) % 3) - 1;
+                int col = (x + wander + TILE_SIZE) % 10;
+
+                int tone = 2;
+                if (col <= 1) tone = 0; // Wide deep fissure
+                else if (col == 2) tone = 4; // Rugged furrow rim
+                else if (col >= 8) tone = 1; // Shadow zone
+                else {
+                    int rug = hash(x / 3, y / 3, 7575) % 100;
+                    if (rug < 30) tone = 1;
+                    else if (rug > 65) tone = 3;
+                }
+
+                int micro = hash(x, y, 7676) % 100;
+                if (micro < 15) tone = Math.max(0, tone - 1);
+                else if (micro > 85) tone = Math.min(4, tone + 1);
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+    }
+
+    // 27: Dark Oak Log Top (Dark charcoal bark rim with deep rich chestnut heartwood)
+    private static void generateDarkOakLogTop(byte[] tile, Random rand) {
+        int cx = TILE_SIZE / 2;
+        int cy = TILE_SIZE / 2;
+
+        final int[][] WOOD_PALETTE = {
+            {76, 50, 32},   // 0: Dark annual ring
+            {96, 66, 42},   // 1: Umber shadow
+            {116, 82, 52},  // 2: Deep chestnut heartwood
+            {138, 100, 64}, // 3: Muted sapwood grain
+            {158, 118, 78}  // 4: Wood highlight
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int dx = x - cx;
+                int dy = y - cy;
+                double dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist >= 27.5) {
+                    int bTone = (hash(x, y, 7777) % 100 < 45) ? 0 : 2;
+                    int[] bRgb = (bTone == 0) ? new int[]{22, 14, 10} : new int[]{48, 32, 22};
+                    setPixel(tile, x, y, bRgb[0], bRgb[1], bRgb[2], 255);
+                } else if (dist >= 25.5) {
+                    setPixel(tile, x, y, 34, 22, 14, 255);
+                } else {
+                    int ringVal = (int)(dist + (hash(dx / 4, dy / 4, 7878) % 3) * 0.5);
+                    int tone = 2;
+
+                    if (ringVal % 5 == 0) {
+                        tone = 0;
+                    } else if (ringVal % 5 == 1) {
+                        tone = 4;
+                    } else if (dist < 5.0) {
+                        tone = 1;
+                    } else {
+                        int grain = hash(x, y, 7979) % 100;
+                        if (grain < 22) tone = 1;
+                        else if (grain > 78) tone = 3;
+                    }
+
+                    int[] rgb = WOOD_PALETTE[tone];
+                    setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+                }
+            }
+        }
+    }
+
+    // 28: Dark Oak Leaves (Deep, shadowy emerald-forest green canopy with high density & thick shade)
+    private static void generateDarkOakLeaves(byte[] tile, Random rand) {
+        final int[][] PALETTE = {
+            {18, 38, 14},   // 0: Deep shadowy forest floor shadow
+            {28, 58, 22},   // 1: Heavy dark foliage
+            {40, 80, 32},   // 2: Rich dark emerald base
+            {56, 104, 44},  // 3: Dense canopy midtone
+            {74, 126, 56}   // 4: Canopy sunlit rim
+        };
+
+        for (int y = 0; y < TILE_SIZE; y++) {
+            for (int x = 0; x < TILE_SIZE; x++) {
+                int bx = x / 4;
+                int by = y / 4;
+
+                int clump = hash(bx, by, 8080) % 100;
+                int baseTone = 2;
+                if (clump < 35) baseTone = 1; // Skewed darker for deep canopy
+                else if (clump > 75) baseTone = 3;
+
+                int micro = hash(x, y, 8181) % 100;
+                int tone = baseTone;
+                if (micro < 22) tone = Math.max(0, baseTone - 1);
+                else if (micro > 82) tone = Math.min(4, baseTone + 1);
+
+                // Heavy understory shadowing
+                if (y % 4 == 0 && (hash(x, y, 8282) % 10 < 7)) {
+                    tone = Math.max(0, tone - 1);
+                }
+
+                int[] rgb = PALETTE[tone];
+                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+            }
+        }
+
+        // Dense canopy with small, sparse cutouts (~6% transparent gaps)
+        for (int by = 0; by < 16; by++) {
+            for (int bx = 0; bx < 16; bx++) {
+                int holeHash = hash(bx, by, 8383) % 100;
+                if (holeHash < 12) {
+                    int holeW = 2;
+                    int holeH = 2;
+                    for (int dy = 0; dy < holeH; dy++) {
+                        for (int dx = 0; dx < holeW; dx++) {
+                            int px = (bx * 4 + dx) % TILE_SIZE;
+                            int py = (by * 4 + dy) % TILE_SIZE;
+                            setPixel(tile, px, py, 0, 0, 0, 0);
+                        }
                     }
                 }
             }

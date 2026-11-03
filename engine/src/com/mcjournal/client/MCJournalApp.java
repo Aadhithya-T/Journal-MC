@@ -62,6 +62,7 @@ public class MCJournalApp {
         applySettings();
 
         gameRenderer.init();
+        screenManager.setFontRenderer(gameRenderer.getFontRenderer());
         worldSession.init();
         camera.updateProjection(window.getAspectRatio());
 

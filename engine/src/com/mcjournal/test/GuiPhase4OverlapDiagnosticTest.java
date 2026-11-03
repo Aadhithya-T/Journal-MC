@@ -61,10 +61,31 @@ public class GuiPhase4OverlapDiagnosticTest {
                     throw new AssertionError("WorldCreateScreen has " + createViolations.size() + " layout violations at "
                             + resW + "x" + resH + " scale=" + scale);
                 }
+
+                // Test WorldEditScreen
+                com.mcjournal.client.WorldSaveManager.SavedWorld mockWorld =
+                        new com.mcjournal.client.WorldSaveManager.SavedWorld();
+                mockWorld.name = "Test World";
+                mockWorld.biome = "Plains";
+                mockWorld.seed = 12345L;
+                mockWorld.worldWidth = 2500;
+                mockWorld.worldDepth = 2500;
+                mockWorld.worldHeight = 256;
+                mockWorld.createdAt = "2026-11-02";
+                WorldEditScreen editScreen = new WorldEditScreen(null, mockWorld);
+                editScreen.init(guiW, guiH);
+                List<GuiDiagnostics.Violation> editViolations = GuiDiagnostics.checkScreen(editScreen, null);
+                if (!editViolations.isEmpty()) {
+                    for (GuiDiagnostics.Violation v : editViolations) {
+                        System.err.println("VIOLATION in EditScreen (" + resW + "x" + resH + " scale=" + scale + "): " + v);
+                    }
+                    throw new AssertionError("WorldEditScreen has " + editViolations.size() + " layout violations at "
+                            + resW + "x" + resH + " scale=" + scale);
+                }
             }
         }
 
-        System.out.println("[Phase 4 Diagnostics] Verified WorldSelectScreen and WorldCreateScreen across 12 resolution/scale configurations: 0 violations.");
+        System.out.println("[Phase 4 Diagnostics] Verified WorldSelectScreen, WorldCreateScreen, and WorldEditScreen across 12 resolution/scale configurations: 0 violations.");
     }
 }
 

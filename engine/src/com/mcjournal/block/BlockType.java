@@ -59,6 +59,14 @@ public class BlockType {
         return transparent;
     }
 
+    public boolean isLeaves() {
+        return legacyId == 8 || legacyId == 12 || legacyId == 20 || legacyId == 22;
+    }
+
+    public boolean isLog() {
+        return legacyId == 7 || legacyId == 11 || legacyId == 19 || legacyId == 21;
+    }
+
     public boolean isPlant() {
         return plant;
     }
@@ -96,9 +104,14 @@ public class BlockType {
         // Dynamic orientation handling for directional logs
         if (state.contains(BlockProperties.AXIS)) {
             Axis axis = state.get(BlockProperties.AXIS);
-            boolean isBirch = (this.legacyId == 11);
-            int barkSlot = isBirch ? 15 : 7;
-            int ringSlot = 8;
+            int barkSlot;
+            int ringSlot;
+            switch (this.legacyId) {
+                case 11 -> { barkSlot = 15; ringSlot = 8; }  // Birch
+                case 19 -> { barkSlot = 23; ringSlot = 24; } // Spruce
+                case 21 -> { barkSlot = 26; ringSlot = 27; } // Dark Oak
+                default -> { barkSlot = 7; ringSlot = 8; }   // Oak
+            }
 
             switch (axis) {
                 case Y -> {
@@ -120,12 +133,20 @@ public class BlockType {
             case 4 -> 4; // Cobblestone
             case 5 -> 5; // Sand
             case 6 -> 6; // Bedrock
-            case 8, 12 -> 9; // Leaves
+            case 8 -> 9; // Oak Leaves
             case 9 -> 10; // Diamond Ore
             case 10 -> 11; // Water
+            case 12 -> 22; // Birch Leaves
             case 13 -> 12; // Tall Grass
             case 14 -> 13; // Poppy
             case 15 -> 14; // Dandelion
+            case 16 -> 19; // Gravel
+            case 17 -> 20; // Andesite
+            case 18 -> 21; // Diorite
+            case 19 -> 23; // Spruce Log
+            case 20 -> 25; // Spruce Leaves
+            case 21 -> 26; // Dark Oak Log
+            case 22 -> 28; // Dark Oak Leaves
             default -> 2;
         };
     }
@@ -139,13 +160,21 @@ public class BlockType {
             case 5 -> 5; // Sand
             case 6 -> 6; // Bedrock
             case 7 -> 7; // Oak Log
-            case 8, 12 -> 9; // Leaves
+            case 8 -> 9; // Oak Leaves
             case 9 -> 10; // Diamond Ore
             case 10 -> 11; // Water
             case 11 -> 15; // Birch Log
+            case 12 -> 22; // Birch Leaves
             case 13 -> 12; // Tall Grass
             case 14 -> 13; // Poppy
             case 15 -> 14; // Dandelion
+            case 16 -> 19; // Gravel
+            case 17 -> 20; // Andesite
+            case 18 -> 21; // Diorite
+            case 19 -> 23; // Spruce Log
+            case 20 -> 25; // Spruce Leaves
+            case 21 -> 26; // Dark Oak Log
+            case 22 -> 28; // Dark Oak Leaves
             default -> 0;
         };
     }
@@ -164,6 +193,13 @@ public class BlockType {
             case 13 -> Blocks.TALL_GRASS;
             case 14 -> Blocks.POPPY;
             case 15 -> Blocks.DANDELION;
+            case 16 -> Blocks.GRAVEL;
+            case 17 -> Blocks.ANDESITE;
+            case 18 -> Blocks.DIORITE;
+            case 19 -> Blocks.SPRUCE_LOG;
+            case 20 -> Blocks.SPRUCE_LEAVES;
+            case 21 -> Blocks.DARK_OAK_LOG;
+            case 22 -> Blocks.DARK_OAK_LEAVES;
             default -> Blocks.AIR;
         };
     }

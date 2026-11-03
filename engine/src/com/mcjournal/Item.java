@@ -36,10 +36,7 @@ public final class Item {
     }
 
     public static boolean isAxeEffective(BlockType block) {
-        return block == Blocks.OAK_LOG
-            || block == Blocks.BIRCH_LOG
-            || block == Blocks.OAK_LEAVES
-            || block == Blocks.BIRCH_LEAVES;
+        return block != null && (block.isLog() || block.isLeaves());
     }
 
     public static boolean isAxeEffective(BlockState state) {
@@ -56,7 +53,8 @@ public final class Item {
     public static boolean isShovelEffective(BlockType block) {
         return block == Blocks.GRASS
             || block == Blocks.DIRT
-            || block == Blocks.SAND;
+            || block == Blocks.SAND
+            || block == Blocks.GRAVEL;
     }
 
     public static boolean isShovelEffective(BlockState state) {
@@ -73,7 +71,9 @@ public final class Item {
     public static boolean isPickaxeEffective(BlockType block) {
         return block == Blocks.STONE
             || block == Blocks.COBBLESTONE
-            || block == Blocks.DIAMOND_ORE;
+            || block == Blocks.DIAMOND_ORE
+            || block == Blocks.ANDESITE
+            || block == Blocks.DIORITE;
     }
 
     public static boolean isPickaxeEffective(BlockState state) {
@@ -114,7 +114,8 @@ public final class Item {
     }
 
     public static boolean canHarvest(byte toolId, BlockType block) {
-        if (block == Blocks.STONE || block == Blocks.COBBLESTONE || block == Blocks.DIAMOND_ORE) {
+        if (block == Blocks.STONE || block == Blocks.COBBLESTONE || block == Blocks.DIAMOND_ORE
+                || block == Blocks.ANDESITE || block == Blocks.DIORITE) {
             return isPickaxe(toolId);
         }
         return true;

@@ -99,6 +99,14 @@ public class BlockState {
         return this.owner.isSolid();
     }
 
+    public boolean isLeaves() {
+        return this.owner != null && this.owner.isLeaves();
+    }
+
+    public boolean isLog() {
+        return this.owner != null && this.owner.isLog();
+    }
+
     public boolean isTransparent() {
         return this.owner.isTransparent();
     }

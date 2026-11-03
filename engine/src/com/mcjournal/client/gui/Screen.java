@@ -20,9 +20,21 @@ public abstract class Screen {
     // Backward compatibility for existing screens accessing 'buttons' directly
     protected final List<Button> buttons = new ArrayList<>();
     protected final FocusManager focusManager = new FocusManager();
+    protected FontRenderer font;
 
     public Screen(MCJournalApp app) {
         this.app = app;
+    }
+
+    public void setFont(FontRenderer font) {
+        this.font = font;
+    }
+
+    public FontRenderer getFont() {
+        if (this.font == null) {
+            this.font = new FontRenderer();
+        }
+        return this.font;
     }
 
     public boolean usesLogicalCoordinates() {
@@ -74,6 +86,13 @@ public abstract class Screen {
         this.focusManager.clearFocus();
     }
 
+    public void init(int width, int height, FontRenderer font) {
+        if (font != null) {
+            this.font = font;
+        }
+        init(width, height);
+    }
+
     /**
      * Synchronizes any buttons directly added to the legacy 'buttons' list into 'widgets'.
      */
@@ -93,6 +112,7 @@ public abstract class Screen {
     }
 
     public void render(GuiRenderer gui, FontRenderer font, double mouseX, double mouseY, float deltaTime) {
+        if (font != null) { this.font = font; }
         syncLegacyButtons();
 
         // 1. Render all visible widgets

@@ -161,8 +161,8 @@ public class ChunkMeshBuilder {
                         continue;
                     }
 
-                    // B. Cutout Leaves (Oak Leaves, Birch Leaves)
-                    if (block.is(Blocks.OAK_LEAVES) || block.is(Blocks.BIRCH_LEAVES)) {
+                    // B. Cutout Leaves (Oak, Birch, Spruce, Dark Oak)
+                    if (block.isLeaves()) {
                         buildLeafBlock(neighborhood, x, y, z, wx, wz, block,
                             cutoutVerts, cutoutIndices, cutoutPos, cutoutNorm, cutoutUv, cutoutCol);
                         continue;
