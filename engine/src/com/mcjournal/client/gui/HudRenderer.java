@@ -144,7 +144,7 @@ public class HudRenderer {
     }
 
     // -------------------------------------------------------------------------
-    // B. Hotbar (9 Slots with Stone Foundation & Luminous Gold Selection)
+    // B. Hotbar (9 Slots with Light Grey Stone Foundation & Gold Selection)
     // -------------------------------------------------------------------------
     private void renderHotbar(GuiRenderer gui, FontRenderer font, HudContext ctx, int width, int height) {
         Player player = ctx.player;
@@ -155,12 +155,12 @@ public class HudRenderer {
         int hx = GuiLayout.centerX(width, totalHotbarW);
         int hy = height - totalHotbarH - 3;
 
-        // 1. Dark Stone Foundation Panel with subtle outer bevel
-        gui.drawRect(hx, hy, totalHotbarW, totalHotbarH, 0.07f, 0.07f, 0.09f, HudTheme.PANEL_ALPHA);
-        gui.drawRect(hx, hy, totalHotbarW, 1, 0.24f, 0.24f, 0.28f, 0.85f);             // Top border
-        gui.drawRect(hx, hy + totalHotbarH - 1, totalHotbarW, 1, 0.04f, 0.04f, 0.06f, 0.90f); // Bottom border
-        gui.drawRect(hx, hy, 1, totalHotbarH, 0.24f, 0.24f, 0.28f, 0.85f);             // Left border
-        gui.drawRect(hx + totalHotbarW - 1, hy, 1, totalHotbarH, 0.04f, 0.04f, 0.06f, 0.90f); // Right border
+        // 1. Light Grey Stone / Iron Foundation Panel with 3D outer bevels
+        gui.drawRect(hx, hy, totalHotbarW, totalHotbarH, 0.54f, 0.54f, 0.58f, 0.88f); // Light grey base fill
+        gui.drawRect(hx, hy, totalHotbarW, 1, 0.84f, 0.84f, 0.88f, 0.95f);             // Top highlight border
+        gui.drawRect(hx, hy, 1, totalHotbarH, 0.84f, 0.84f, 0.88f, 0.95f);             // Left highlight border
+        gui.drawRect(hx, hy + totalHotbarH - 1, totalHotbarW, 1, 0.22f, 0.22f, 0.25f, 0.95f); // Bottom shadow border
+        gui.drawRect(hx + totalHotbarW - 1, hy, 1, totalHotbarH, 0.22f, 0.22f, 0.25f, 0.95f); // Right shadow border
 
         int selected = Math.clamp(player.selectedSlot, 0, 8);
 
@@ -168,11 +168,13 @@ public class HudRenderer {
             int sx = hx + HudTheme.HOTBAR_PADDING + i * slotSize;
             int sy = hy + HudTheme.HOTBAR_PADDING;
 
-            // High-Contrast Slot Cavity (Lighter translucent fill, distinct visible border, 1px inner inset shadow)
-            gui.drawRect(sx, sy, slotSize, slotSize, 0.24f, 0.24f, 0.29f, 0.85f); // Visible slot border
-            gui.drawRect(sx + 1, sy + 1, slotSize - 2, slotSize - 2, 0.09f, 0.09f, 0.13f, HudTheme.SLOT_BG_ALPHA); // Lighter translucent cavity well
-            gui.drawRect(sx + 1, sy + 1, slotSize - 2, 1, 0.03f, 0.03f, 0.05f, 0.90f); // Recessed inner top drop shadow
-            gui.drawRect(sx + 1, sy + 1, 1, slotSize - 2, 0.03f, 0.03f, 0.05f, 0.90f); // Recessed inner left drop shadow
+            // Recessed Slot Cavity with 3D inset bevels:
+            gui.drawRect(sx, sy, slotSize, slotSize, 0.26f, 0.26f, 0.30f, 0.90f); // Slot outer divider border
+            gui.drawRect(sx + 1, sy + 1, slotSize - 2, slotSize - 2, 0.36f, 0.36f, 0.40f, 0.82f); // Mid-grey cavity well
+            gui.drawRect(sx + 1, sy + 1, slotSize - 2, 1, 0.14f, 0.14f, 0.18f, 0.90f); // Top inner drop shadow
+            gui.drawRect(sx + 1, sy + 1, 1, slotSize - 2, 0.14f, 0.14f, 0.18f, 0.90f); // Left inner drop shadow
+            gui.drawRect(sx + 1, sy + slotSize - 2, slotSize - 2, 1, 0.50f, 0.50f, 0.55f, 0.75f); // Bottom inner highlight rim
+            gui.drawRect(sx + slotSize - 2, sy + 1, 1, slotSize - 2, 0.50f, 0.50f, 0.55f, 0.75f); // Right inner highlight rim
 
             // Slot Item / Block Content
             byte itemId = player.hotbarBlocks[i];
@@ -244,15 +246,87 @@ public class HudRenderer {
     }
 
     // -------------------------------------------------------------------------
-    // C. Health (Ruby Shield) & Hunger (Amber Loaf) Indicators
+    // C. Health (Hearts) & Hunger (Drumsticks) Indicators
     // -------------------------------------------------------------------------
+    private static final String[] HEART_FULL = {
+        ".##...##.",
+        "#RR#.#RR#",
+        "#WRR#RRR#",
+        "#RRRRRRR#",
+        "#RRRRRRR#",
+        ".#RRRRR#.",
+        "..#RRR#..",
+        "...#R#...",
+        "....#...."
+    };
+
+    private static final String[] HEART_HALF = {
+        ".##...##.",
+        "#RR#.#EE#",
+        "#WRR#EEE#",
+        "#RRRREEE#",
+        "#RRRREEE#",
+        ".#RRREE#.",
+        "..#RRE#..",
+        "...#R#...",
+        "....#...."
+    };
+
+    private static final String[] HEART_EMPTY = {
+        ".##...##.",
+        "#EE#.#EE#",
+        "#EEE#EEE#",
+        "#EEEEEEE#",
+        "#EEEEEEE#",
+        ".#EEEEE#.",
+        "..#EEE#..",
+        "...#E#...",
+        "....#...."
+    };
+
+    private static final String[] DRUMSTICK_FULL = {
+        "....###..",
+        "...#MMM#.",
+        "..#MHMMM#",
+        "..#MMMMM#",
+        ".#MMMMS#.",
+        ".#MMSS##.",
+        "#B##.....",
+        "BB#......",
+        "##......."
+    };
+
+    private static final String[] DRUMSTICK_HALF = {
+        "....###..",
+        "...#EEE#.",
+        "..#EEEEE#",
+        "..#MMMEE#",
+        ".#MMMMS#.",
+        ".#MMSS##.",
+        "#B##.....",
+        "BB#......",
+        "##......."
+    };
+
+    private static final String[] DRUMSTICK_EMPTY = {
+        "....###..",
+        "...#EEE#.",
+        "..#EEEEE#",
+        "..#EEEEE#",
+        ".#EEEEE#.",
+        ".#EEEE##.",
+        "#b##.....",
+        "bb#......",
+        "##......."
+    };
+
     private void renderHealthAndHunger(GuiRenderer gui, HudContext ctx, int width, int height) {
         Player player = ctx.player;
         int hotbarW = HudTheme.HOTBAR_WIDTH;
         int hx = GuiLayout.centerX(width, hotbarW);
         int indicatorsY = height - HudTheme.HOTBAR_HEIGHT - 15;
 
-        // 1. Health Bar (Left: 10 Ruby Shields = 20 HP)
+        // 1. Health Bar (Left: 10 Hearts = 20 HP)
         int hp = Math.clamp(player.health, 0, 20);
         boolean isHurt = player.hurtTime > 0;
         int iconSize = HudTheme.ICON_SIZE;
@@ -261,10 +335,10 @@ public class HudRenderer {
         for (int i = 0; i < 10; i++) {
             int px = hx + 1 + i * (iconSize + gap);
             int pipValue = hp - (i * 2);
-            renderHealthGem(gui, px, indicatorsY, pipValue, isHurt);
+            renderHeart(gui, px, indicatorsY, pipValue, isHurt);
         }
 
-        // 2. Hunger Bar (Right: 10 Amber Loaves = 20 Hunger)
+        // 2. Hunger Bar (Right: 10 Roasted Drumsticks = 20 Hunger)
         int hunger = Math.clamp(player.hunger, 0, 20);
         int hungerStartX = hx + hotbarW - HudTheme.STATUS_BAR_WIDTH - 1;
 
@@ -272,164 +346,86 @@ public class HudRenderer {
             // Right-to-left layout: Pip 9 is furthest right
             int px = hungerStartX + (9 - i) * (iconSize + gap);
             int pipValue = hunger - (i * 2);
-            renderHungerLoaf(gui, px, indicatorsY, pipValue);
+            renderHungerDrumstick(gui, px, indicatorsY, pipValue);
         }
     }
 
-    private void renderHealthGem(GuiRenderer gui, int x, int y, int pipValue, boolean isHurt) {
-        if (isHurt) {
-            // Damage Hurt Flash: Container blinks brilliant white during player hurtTime
-            float flashA = 0.95f;
-            gui.drawRect(x + 1, y, 2, 1, 1.0f, 1.0f, 1.0f, flashA);
-            gui.drawRect(x + 5, y, 2, 1, 1.0f, 1.0f, 1.0f, flashA);
-            gui.drawRect(x, y + 1, 9, 4, 1.0f, 1.0f, 1.0f, flashA);
-            gui.drawRect(x + 1, y + 5, 7, 1, 1.0f, 1.0f, 1.0f, flashA);
-            gui.drawRect(x + 2, y + 6, 5, 1, 1.0f, 1.0f, 1.0f, flashA);
-            gui.drawRect(x + 3, y + 7, 3, 1, 1.0f, 1.0f, 1.0f, flashA);
-            gui.drawRect(x + 4, y + 8, 1, 1, 1.0f, 1.0f, 1.0f, flashA);
-            return;
+    private void renderHeart(GuiRenderer gui, int x, int y, int pipValue, boolean isHurt) {
+        String[] sprite;
+        if (pipValue <= 0) {
+            sprite = HEART_EMPTY;
+        } else if (pipValue == 1) {
+            sprite = HEART_HALF;
+        } else {
+            sprite = HEART_FULL;
         }
 
-        // 9x9 Health Crest / Shield Gem
-        float bgR = 0.08f, bgG = 0.08f, bgB = 0.10f, bgA = 0.85f;
+        for (int dy = 0; dy < 9; dy++) {
+            String row = sprite[dy];
+            for (int dx = 0; dx < 9; dx++) {
+                char c = row.charAt(dx);
+                if (c == '.') continue;
 
-        // Top gold crest accent
-        gui.drawRect(x + 1, y, 2, 1, HudTheme.GOLD_R, HudTheme.GOLD_G, HudTheme.GOLD_B, 0.90f);
-        gui.drawRect(x + 5, y, 2, 1, HudTheme.GOLD_R, HudTheme.GOLD_G, HudTheme.GOLD_B, 0.90f);
-
-        // Stone boundary frame
-        gui.drawRect(x, y + 1, 1, 4, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 8, y + 1, 1, 4, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 4, y + 1, 1, 2, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 1, y + 5, 1, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 7, y + 5, 1, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 2, y + 6, 1, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 6, y + 6, 1, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 3, y + 7, 1, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 5, y + 7, 1, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 4, y + 8, 1, 1, bgR, bgG, bgB, bgA);
-
-        // Background container fill (dark hollow stone cavity)
-        float emptyR = 0.15f, emptyG = 0.15f, emptyB = 0.18f, emptyA = 0.90f;
-        gui.drawRect(x + 1, y + 1, 3, 4, emptyR, emptyG, emptyB, emptyA);
-        gui.drawRect(x + 5, y + 1, 3, 4, emptyR, emptyG, emptyB, emptyA);
-        gui.drawRect(x + 4, y + 3, 1, 2, emptyR, emptyG, emptyB, emptyA);
-        gui.drawRect(x + 2, y + 5, 5, 1, emptyR, emptyG, emptyB, emptyA);
-        gui.drawRect(x + 3, y + 6, 3, 1, emptyR, emptyG, emptyB, emptyA);
-        gui.drawRect(x + 4, y + 7, 1, 1, emptyR, emptyG, emptyB, emptyA);
-
-        if (pipValue <= 0) return;
-
-        // Ruby Gem Fill (Full or Half)
-        float fillR = isHurt ? 1.0f : 0.86f;
-        float fillG = isHurt ? 0.94f : 0.12f;
-        float fillB = isHurt ? 0.90f : 0.16f;
-        float fillA = 1.0f;
-
-        if (pipValue >= 2) {
-            // Full Ruby Gem
-            gui.drawRect(x + 1, y + 1, 3, 4, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 5, y + 1, 3, 4, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 4, y + 3, 1, 2, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 2, y + 5, 5, 1, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 3, y + 6, 3, 1, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 4, y + 7, 1, 1, fillR, fillG, fillB, fillA);
-
-            if (!isHurt) {
-                // Specular gleam highlight on top-left lobe
-                gui.drawRect(x + 2, y + 2, 1, 1, 1.0f, 0.45f, 0.52f, 1.0f);
-                // Subtle dark ruby shade along bottom facets
-                gui.drawRect(x + 3, y + 6, 3, 1, 0.55f, 0.06f, 0.10f, 1.0f);
-                gui.drawRect(x + 4, y + 7, 1, 1, 0.45f, 0.05f, 0.08f, 1.0f);
-            }
-        } else {
-            // Half Ruby Gem (Left lobe filled, right lobe hollow)
-            gui.drawRect(x + 1, y + 1, 3, 4, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 2, y + 5, 3, 1, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 3, y + 6, 1, 1, fillR, fillG, fillB, fillA);
-
-            if (!isHurt) {
-                gui.drawRect(x + 2, y + 2, 1, 1, 1.0f, 0.45f, 0.52f, 1.0f);
+                float r, g, b, a;
+                switch (c) {
+                    case '#' -> { r = 0.08f; g = 0.06f; b = 0.06f; a = 1.0f; } // Dark heart outline
+                    case 'R' -> {
+                        if (isHurt) {
+                            r = 1.0f; g = 1.0f; b = 1.0f; a = 1.0f; // White hurt flash
+                        } else if (dy >= 6) {
+                            r = 0.65f; g = 0.06f; b = 0.06f; a = 1.0f; // Shaded bottom red
+                        } else {
+                            r = 0.92f; g = 0.12f; b = 0.12f; a = 1.0f; // Vibrant Minecraft red
+                        }
+                    }
+                    case 'W' -> { r = 1.0f; g = 1.0f; b = 1.0f; a = 1.0f; } // Specular glint
+                    case 'E' -> { r = 0.20f; g = 0.12f; b = 0.12f; a = 0.88f; } // Empty heart cavity
+                    default  -> { continue; }
+                }
+                gui.drawRect(x + dx, y + dy, 1, 1, r, g, b, a);
             }
         }
     }
 
-    private void renderHungerLoaf(GuiRenderer gui, int x, int y, int pipValue) {
-        // 9x9 Hunger Amber Loaf / Drumstick Crest
-        float bgR = 0.12f, bgG = 0.08f, bgB = 0.05f, bgA = 0.85f;
-
-        // Outline silhouette
-        gui.drawRect(x + 3, y, 4, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 2, y + 1, 1, 2, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 7, y + 1, 1, 4, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 1, y + 3, 1, 3, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 2, y + 6, 1, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 6, y + 5, 1, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 5, y + 6, 1, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 3, y + 7, 2, 1, bgR, bgG, bgB, bgA);
-        gui.drawRect(x + 2, y + 8, 1, 1, bgR, bgG, bgB, bgA);
-
-        // Hollow container fill
-        float emptyR = 0.18f, emptyG = 0.14f, emptyB = 0.10f, emptyA = 0.90f;
-        gui.drawRect(x + 3, y + 1, 4, 2, emptyR, emptyG, emptyB, emptyA);
-        gui.drawRect(x + 2, y + 3, 5, 2, emptyR, emptyG, emptyB, emptyA);
-        gui.drawRect(x + 2, y + 5, 4, 1, emptyR, emptyG, emptyB, emptyA);
-        gui.drawRect(x + 3, y + 6, 2, 1, emptyR, emptyG, emptyB, emptyA);
-
-        if (pipValue <= 0) return;
-
-        float fillR = 0.88f, fillG = 0.52f, fillB = 0.10f, fillA = 1.0f;
-
-        if (pipValue >= 2) {
-            // Full Amber Roast Loaf
-            gui.drawRect(x + 3, y + 1, 4, 2, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 2, y + 3, 5, 2, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 2, y + 5, 4, 1, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 3, y + 6, 2, 1, fillR, fillG, fillB, fillA);
-
-            // Caramel glaze top highlight
-            gui.drawRect(x + 4, y + 1, 2, 1, 1.0f, 0.74f, 0.28f, 1.0f);
-            gui.drawRect(x + 5, y + 2, 1, 1, 1.0f, 0.74f, 0.28f, 1.0f);
-            // Rich roasted shadow along bottom
-            gui.drawRect(x + 2, y + 5, 4, 1, 0.55f, 0.30f, 0.05f, 1.0f);
+    private void renderHungerDrumstick(GuiRenderer gui, int x, int y, int pipValue) {
+        String[] sprite;
+        if (pipValue <= 0) {
+            sprite = DRUMSTICK_EMPTY;
+        } else if (pipValue == 1) {
+            sprite = DRUMSTICK_HALF;
         } else {
-            // Half Amber Loaf (Right portion filled, left portion hollow)
-            gui.drawRect(x + 4, y + 1, 3, 2, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 4, y + 3, 3, 2, fillR, fillG, fillB, fillA);
-            gui.drawRect(x + 4, y + 5, 2, 1, fillR, fillG, fillB, fillA);
+            sprite = DRUMSTICK_FULL;
+        }
 
-            gui.drawRect(x + 5, y + 1, 1, 1, 1.0f, 0.74f, 0.28f, 1.0f);
+        for (int dy = 0; dy < 9; dy++) {
+            String row = sprite[dy];
+            for (int dx = 0; dx < 9; dx++) {
+                char c = row.charAt(dx);
+                if (c == '.') continue;
+
+                float r, g, b, a;
+                switch (c) {
+                    case '#' -> { r = 0.20f; g = 0.09f; b = 0.03f; a = 1.0f; } // Dark roasted outline
+                    case 'M' -> { r = 0.86f; g = 0.44f; b = 0.08f; a = 1.0f; } // Golden roasted meat
+                    case 'H' -> { r = 0.98f; g = 0.72f; b = 0.24f; a = 1.0f; } // Cooked glaze highlight
+                    case 'S' -> { r = 0.50f; g = 0.22f; b = 0.03f; a = 1.0f; } // Deep roasted shadow
+                    case 'B' -> { r = 0.94f; g = 0.92f; b = 0.86f; a = 1.0f; } // Ivory chicken bone
+                    case 'b' -> { r = 0.38f; g = 0.35f; b = 0.30f; a = 0.85f; } // Dim empty bone
+                    case 'E' -> { r = 0.20f; g = 0.14f; b = 0.10f; a = 0.85f; } // Empty cavity
+                    default  -> { continue; }
+                }
+                gui.drawRect(x + dx, y + dy, 1, 1, r, g, b, a);
+            }
         }
     }
 
     // -------------------------------------------------------------------------
-    // D. World Information Panel (Structured Frosted Slate Card)
+    // D. World Information Overlay (Authentic Vanilla F3 Style Lines)
     // -------------------------------------------------------------------------
     private void renderWorldInfo(GuiRenderer gui, FontRenderer font, HudContext ctx, int width, int height) {
-        int x = 6;
-        int y = 6;
-        float fontScale = 0.45f;
+        int x = 2;
+        int curY = 2;
         int lineH = 10;
-        int padX = 8;
-        int padY = 6;
-
-        // Determine active line count
-        int lines = 0;
-        if (ctx.settings.showCoordinates && ctx.hasPlayer()) lines += 3;
-        if (ctx.settings.showFps) lines += 1;
-        if (lines == 0) return;
-
-        int panelW = 188;
-        int panelH = padY * 2 + lines * lineH - 1;
-
-        // Frosted Charcoal Slate Panel with subtle border (Cleaner 0.65 opacity)
-        gui.drawRect(x, y, panelW, panelH, 0.07f, 0.07f, 0.09f, 0.65f);
-        gui.drawRect(x, y, panelW, 1, 0.22f, 0.22f, 0.28f, 0.75f);             // Top border
-        gui.drawRect(x, y + panelH - 1, panelW, 1, 0.05f, 0.05f, 0.07f, 0.85f); // Bottom border
-        gui.drawRect(x, y, 1, panelH, 0.22f, 0.22f, 0.28f, 0.75f);             // Left border
-        gui.drawRect(x + panelW - 1, y, 1, panelH, 0.05f, 0.05f, 0.07f, 0.85f); // Right border
-
-        int curY = y + padY;
 
         // 1. Primary Line: Coordinates & Elevation
         if (ctx.settings.showCoordinates && ctx.hasPlayer()) {
@@ -444,9 +440,9 @@ public class HudRenderer {
                 cachedCoordZ = pz;
                 int seaDelta = py - 64;
                 String seaSign = seaDelta >= 0 ? "+" : "";
-                cachedCoordStr = "XYZ: " + px + " " + py + " " + pz + " (" + seaSign + seaDelta + "m)";
+                cachedCoordStr = "XYZ: " + px + ", " + py + ", " + pz + " (" + seaSign + seaDelta + "m)";
             }
-            font.drawString(gui, "§6XYZ:§r " + cachedCoordX + ", " + cachedCoordY + ", " + cachedCoordZ + " §7(" + (cachedCoordY - 64 >= 0 ? "+" : "") + (cachedCoordY - 64) + "m)§r", x + padX, curY, fontScale, 0xffffff, true);
+            renderOverlayLine(gui, font, cachedCoordStr, x, curY, 0xe0e0e0);
             curY += lineH;
 
             // 2. Primary Line: Biome & World Name
@@ -454,7 +450,7 @@ public class HudRenderer {
                 cachedBiome = ctx.currentBiome;
                 cachedBiomeStr = "Biome: " + cachedBiome;
             }
-            font.drawString(gui, "§7Biome:§r " + cachedBiome, x + padX, curY, fontScale, 0xe0e0e8, true);
+            renderOverlayLine(gui, font, cachedBiomeStr, x, curY, 0xe0e0e0);
             curY += lineH;
 
             // 3. Secondary Line: Solar Day & Clock
@@ -466,9 +462,9 @@ public class HudRenderer {
                 if (day != cachedDay || isDay != cachedIsDay) {
                     cachedDay = day;
                     cachedIsDay = isDay;
-                    cachedSolarTimeStr = "Day " + day + "  •  " + (isDay ? "Daylight" : "Nightfall");
+                    cachedSolarTimeStr = "Time: Day " + day + " \u00B7 " + (isDay ? "Daylight" : "Nightfall");
                 }
-                font.drawString(gui, "§7Time:§r Day " + day + " §8•§r " + (isDay ? "§eDaylight§r" : "§9Nightfall§r"), x + padX, curY, fontScale, 0xd0d0d8, true);
+                renderOverlayLine(gui, font, cachedSolarTimeStr, x, curY, 0xd0d0d8);
                 curY += lineH;
             }
         }
@@ -479,11 +475,17 @@ public class HudRenderer {
                 cachedFps = ctx.currentFps;
                 cachedRenderedChunks = ctx.renderedChunks;
                 cachedLoadedChunks = ctx.loadedChunks;
-                cachedFpsStr = cachedFps + " FPS  •  Chunks " + cachedRenderedChunks + "/" + cachedLoadedChunks;
+                cachedFpsStr = cachedFps + " FPS \u00B7 Chunks " + cachedRenderedChunks + "/" + cachedLoadedChunks;
             }
-            int fpsColor = cachedFps >= 50 ? 0x90e090 : (cachedFps >= 30 ? 0xf0c060 : 0xf07070);
-            font.drawString(gui, "§7" + cachedFps + " FPS §8•§r §7Chunks §f" + cachedRenderedChunks + "/" + cachedLoadedChunks, x + padX, curY, fontScale, fpsColor, true);
+            int fpsColor = cachedFps >= 50 ? 0xa0e8a0 : (cachedFps >= 30 ? 0xf0c060 : 0xf07070);
+            renderOverlayLine(gui, font, cachedFpsStr, x, curY, fpsColor);
         }
+    }
+
+    private void renderOverlayLine(GuiRenderer gui, FontRenderer font, String text, int x, int y, int color) {
+        float textW = font.getStringWidth(text, 1);
+        gui.drawRect(x - 1, y - 1, textW + 2, 10, 0.0f, 0.0f, 0.0f, 0.40f);
+        font.drawString(gui, text, x, y, 1, color, true);
     }
 
     // -------------------------------------------------------------------------

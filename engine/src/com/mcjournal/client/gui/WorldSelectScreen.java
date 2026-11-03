@@ -125,13 +125,15 @@ public class WorldSelectScreen extends Screen {
         if (currentWorld == null) return;
 
         String worldName = currentWorld.name != null ? currentWorld.name : "this world";
-        String prompt = "Are you sure you want to delete '" + worldName + "'?\nThis action cannot be undone!";
+        String prompt = "Are you sure you want to delete\n'" + worldName + "'?\nThis action cannot be undone!";
 
         ConfirmScreen confirm = new ConfirmScreen(app, "Delete World?", prompt, "Delete", "Cancel", true,
                 () -> {
                     WorldSaveManager.deleteWorld();
                     currentWorld = null;
-                    init(width, height);
+                    if (app != null) {
+                        app.setScreen(new WorldSelectScreen(app));
+                    }
                 },
                 () -> {
                     if (app != null) app.popScreen();
@@ -140,6 +142,12 @@ public class WorldSelectScreen extends Screen {
         if (app != null) {
             app.pushScreen(confirm);
         }
+    }
+
+    @Override
+    public void onReactivated() {
+        super.onReactivated();
+        init(width, height);
     }
 
     @Override

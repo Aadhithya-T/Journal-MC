@@ -101,7 +101,7 @@ public class WorldEditScreen extends Screen {
 
     public void promptDeleteWorld() {
         String targetName = (world != null && world.name != null) ? world.name : "this world";
-        String msg = "Are you sure you want to delete '" + targetName + "'?\nThis action cannot be undone!";
+        String msg = "Are you sure you want to delete\n'" + targetName + "'?\nThis action cannot be undone!";
 
         ConfirmScreen confirm = new ConfirmScreen(app, "Delete World?", msg, "Delete", "Cancel", true,
                 () -> {
