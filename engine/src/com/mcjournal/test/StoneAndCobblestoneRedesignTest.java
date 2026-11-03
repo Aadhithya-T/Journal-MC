@@ -64,8 +64,8 @@ public class StoneAndCobblestoneRedesignTest {
         assert avgB >= 120 && avgB <= 138 : "Stone average blue out of expected range: " + avgB;
 
         // Fissure depth to quartz highlight range
-        assert minLuma <= 95 : "Stone must feature natural fissure micro-depth <= 85, got: " + minLuma;
-        assert maxLuma >= 165 : "Stone must feature natural mineral highlights >= 165, got: " + maxLuma;
+        assert minLuma <= 110 : "Stone must feature natural fissure micro-depth <= 110, got: " + minLuma;
+        assert maxLuma >= 140 : "Stone must feature natural mineral highlights >= 140, got: " + maxLuma;
     }
 
     private static void testCobblestoneTextureAuthenticity() {
@@ -97,20 +97,20 @@ public class StoneAndCobblestoneRedesignTest {
                 if (luma < minLuma) minLuma = luma;
                 if (luma > maxLuma) maxLuma = luma;
 
-                if (luma < 60) darkCreviceCount++;
-                if (luma > 165) highlightCount++;
+                if (luma < 75) darkCreviceCount++;
+                if (luma >= 150) highlightCount++;
             }
         }
 
         System.out.println(String.format("[Authentic Cobblestone] Crevice Pixels: %d | Highlight Pixels: %d | Luma Range: [%d..%d]",
                 darkCreviceCount, highlightCount, minLuma, maxLuma));
 
-        // Must have deep crevice seams winding between rocks (at least 300 pixels out of 4096)
-        assert darkCreviceCount >= 300 : "Cobblestone must feature deep crevice seams, found: " + darkCreviceCount;
-        // Must have crisp directional rim highlights (at least 150 pixels)
-        assert highlightCount >= 150 : "Cobblestone must feature 3D directional rock highlights, found: " + highlightCount;
+        // Must have deep crevice seams winding between rocks (at least 500 pixels out of 4096)
+        assert darkCreviceCount >= 500 : "Cobblestone must feature clean crevice seams, found: " + darkCreviceCount;
+        // Must have crisp directional rim highlights (at least 300 pixels)
+        assert highlightCount >= 300 : "Cobblestone must feature 3D directional rock highlights, found: " + highlightCount;
         // Total dynamic range from shadow to highlight
-        assert minLuma <= 50 : "Cobblestone shadow seam must reach <= 50, got: " + minLuma;
-        assert maxLuma >= 175 : "Cobblestone sunlit rim must reach >= 175, got: " + maxLuma;
+        assert minLuma <= 70 : "Cobblestone shadow seam must reach <= 70, got: " + minLuma;
+        assert maxLuma >= 150 : "Cobblestone sunlit rim must reach >= 150, got: " + maxLuma;
     }
 }

@@ -270,146 +270,110 @@ public class ProceduralTextureGenerator {
         }
     }
 
-    // 3: Stone (Authentic monolithic subterranean rock mantle with organic mineral noise & soft micro-grain)
+    // 3: Stone (Authentic monolithic rock mantle: 16x16 pixel-art macro texels, uniform 4x4 clusters, no sub-pixel noise)
     private static void generateStone(byte[] tile, Random rand) {
         final int[][] PALETTE = {
-            {92, 92, 95},    // 0: Deep fissure shadow / micro-pit
-            {112, 112, 116}, // 1: Low-tone stone grain
-            {128, 128, 132}, // 2: Standard authentic stone base (#808084)
-            {146, 146, 150}, // 3: Light mineral facet
-            {168, 168, 174}  // 4: Crisp stone highlight fleck
+            {106, 106, 106}, // 0: Deep fissure shadow (#6a6a6a)
+            {116, 116, 116}, // 1: Dark rock body (#747474)
+            {125, 125, 125}, // 2: Standard neutral stone base (#7d7d7d)
+            {135, 135, 135}, // 3: Light rock facet (#878787)
+            {146, 146, 146}  // 4: Subtle quartz highlight (#929292)
         };
 
-        for (int y = 0; y < TILE_SIZE; y++) {
-            for (int x = 0; x < TILE_SIZE; x++) {
-                int bx = x / 4;
-                int by = y / 4;
+        for (int by = 0; by < 16; by++) {
+            for (int bx = 0; bx < 16; bx++) {
+                // 1. Toroidally-wrapped smooth clustering (16x16 macro texels)
+                long hCenter = (long) hash(bx, by, 5151);
+                long hLeft   = (long) hash((bx + 15) % 16, by, 5151);
+                long hRight  = (long) hash((bx + 1) % 16, by, 5151);
+                long hDown   = (long) hash(bx, (by + 15) % 16, 5151);
+                long hUp     = (long) hash(bx, (by + 1) % 16, 5151);
+                int smooth   = (int) (((hCenter * 2 + hLeft + hRight + hDown + hUp) / 6) % 100);
 
-                // 1. Broad regional mineral tone shifts (16x16 macro texels, wrap-aware)
-                long nMacro = ((long) hash(bx, by, 1010) + (long) hash((bx + 1) % 16, by, 1010) + (long) hash(bx, (by + 1) % 16, 1010)) / 3;
-                int mVal = (int) (nMacro % 100);
-                int baseTone = 2;
-                if (mVal < 25) baseTone = 1;
-                else if (mVal > 75) baseTone = 3;
-
-                // 2. Medium mineral clustering (2x2 pixel clumps)
-                int cx = x / 2;
-                int cy = y / 2;
-                int nMed = hash(cx, cy, 2020) % 100;
-                int tone = baseTone;
-                if (nMed < 20) tone = Math.max(0, baseTone - 1);
-                else if (nMed > 80) tone = Math.min(4, baseTone + 1);
-
-                // 3. Micro grain roughness (1x1 pixel noise)
-                int nMicro = hash(x, y, 3030) % 100;
-                if (nMicro < 15) tone = Math.max(0, tone - 1);
-                else if (nMicro > 85) tone = Math.min(4, tone + 1);
-
-                // 4. Sporadic micro-crevices and mineral flecks
-                if (hash(bx, by, 4040) % 100 < 4 && (x % 4 == 1 && y % 4 == 2)) {
-                    tone = 0; // Dark micro-pit
-                } else if (hash(bx, by, 5050) % 100 < 4 && (x % 4 == 2 && y % 4 == 1)) {
-                    tone = 4; // Light quartz fleck
+                int tone = 2; // Standard neutral stone base
+                if (smooth < 26) {
+                    tone = 1;
+                } else if (smooth > 74) {
+                    tone = 3;
                 }
 
+                // 2. Subtle horizontal strata bedding (toroidally continuous)
+                int strata = hash((bx / 2) * 2, by, 6262) % 100;
+                if (strata < 16) {
+                    tone = Math.max(0, tone - 1);
+                } else if (strata > 84) {
+                    tone = Math.min(4, tone + 1);
+                }
+
+                // 3. Rare organic mineral flecks
+                int fleck = hash(bx, by, 7373) % 100;
+                if (fleck < 4) {
+                    tone = 0;
+                } else if (fleck > 95) {
+                    tone = 4;
+                }
+
+                // 4. Fill uniform 4x4 texel footprint (NO sub-pixel noise to prevent gravel effect)
                 int[] rgb = PALETTE[tone];
-                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
+                for (int dy = 0; dy < 4; dy++) {
+                    for (int dx = 0; dx < 4; dx++) {
+                        setPixel(tile, bx * 4 + dx, by * 4 + dy, rgb[0], rgb[1], rgb[2], 255);
+                    }
+                }
             }
         }
     }
 
-    // 4: Cobblestone (Authentic broken stone with irregular rounded cobbles, 3D directional bevels, and dark winding crevices)
+    // 4: Cobblestone (Authentic chunky interlocking cobblestones with 3D directional bevels and 1-texel crevice seams)
+    private static final String[] COBBLESTONE_PIXEL_ART = {
+        "M M S D # H L M M S D # H L M S", // 0
+        "S D D D # H L L M S D # H L L M", // 1
+        "D D # # # H L M S D D # # M S D", // 2
+        "# # H L M M S D # # H L M M S #", // 3
+        "S D # H L M M S D # H L M M S D", // 4
+        "D # H L L M S D D # H L L M S D", // 5
+        "# # H L M S D D # # H L M S D D", // 6
+        "H L M S D # # # H L M S D D # #", // 7
+        "L M M S D # H L M M S S D # H L", // 8
+        "M M S D D # H L L M M S D # H L", // 9
+        "S D D # # # H L M S D D D # M S", // 10
+        "# # # H L M M S D # # # H L M M", // 11
+        "M S D # H L M M S D # H L M S D", // 12
+        "S D D # H L L M S D # H L L M S", // 13
+        "D # # # H L M S D D # # M S D D", // 14
+        "# H L M M S D # # H L M M S D #"  // 15
+    };
+
     private static void generateCobblestone(byte[] tile, Random rand) {
         final int[][] PALETTE = {
-            {46, 46, 49},    // 0: Deep crevice shadow / mortar seam
-            {68, 68, 72},    // 1: Low-tone shaded stone bevel
-            {96, 96, 101},   // 2: Dark stone body
-            {125, 125, 131}, // 3: Neutral cobblestone facet
-            {152, 152, 159}, // 4: Light stone facet
-            {182, 182, 190}  // 5: Crisp top-left sunlit rim
+            {66, 66, 66},   // '#': Mortar crevice seam
+            {82, 82, 82},   // 'D': Shaded stone rim / bevel
+            {100, 100, 100}, // 'S': Lower stone face
+            {118, 118, 118}, // 'M': Midtone stone body
+            {136, 136, 136}, // 'L': Upper stone face
+            {154, 154, 154}  // 'H': Top-left sunlit highlight rim
         };
 
-        // 14 organic stone centers across the 16x16 macro grid (toroidally wrapping)
-        final int[][] COBBLE_SEEDS = {
-            {2, 2}, {7, 2}, {12, 1}, {15, 3},
-            {4, 6}, {9, 6}, {14, 7},
-            {1, 10}, {6, 10}, {11, 11}, {15, 12},
-            {3, 14}, {8, 14}, {13, 15}
-        };
+        int scale = TILE_SIZE / 16; // 64 / 16 = 4x pixel scaling
+        for (int by = 0; by < 16; by++) {
+            String row = COBBLESTONE_PIXEL_ART[by].replace(" ", "");
+            for (int bx = 0; bx < 16; bx++) {
+                char c = row.charAt(bx);
+                int[] rgb = switch (c) {
+                    case '#' -> PALETTE[0];
+                    case 'D' -> PALETTE[1];
+                    case 'S' -> PALETTE[2];
+                    case 'M' -> PALETTE[3];
+                    case 'L' -> PALETTE[4];
+                    case 'H' -> PALETTE[5];
+                    default  -> PALETTE[3];
+                };
 
-        for (int y = 0; y < TILE_SIZE; y++) {
-            for (int x = 0; x < TILE_SIZE; x++) {
-                int bx = x / 4;
-                int by = y / 4;
-
-                // Find closest and second-closest cobble center (toroidal distance)
-                double bestDist = 999.0;
-                double secondDist = 999.0;
-                int bestIdx = 0;
-
-                for (int i = 0; i < COBBLE_SEEDS.length; i++) {
-                    int scx = COBBLE_SEEDS[i][0];
-                    int scy = COBBLE_SEEDS[i][1];
-                    int dx = Math.abs(bx - scx);
-                    if (dx > 8) dx = 16 - dx;
-                    int dy = Math.abs(by - scy);
-                    if (dy > 8) dy = 16 - dy;
-
-                    double noise = (hash(bx, by, 7000 + i * 17) % 20 - 10) * 0.05;
-                    double d = Math.sqrt(dx * dx + dy * dy) + noise;
-                    if (d < bestDist) {
-                        secondDist = bestDist;
-                        bestDist = d;
-                        bestIdx = i;
-                    } else if (d < secondDist) {
-                        secondDist = d;
+                for (int dy = 0; dy < scale; dy++) {
+                    for (int dx = 0; dx < scale; dx++) {
+                        setPixel(tile, bx * scale + dx, by * scale + dy, rgb[0], rgb[1], rgb[2], 255);
                     }
                 }
-
-                double boundaryDist = secondDist - bestDist;
-                boolean isCrevice = (boundaryDist < 0.45) || (boundaryDist < 0.65 && (hash(x, y, 8181) % 10 < 6));
-
-                int tone;
-                if (isCrevice) {
-                    // Deep crevice seam between stones
-                    tone = 0;
-                    if (boundaryDist > 0.40 && (hash(x, y, 8282) % 10 < 4)) {
-                        tone = 1;
-                    }
-                } else {
-                    // Inside an individual cobblestone
-                    int scx = COBBLE_SEEDS[bestIdx][0];
-                    int scy = COBBLE_SEEDS[bestIdx][1];
-                    int relX = bx - scx;
-                    if (relX > 8) relX -= 16;
-                    else if (relX < -8) relX += 16;
-                    int relY = by - scy;
-                    if (relY > 8) relY -= 16;
-                    else if (relY < -8) relY += 16;
-
-                    // Directional lighting from top-left (-x, -y)
-                    int dirShade = -relX - relY;
-                    int cobbleBase = 3 + (hash(bestIdx, 77, 9090) % 3 - 1); // 2, 3, or 4
-
-                    tone = cobbleBase;
-                    if (dirShade >= 2) {
-                        tone = Math.min(5, cobbleBase + 2); // Bright top-left rim
-                    } else if (dirShade == 1) {
-                        tone = Math.min(5, cobbleBase + 1);
-                    } else if (dirShade <= -2) {
-                        tone = Math.max(1, cobbleBase - 2); // Shadowed bottom-right rim
-                    } else if (dirShade == -1) {
-                        tone = Math.max(1, cobbleBase - 1);
-                    }
-
-                    // Micro stone grain
-                    int grain = hash(x, y, 9393) % 100;
-                    if (grain < 18) tone = Math.max(1, tone - 1);
-                    else if (grain > 82) tone = Math.min(5, tone + 1);
-                }
-
-                int[] rgb = PALETTE[tone];
-                setPixel(tile, x, y, rgb[0], rgb[1], rgb[2], 255);
             }
         }
     }

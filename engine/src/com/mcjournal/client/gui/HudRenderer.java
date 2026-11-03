@@ -42,9 +42,6 @@ public class HudRenderer {
     private boolean cachedIsDay = true;
     private String cachedSolarTimeStr = "";
 
-    private String cachedTargetBlockName = "";
-    private String cachedTargetBlockId = "";
-
     // Ephemeral in-game notifications (e.g. Screenshot capture toast)
     private String notificationText = null;
     private float notificationTimer = 0.0f;
@@ -81,7 +78,6 @@ public class HudRenderer {
         cachedCoordX = Integer.MIN_VALUE;
         cachedBiome = "";
         cachedDay = -1;
-        cachedTargetBlockId = "";
     }
 
     /**
@@ -96,13 +92,9 @@ public class HudRenderer {
         int width = ctx.screenWidth;
         int height = ctx.screenHeight;
 
-        // 1. Crosshair & Contextual Target Feedback (Center)
+        // 1. Crosshair & Target Feedback (Center)
         if (ctx.settings.showCrosshair) {
             renderCrosshair(gui, width, height, ctx.hasTarget());
-        }
-
-        if (ctx.hasTarget()) {
-            renderContextualTarget(gui, font, ctx, width, height);
         }
 
         // 2. Hotbar & Health/Hunger Indicators (Bottom Center)
@@ -495,61 +487,7 @@ public class HudRenderer {
     }
 
     // -------------------------------------------------------------------------
-    // E. Contextual Target Feedback (Connected to Crosshair Reticle)
-    // -------------------------------------------------------------------------
-    private void renderContextualTarget(GuiRenderer gui, FontRenderer font, HudContext ctx, int width, int height) {
-        if (!ctx.hasTarget() || ctx.targetedBlock.state == null) {
-            return;
-        }
-
-        BlockType block = ctx.targetedBlock.state.getBlock();
-        String blockId = (block != null) ? block.getId() : "";
-        if (!blockId.equals(cachedTargetBlockId)) {
-            cachedTargetBlockId = blockId;
-            cachedTargetBlockName = (block != null) ? block.getName() : "Block";
-        }
-
-        float textScale = 0.46f;
-        float textW = font.getStringWidth(cachedTargetBlockName, textScale);
-        float pillW = Math.max(textW + 16, 44);
-        float pillH = 14;
-        int cx = width / 2;
-        int cy = height / 2;
-        float pillX = GuiLayout.centerX(width, (int) pillW);
-        float pillY = cy + 10;
-
-        // Visual connector from crosshair bottom to target card
-        gui.drawRect(cx, cy + 6, 1, 4, HudTheme.GOLD_R, HudTheme.GOLD_G, HudTheme.GOLD_B, 0.65f);
-
-        // Translucent frosted stone capsule
-        gui.drawRect(pillX, pillY, pillW, pillH, 0.08f, 0.08f, 0.11f, 0.85f);
-        gui.drawRect(pillX, pillY, pillW, 1, HudTheme.GOLD_R, HudTheme.GOLD_G, HudTheme.GOLD_B, 0.90f); // Top gold accent
-        gui.drawRect(pillX, pillY + pillH - 1, pillW, 1, 0.04f, 0.04f, 0.06f, 0.90f);                   // Bottom border
-        gui.drawRect(pillX, pillY, 1, pillH, 0.25f, 0.25f, 0.30f, 0.80f);                               // Left border
-        gui.drawRect(pillX + pillW - 1, pillY, 1, pillH, 0.04f, 0.04f, 0.06f, 0.90f);                   // Right border
-
-        // Centered block name
-        float nameX = pillX + (pillW - textW) / 2.0f;
-        font.drawString(gui, cachedTargetBlockName, nameX, pillY + 3, textScale, 0xffffff, true);
-
-        // Mining Progress Bar (Directly below capsule)
-        if (ctx.breakProgress > 0.0f) {
-            float barW = pillW;
-            float barH = 2;
-            float barY = pillY + pillH + 2;
-
-            // Recessed track
-            gui.drawRect(pillX, barY, barW, barH, 0.04f, 0.04f, 0.06f, 0.90f);
-
-            // Radiant gold-to-emerald progress fill
-            float progress = Math.clamp(ctx.breakProgress, 0.0f, 1.0f);
-            float progressW = progress * barW;
-            gui.drawRect(pillX, barY, progressW, barH, HudTheme.GOLD_R, HudTheme.GOLD_G, HudTheme.GOLD_B, 1.0f);
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // F. Red Hurt Vignette
+    // E. Red Hurt Vignette
     // -------------------------------------------------------------------------
     private void renderHurtVignette(GuiRenderer gui, HudContext ctx, int width, int height) {
         Player player = ctx.player;
