@@ -4,7 +4,6 @@ import com.mcjournal.*;
 import com.mcjournal.block.BlockState;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.world.WorldBounds;
-import com.mcjournal.world.WorldConfiguration;
 
 import java.util.HashMap;
 import java.util.List;

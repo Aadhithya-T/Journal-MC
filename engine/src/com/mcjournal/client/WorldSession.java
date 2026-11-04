@@ -1,6 +1,5 @@
 package com.mcjournal.client;
 
-import com.mcjournal.Chunk;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.ChunkMeshBuilder;
 import com.mcjournal.ChunkPos;
@@ -8,6 +7,13 @@ import com.mcjournal.FluidPhysicsManager;
 import com.mcjournal.Item;
 import org.joml.Vector3f;
 
+import com.mcjournal.event.*;
+import com.mcjournal.storage.WorldStorageDirectory;
+import com.mcjournal.world.biome.Biome;
+import com.mcjournal.world.context.*;
+import com.mcjournal.world.landmark.LandmarkRegistry;
+import com.mcjournal.world.landmark.WorldLandmark;
+import com.mcjournal.world.time.WorldClock;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Map;
@@ -19,7 +25,7 @@ import static org.lwjgl.glfw.GLFW.*;
  * chunk streaming, terrain generation, block mutation, physics, fluid dynamics,
  * dropped entities, particle simulation, and persistence.
  */
-public class WorldSession {
+public class WorldSession implements WorldContextProvider {
     private static final double TICK_DURATION = 0.050; // 50ms = 20 TPS
 
     private ChunkManager chunkManager;
@@ -29,9 +35,20 @@ public class WorldSession {
     private final ParticleManager particleManager;
 
     private String currentBiome = "Plains";
-    private String currentWorldName = "Hardcore World";
+    private String currentWorldName = "Journal World";
     private long currentSeed = 4242;
     private boolean inWorld = false;
+
+    // Readiness Subsystems: Metadata, Storage, Clock & Landmarks
+    private WorldMetadata metadata;
+    private WorldStorageDirectory storageDirectory;
+    private LandmarkRegistry landmarkRegistry;
+    private WorldClock worldClock = new WorldClock(6000.0);
+    private Player currentPlayer;
+    private int prevBlockX = Integer.MIN_VALUE;
+    private int prevBlockY = Integer.MIN_VALUE;
+    private int prevBlockZ = Integer.MIN_VALUE;
+    private String currentBiomeId = "plains";
 
     public WorldSession() {
         this.blockPlacementManager = new BlockPlacementManager();
@@ -69,6 +86,67 @@ public class WorldSession {
         return particleManager;
     }
 
+    public WorldMetadata getMetadata() {
+        return metadata;
+    }
+
+    public WorldStorageDirectory getStorageDirectory() {
+        return storageDirectory;
+    }
+
+    public LandmarkRegistry getLandmarkRegistry() {
+        return landmarkRegistry;
+    }
+
+    public WorldClock getWorldClock() {
+        return worldClock;
+    }
+
+    public String getWorldId() {
+        return (metadata != null) ? metadata.getWorldId() : "default-world-id";
+    }
+
+    @Override
+    public WorldContext getCurrentContext() {
+        if (!inWorld || chunkManager == null || currentPlayer == null) {
+            return WorldContext.UNAVAILABLE;
+        }
+        WorldLocation loc = getPlayerLocation();
+        WorldLandmark nearestLm = (landmarkRegistry != null)
+            ? landmarkRegistry.getNearestDiscoveredLandmark(loc.x(), loc.y(), loc.z(), 64.0).orElse(null)
+            : null;
+
+        return new WorldContext(
+            getWorldId(),
+            currentWorldName,
+            loc,
+            (worldClock != null) ? worldClock.getDay() : 1,
+            (worldClock != null) ? worldClock.getTimeOfDayTicks() : 6000.0,
+            (worldClock != null) ? worldClock.getFormattedTime() : "Day 1 — 12:00",
+            currentBiome,
+            nearestLm,
+            true
+        );
+    }
+
+    @Override
+    public WorldLocation getPlayerLocation() {
+        if (!inWorld || currentPlayer == null) return WorldLocation.empty();
+        return WorldLocation.of(
+            getWorldId(),
+            currentPlayer.pos.x,
+            currentPlayer.pos.y,
+            currentPlayer.pos.z,
+            currentBiomeId,
+            currentBiome
+        );
+    }
+
+    @Override
+    public boolean isContextAvailable() {
+        return inWorld && chunkManager != null;
+    }
+
     public String getCurrentBiome() {
         return currentBiome;
     }
@@ -102,8 +180,37 @@ public class WorldSession {
         }
         com.mcjournal.world.WorldBounds worldBounds = new com.mcjournal.world.WorldBounds(worldConfig);
 
+        this.currentPlayer = player;
         System.out.println("[WorldSession] Initializing finite world: '" + worldName + "' (" + worldConfig.width() + "x" + worldConfig.depth() + "x" + worldConfig.height() + ", Seed: " + seed + ")...");
         File worldDir = new File("saves/" + worldName.toLowerCase().replaceAll("[^a-z0-9_-]", "_"));
+        this.storageDirectory = new WorldStorageDirectory(worldDir);
+
+        // Initialize or resolve decoupled WorldMetadata
+        if (storageDirectory.getMetadataFile().exists()) {
+            this.metadata = WorldMetadata.fromJson(WorldStorageDirectory.readStringSafe(storageDirectory.getMetadataFile()));
+        } else if (existingSave != null) {
+            this.metadata = WorldMetadata.fromLegacySave(worldName, seed, worldConfig, existingSave.worldTime);
+        } else {
+            this.metadata = WorldMetadata.createNew(worldName, seed, worldConfig);
+        }
+
+        // Initialize decoupled WorldClock & sync with atmospheric system
+        this.worldClock = (atmosphericSystem != null) ? atmosphericSystem.getClock() : new WorldClock();
+        this.worldClock.setWorldId(metadata.getWorldId());
+        if (existingSave != null) {
+            this.worldClock.setTotalTicks(existingSave.worldTime);
+        }
+
+        // Initialize Landmark Registry
+        this.landmarkRegistry = new LandmarkRegistry(metadata.getWorldId());
+        if (storageDirectory.getLandmarksFile().exists()) {
+            this.landmarkRegistry.loadFromJson(WorldStorageDirectory.readStringSafe(storageDirectory.getLandmarksFile()));
+        }
+
+        // Propagate worldId to managers
+        this.blockPlacementManager.setWorldId(metadata.getWorldId());
+        this.itemEntityManager.setWorldId(metadata.getWorldId());
+
         this.chunkManager = new ChunkManager(settings.renderDistance, seed, worldDir, worldBounds);
 
         // 1. If loading an existing save, apply all persisted voxel block changes
@@ -231,6 +338,12 @@ public class WorldSession {
         }
 
         this.inWorld = true;
+        EventBus.getInstance().post(new WorldLoadedEvent(
+            metadata != null ? metadata.getWorldId() : "default-world-id",
+            currentWorldName,
+            seed,
+            worldClock != null ? worldClock.getTotalTicks() : 6000.0
+        ));
     }
 
     public void tick(Player player, Camera camera, InputHandler input,
@@ -247,6 +360,45 @@ public class WorldSession {
         boolean sneak = input.isKeyDown(GLFW_KEY_LEFT_SHIFT);
 
         player.updateTick(chunkManager, forward, backward, left, right, jump, sprint, sneak);
+
+        // 1. Spatial Movement & Biome Transition Tracking
+        int curBx = (int) Math.floor(player.pos.x);
+        int curBy = (int) Math.floor(player.pos.y);
+        int curBz = (int) Math.floor(player.pos.z);
+        if (curBx != prevBlockX || curBy != prevBlockY || curBz != prevBlockZ) {
+            EventBus.getInstance().post(new PlayerMovedEvent(
+                getWorldId(),
+                prevBlockX != Integer.MIN_VALUE ? prevBlockX : curBx,
+                prevBlockY != Integer.MIN_VALUE ? prevBlockY : curBy,
+                prevBlockZ != Integer.MIN_VALUE ? prevBlockZ : curBz,
+                player.pos.x, player.pos.y, player.pos.z
+            ));
+
+            // Discrete Biome Transition Resolution
+            if (chunkManager != null && chunkManager.getGenerator() != null) {
+                Biome sampled = chunkManager.getGenerator().getBiomeSampler().getBiome(curBx, curBz);
+                if (sampled != null && !sampled.getId().equals(currentBiomeId)) {
+                    String prevBiome = currentBiomeId;
+                    this.currentBiomeId = sampled.getId();
+                    this.currentBiome = sampled.getDisplayName();
+                    EventBus.getInstance().post(new BiomeEnteredEvent(
+                        getWorldId(),
+                        prevBiome,
+                        currentBiomeId,
+                        currentBiome
+                    ));
+                }
+            }
+
+            // Proximity Landmark Discovery
+            if (landmarkRegistry != null) {
+                landmarkRegistry.checkDiscoveryProximity(player.pos.x, player.pos.y, player.pos.z, 32.0);
+            }
+
+            this.prevBlockX = curBx;
+            this.prevBlockY = curBy;
+            this.prevBlockZ = curBz;
+        }
 
         // Stream chunks dynamically based on player position & look direction
         int playerCx = Math.floorDiv((int) Math.floor(player.pos.x), 16);
@@ -281,6 +433,22 @@ public class WorldSession {
 
     public void save(Player player, double worldTimeTicks) {
         if (inWorld && chunkManager != null) {
+            if (metadata != null && worldClock != null) {
+                metadata.updateTime(worldClock.getDay(), worldClock.getTotalTicks());
+                try {
+                    WorldStorageDirectory.writeStringAtomic(storageDirectory.getMetadataFile(), metadata.toJson());
+                } catch (Exception e) {
+                    System.err.println("[WorldSession] Warning: Failed to write metadata: " + e.getMessage());
+                }
+            }
+            if (landmarkRegistry != null) {
+                try {
+                    WorldStorageDirectory.writeStringAtomic(storageDirectory.getLandmarksFile(), landmarkRegistry.toJson());
+                } catch (Exception e) {
+                    System.err.println("[WorldSession] Warning: Failed to write landmarks: " + e.getMessage());
+                }
+            }
+
             WorldSaveManager.saveWorld(
                 currentWorldName,
                 currentBiome,
@@ -289,20 +457,30 @@ public class WorldSession {
                 worldTimeTicks,
                 chunkManager
             );
+
+            EventBus.getInstance().post(new WorldSavedEvent(
+                getWorldId(),
+                currentWorldName,
+                storageDirectory != null ? storageDirectory.getRootDir().getAbsolutePath() : "saves"
+            ));
         }
     }
 
     public void saveAndQuit(Player player, double worldTimeTicks) {
         if (inWorld) {
             save(player, worldTimeTicks);
+            String wid = getWorldId();
             inWorld = false;
+            EventBus.getInstance().post(new WorldUnloadedEvent(wid));
         }
     }
 
     public void shutdown(Player player, double worldTimeTicks) {
         if (inWorld) {
             save(player, worldTimeTicks);
+            String wid = getWorldId();
             inWorld = false;
+            EventBus.getInstance().post(new WorldUnloadedEvent(wid));
         }
         if (chunkManager != null) {
             chunkManager.shutdown();

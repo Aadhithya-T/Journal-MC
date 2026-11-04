@@ -5,8 +5,10 @@ import com.google.gson.GsonBuilder;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.block.BlockState;
 import com.mcjournal.block.BlockStateRegistry;
-import com.mcjournal.world.WorldBounds;
+import com.mcjournal.storage.WorldStorageDirectory;
 import com.mcjournal.world.WorldConfiguration;
+import com.mcjournal.world.context.WorldMetadata;
+import java.util.UUID;
 
 import java.io.*;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -39,6 +41,7 @@ public class WorldSaveManager {
 
     public static class SavedWorld {
         public int formatVersion = FORMAT_VERSION;
+        public String worldId = "";
         public String name = "World";
         public String biome = "Plains";
         public long seed = 12345L;
@@ -232,6 +235,18 @@ public class WorldSaveManager {
                 world.spawnZ = (int) world.playerZ;
             }
 
+                        // Load or initialize worldId from metadata JSON
+            File metaFile = new File(file.getParentFile(), "world_metadata.json");
+            if (metaFile.exists()) {
+                WorldMetadata meta = WorldMetadata.fromJson(WorldStorageDirectory.readStringSafe(metaFile));
+                if (meta != null && meta.getWorldId() != null && !meta.getWorldId().isBlank()) {
+                    world.worldId = meta.getWorldId();
+                }
+            }
+            if (world.worldId == null || world.worldId.isBlank()) {
+                world.worldId = UUID.nameUUIDFromBytes((world.name + ":" + world.seed).getBytes()).toString();
+            }
+
             return world;
         }
     }
@@ -318,6 +333,25 @@ public class WorldSaveManager {
                 }
 
                 dos.flush();
+            }
+
+            // Also write decoupled world_metadata.json atomically
+            try {
+                File metaFile = new File(targetFile.getParentFile(), "world_metadata.json");
+                WorldMetadata meta = null;
+                if (metaFile.exists()) {
+                    meta = WorldMetadata.fromJson(WorldStorageDirectory.readStringSafe(metaFile));
+                    if (meta != null) {
+                        meta.setWorldName(world.name);
+                    }
+                }
+                if (meta == null) {
+                    meta = WorldMetadata.createNew(world.name, world.seed, world.toWorldConfiguration());
+                }
+                meta.updateTime((long) Math.floor(world.worldTime / 24000.0) + 1, world.worldTime);
+                WorldStorageDirectory.writeStringAtomic(metaFile, meta.toJson());
+            } catch (Exception e) {
+                System.err.println("[WorldSaveManager] Warning: failed to save world_metadata.json: " + e.getMessage());
             }
 
             try {
@@ -415,6 +449,14 @@ public class WorldSaveManager {
             world.name = newName.trim();
             try {
                 saveBinaryDirect(world, SAVE_FILE_JMC);
+                File metaFile = new File(SAVE_FILE_JMC.getParentFile(), "world_metadata.json");
+                if (metaFile.exists()) {
+                    WorldMetadata meta = WorldMetadata.fromJson(WorldStorageDirectory.readStringSafe(metaFile));
+                    if (meta != null) {
+                        meta.setWorldName(world.name);
+                        WorldStorageDirectory.writeStringAtomic(metaFile, meta.toJson());
+                    }
+                }
                 System.out.println("[WorldSaveManager] World renamed to: " + world.name);
             } catch (Exception e) {
                 System.err.println("[WorldSaveManager] Failed to rename world: " + e.getMessage());
@@ -426,6 +468,10 @@ public class WorldSaveManager {
         if (SAVE_FILE_JMC.exists()) {
             SAVE_FILE_JMC.delete();
         }
+        File metaFile = new File("saves/world_metadata.json");
+        if (metaFile.exists()) metaFile.delete();
+        File lmFile = new File("saves/landmarks.json");
+        if (lmFile.exists()) lmFile.delete();
         if (SAVE_FILE_LEGACY_JSON.exists()) {
             SAVE_FILE_LEGACY_JSON.delete();
         }

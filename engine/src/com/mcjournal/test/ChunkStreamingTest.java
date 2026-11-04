@@ -1,10 +1,8 @@
 package com.mcjournal.test;
 
 import com.mcjournal.*;
-import com.mcjournal.block.BlockProperties;
 import com.mcjournal.block.BlockState;
 import com.mcjournal.block.Blocks;
-import com.mcjournal.block.property.Axis;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -5,7 +5,6 @@ import com.mcjournal.ChunkPos;
 import com.mcjournal.ChunkSerializer;
 import com.mcjournal.RegionFile;
 import com.mcjournal.RegionManager;
-import com.mcjournal.RegionPos;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.world.WorldBounds;
 import com.mcjournal.world.WorldConfiguration;

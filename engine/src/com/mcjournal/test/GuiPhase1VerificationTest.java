@@ -1,6 +1,5 @@
 package com.mcjournal.test;
 
-import com.mcjournal.client.GameSettings;
 import com.mcjournal.client.ScreenManager;
 import com.mcjournal.client.gui.*;
 import org.lwjgl.glfw.GLFW;

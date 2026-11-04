@@ -12,7 +12,7 @@ import org.lwjgl.glfw.GLFW;
  * Displays only authentic, verified gameplay data:
  * - Days survived (from continuous 24,000-tick solar cycles)
  * - World time & day/night status
- * - Player health, hunger, and 3D world coordinates
+ * - Explorer status, elevation, and 3D world coordinates
  * - World seed, biome, and finite world boundaries (2500x2500x256)
  * No fabricated statistics are used.
  */

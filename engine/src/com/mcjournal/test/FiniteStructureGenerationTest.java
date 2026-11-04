@@ -3,7 +3,6 @@ package com.mcjournal.test;
 import com.mcjournal.Chunk;
 import com.mcjournal.ChunkPersistence;
 import com.mcjournal.ChunkPos;
-import com.mcjournal.EngineConstants;
 import com.mcjournal.RegionManager;
 import com.mcjournal.TerrainGenerator;
 import com.mcjournal.block.BlockProperties;

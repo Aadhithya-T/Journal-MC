@@ -4,7 +4,6 @@ import com.mcjournal.block.BlockState;
 import com.mcjournal.block.BlockStateRegistry;
 import com.mcjournal.block.Blocks;
 
-import java.util.Base64;
 
 public class Chunk {
     public static final int SIZE = 16;

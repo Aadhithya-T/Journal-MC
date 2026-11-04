@@ -1,7 +1,5 @@
 package com.mcjournal.test;
 
-import com.mcjournal.Item;
-import com.mcjournal.block.BlockStateRegistry;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.client.*;
 import com.mcjournal.client.gui.*;

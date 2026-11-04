@@ -2,8 +2,6 @@ package com.mcjournal.client;
 
 import com.mcjournal.ChunkManager;
 import com.mcjournal.block.BlockState;
-import com.mcjournal.block.BlockStateRegistry;
-import com.mcjournal.block.BlockType;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.system.MemoryUtil;
@@ -89,40 +87,6 @@ public class ParticleManager {
         MemoryUtil.memFree(vertexBuffer);
     }
 
-    public void spawnBlockBreakParticles(int bx, int by, int bz, BlockState state) {
-        if (state == null) return;
-        Vector4f baseColor = parseHexColor(state.getBlock().getColorHex());
-        int count = 28; // Disintegration cloud of ~28 debris fragments
-
-        for (int i = 0; i < count; i++) {
-            Particle p = new Particle();
-            float rx = bx + 0.1f + random.nextFloat() * 0.8f;
-            float ry = by + 0.1f + random.nextFloat() * 0.8f;
-            float rz = bz + 0.1f + random.nextFloat() * 0.8f;
-            p.pos.set(rx, ry, rz);
-
-            // Explode outward in random directions
-            float vx = (random.nextFloat() - 0.5f) * 3.5f;
-            float vy = 1.5f + random.nextFloat() * 3.0f;
-            float vz = (random.nextFloat() - 0.5f) * 3.5f;
-            p.velocity.set(vx, vy, vz);
-
-            // Particle shading variance
-            float shade = 0.75f + random.nextFloat() * 0.35f;
-            p.color.set(baseColor.x * shade, baseColor.y * shade, baseColor.z * shade, 1.0f);
-
-            p.scale = 0.07f + random.nextFloat() * 0.07f;
-            p.maxLifetime = 0.6f + random.nextFloat() * 0.6f;
-            p.lifetime = p.maxLifetime;
-
-            particles.add(p);
-        }
-    }
-
-    public void spawnBlockBreakParticles(int bx, int by, int bz, byte blockType) {
-        spawnBlockBreakParticles(bx, by, bz, BlockStateRegistry.getDefaultState(blockType));
-    }
-
     public void spawnWaterSplashParticles(int bx, int by, int bz, BlockState state) {
         if (state == null) return;
         Vector4f baseColor = parseHexColor(state.getBlock().getColorHex());
@@ -149,15 +113,6 @@ public class ParticleManager {
 
             particles.add(p);
         }
-    }
-
-    @Deprecated
-    public void spawnMiningHitParticles(int bx, int by, int bz, BlockState state, int normalX, int normalY, int normalZ) {
-        spawnWaterSplashParticles(bx, by, bz, state);
-    }
-
-    public void spawnMiningHitParticles(int bx, int by, int bz, byte blockType, int normalX, int normalY, int normalZ) {
-        spawnMiningHitParticles(bx, by, bz, BlockStateRegistry.getDefaultState(blockType), normalX, normalY, normalZ);
     }
 
     public void update(double deltaTime, ChunkManager world) {

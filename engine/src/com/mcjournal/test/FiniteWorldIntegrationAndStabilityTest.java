@@ -1,20 +1,13 @@
 package com.mcjournal.test;
 
 import com.mcjournal.*;
-import com.mcjournal.block.BlockProperties;
 import com.mcjournal.block.BlockState;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.client.*;
 import com.mcjournal.physics.AABB;
 import com.mcjournal.physics.CollisionDetector;
-import com.mcjournal.physics.PhysicsSystem;
 import com.mcjournal.world.WorldBounds;
-import com.mcjournal.world.WorldConfiguration;
-import com.mcjournal.world.biome.BiomeRegistry;
 import com.mcjournal.world.structure.*;
-import com.mcjournal.world.terrain.PlateauModifier;
-import com.mcjournal.world.terrain.SpawnLocator;
-import com.mcjournal.world.terrain.TerrainModifierPipeline;
 import org.joml.Vector3f;
 
 import java.io.File;

@@ -152,7 +152,7 @@ public class FluidPhysicsManager {
 
             // Water ripple/splash particles
             if (particles != null) {
-                particles.spawnMiningHitParticles(x, y, z, waterState, 0, 1, 0);
+                particles.spawnWaterSplashParticles(x, y, z, waterState);
             }
 
             // 1. Downward Flow (Vertical cascade has highest priority)

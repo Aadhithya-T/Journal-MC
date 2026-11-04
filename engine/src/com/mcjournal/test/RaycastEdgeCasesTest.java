@@ -2,7 +2,6 @@ package com.mcjournal.test;
 
 import com.mcjournal.Chunk;
 import com.mcjournal.ChunkManager;
-import com.mcjournal.ChunkPos;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.block.property.Direction;
 import com.mcjournal.client.Raycast;

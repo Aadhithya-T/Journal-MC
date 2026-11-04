@@ -1,7 +1,6 @@
 package com.mcjournal.client;
 
 import com.mcjournal.ChunkManager;
-import com.mcjournal.block.BlockState;
 import org.joml.Vector3f;
 
 import java.util.Random;

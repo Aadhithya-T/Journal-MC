@@ -8,7 +8,6 @@ import com.mcjournal.TerrainGenerator;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.client.Camera;
 import com.mcjournal.client.GameInputSystem;
-import com.mcjournal.client.ItemEntity;
 import com.mcjournal.client.ItemEntityManager;
 import com.mcjournal.client.Player;
 import com.mcjournal.client.WorldSaveManager;
@@ -16,7 +15,6 @@ import com.mcjournal.client.WorldSession;
 import com.mcjournal.world.WorldBounds;
 
 import java.io.File;
-import java.util.Arrays;
 
 /**
  * Verification test suite for Non-Mining, Exploration, Block Protection,

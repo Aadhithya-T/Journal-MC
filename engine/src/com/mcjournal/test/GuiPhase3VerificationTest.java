@@ -1,16 +1,12 @@
 package com.mcjournal.test;
 
-import com.mcjournal.client.GameSettings;
-import com.mcjournal.client.MCJournalApp;
 import com.mcjournal.client.Player;
 import com.mcjournal.client.ScreenManager;
 import com.mcjournal.client.WorldSaveManager;
 import com.mcjournal.client.gui.*;
 import org.lwjgl.glfw.GLFW;
 
-import java.io.File;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Phase 3 GUI Overhaul Automated Verification Suite.

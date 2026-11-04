@@ -3,7 +3,6 @@ package com.mcjournal.test;
 import com.mcjournal.Chunk;
 import com.mcjournal.TerrainGenerator;
 import com.mcjournal.block.Blocks;
-import com.mcjournal.block.BlockType;
 
 public class NewBlocksWorldGenTest {
 

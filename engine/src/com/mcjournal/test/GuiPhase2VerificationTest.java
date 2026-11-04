@@ -5,7 +5,6 @@ import com.mcjournal.client.gui.*;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;

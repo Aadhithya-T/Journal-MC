@@ -1,7 +1,6 @@
 package com.mcjournal.client.gui;
 
 import com.mcjournal.client.*;
-import com.mcjournal.world.biome.Biome;
 
 /**
  * Read-only snapshot of current frame gameplay state required for HUD rendering.

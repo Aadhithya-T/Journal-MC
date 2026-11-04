@@ -12,12 +12,10 @@ import com.mcjournal.client.TextureAtlas;
  * and batches all draw calls through GuiRenderer.
  *
  * Implements:
- * - Distinct, recognizable 9x9 pixel-art symbols for Health (Ruby Shield) and Hunger (Amber Loaf)
- * - 9-slot hotbar with dark stone foundation, recessed slots, and luminous gold selected frame
+ * - 9-slot exploration hotbar with dark stone foundation, recessed slots, and luminous gold selected frame
  * - Structured World Information Panel with frosted slate card styling and string caching
  * - Centered crosshair with target dot and connected contextual target block tooltip
- * - Mining break progress bar
- * - Damage hurt vignette
+ * - Active held-item rendering and count badges
  */
 public class HudRenderer {
     private final HudContext context = new HudContext();

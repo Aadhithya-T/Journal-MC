@@ -1,9 +1,6 @@
 package com.mcjournal.client;
 
 import com.mcjournal.ChunkManager;
-import com.mcjournal.Item;
-import com.mcjournal.block.BlockState;
-import com.mcjournal.block.Blocks;
 import com.mcjournal.physics.PhysicsSystem;
 import org.joml.Vector3f;
 

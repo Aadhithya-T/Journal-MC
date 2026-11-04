@@ -6,7 +6,6 @@ import com.mcjournal.block.BlockStateRegistry;
 import com.mcjournal.block.BlockType;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.block.property.Axis;
-import com.mcjournal.block.property.Property;
 
 import java.util.Collection;
 

@@ -8,6 +8,7 @@ import org.joml.Vector3f;
  */
 public class AtmosphericTimeSystem {
     // Continuous Solar Orbital Cycle (0.0 = Noon, 0.25 = Sunset, 0.5 = Midnight, 0.75 = Sunrise)
+    private final com.mcjournal.world.time.WorldClock clock = new com.mcjournal.world.time.WorldClock(6000.0);
     private double worldTimeTicks = 6000.0; // Day 1 Mid-Morning baseline
 
     private final Vector3f sunDir = new Vector3f();
@@ -25,10 +26,11 @@ public class AtmosphericTimeSystem {
 
     public void update(double deltaTime, boolean inWorld, boolean isPaused) {
         if (inWorld && !isPaused) {
-            worldTimeTicks = (worldTimeTicks + deltaTime * 20.0) % 24000.0;
+            clock.advanceTime(deltaTime);
+            worldTimeTicks = clock.getTotalTicks();
         }
 
-        float dayFraction = (float) (worldTimeTicks / 24000.0);
+        float dayFraction = (float) ((worldTimeTicks % 24000.0) / 24000.0);
 
         // Astronomical solar orbital angle
         float sunAngle = (dayFraction * 2.0f * (float) Math.PI) - ((float) Math.PI / 2.0f);
@@ -125,6 +127,11 @@ public class AtmosphericTimeSystem {
 
     public void setWorldTimeTicks(double worldTimeTicks) {
         this.worldTimeTicks = worldTimeTicks;
+        this.clock.setTotalTicks(worldTimeTicks);
+    }
+
+    public com.mcjournal.world.time.WorldClock getClock() {
+        return clock;
     }
 
     public Vector3f getSunDir() {

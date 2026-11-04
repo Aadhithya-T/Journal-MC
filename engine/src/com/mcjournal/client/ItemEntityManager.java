@@ -1,9 +1,10 @@
 package com.mcjournal.client;
 
 import com.mcjournal.ChunkManager;
-import com.mcjournal.Item;
 import com.mcjournal.block.BlockState;
 import com.mcjournal.block.BlockStateRegistry;
+import com.mcjournal.event.EventBus;
+import com.mcjournal.event.ItemCollectedEvent;
 import com.mcjournal.block.BlockType;
 import org.lwjgl.system.MemoryUtil;
 
@@ -25,6 +26,15 @@ public class ItemEntityManager {
 
     private final List<ItemEntity> items = new ArrayList<>();
     private final List<ItemEntity> spawnQueue = new ArrayList<>();
+    private String worldId = "world";
+
+    public void setWorldId(String worldId) {
+        this.worldId = (worldId != null) ? worldId : "world";
+    }
+
+    public String getWorldId() {
+        return worldId;
+    }
 
     private int vao;
     private int vbo;
@@ -108,11 +118,13 @@ public class ItemEntityManager {
                     if (unadded == 0) {
                         // Entire stack collected
                         System.out.println("[Inventory] 📦 Picked up " + item.count + "x " + BlockStateRegistry.getBlockType(item.blockType).getName());
+                        EventBus.getInstance().post(new ItemCollectedEvent(worldId, item.blockType, item.count));
                         it.remove();
                     } else if (unadded < item.count) {
                         // Partial stack collected (inventory almost full)
                         int collected = item.count - unadded;
                         System.out.println("[Inventory] 📦 Picked up " + collected + "x " + BlockStateRegistry.getBlockType(item.blockType).getName() + " (" + unadded + " remaining on ground)");
+                        EventBus.getInstance().post(new ItemCollectedEvent(worldId, item.blockType, collected));
                         item.count = unadded;
                         item.pickupDelay = 0.5f;
                         item.velocity.x *= 0.1f;

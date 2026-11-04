@@ -63,6 +63,9 @@ public class MasterTestSuite {
         // Non-Mining & Exploration: Block Protection, Pickup & Item Invariants
         runSuite("Non-Mining & Exploration: Block Protection, Pickup & Item Invariants", () -> NonMiningExplorationTest.main(new String[0]));
 
+        // Journal Engine Readiness: World Metadata, Clock, Events, Storage, Landmarks & Context
+        runSuite("Journal Engine Readiness: Metadata, Clock, Events, Storage & Context", () -> JournalEngineReadinessTest.main(new String[0]));
+
         // World Generation: Gravel, Andesite, Diorite & Stone
         runSuite("World Generation: Gravel, Andesite, Diorite & Stone", () -> NewBlocksWorldGenTest.main(new String[0]));
 

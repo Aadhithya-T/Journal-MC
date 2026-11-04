@@ -9,6 +9,8 @@ import com.mcjournal.block.BlockStateRegistry;
 import com.mcjournal.block.BlockType;
 import com.mcjournal.block.Blocks;
 import com.mcjournal.block.property.Axis;
+import com.mcjournal.event.BlockPlacedEvent;
+import com.mcjournal.event.EventBus;
 import org.joml.Vector3f;
 
 /**
@@ -21,7 +23,16 @@ public class BlockPlacementManager {
     public static final float REACH_DISTANCE = 4.5f;
 
     private Raycast.Hit currentHit;
+    private String worldId = "world";
     private boolean wasRmbDown = false;
+
+    public void setWorldId(String worldId) {
+        this.worldId = (worldId != null) ? worldId : "world";
+    }
+
+    public String getWorldId() {
+        return worldId;
+    }
 
     public void update(ChunkManager world, ChunkRenderer renderer, ParticleManager particles,
                        FluidPhysicsManager fluidPhysics, FirstPersonHandRenderer hand,
@@ -83,6 +94,7 @@ public class BlockPlacementManager {
                             if (hand != null) {
                                 hand.triggerSwing();
                             }
+                            EventBus.getInstance().post(new BlockPlacedEvent(worldId, blockToPlace, placeX, placeY, placeZ));
                             System.out.println("[Building] 🧱 Placed " + stateToPlace.getSerializedName() + " at (" + placeX + ", " + placeY + ", " + placeZ + ")");
                         }
                     }

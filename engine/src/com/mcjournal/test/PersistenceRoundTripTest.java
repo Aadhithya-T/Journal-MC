@@ -3,7 +3,6 @@ package com.mcjournal.test;
 import com.mcjournal.Chunk;
 import com.mcjournal.ChunkManager;
 import com.mcjournal.ChunkSerializer;
-import com.mcjournal.Item;
 import com.mcjournal.block.BlockProperties;
 import com.mcjournal.block.BlockState;
 import com.mcjournal.block.Blocks;
@@ -11,7 +10,6 @@ import com.mcjournal.client.Player;
 import com.mcjournal.client.WorldSaveManager;
 
 import java.io.File;
-import java.util.Map;
 
 /**
  * P11 Unit Test: Persistence System

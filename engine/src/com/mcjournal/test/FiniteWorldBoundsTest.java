@@ -1,7 +1,6 @@
 package com.mcjournal.test;
 
 import com.mcjournal.ChunkPos;
-import com.mcjournal.EngineConstants;
 import com.mcjournal.world.WorldBounds;
 import com.mcjournal.world.WorldConfiguration;
 
