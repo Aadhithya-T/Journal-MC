@@ -12,6 +12,9 @@ public class FocusManager {
     private Widget focusedWidget = null;
 
     public Widget getFocusedWidget() {
+        if (focusedWidget != null && !focusedWidget.isFocusable()) {
+            clearFocus();
+        }
         return focusedWidget;
     }
 
@@ -94,7 +97,7 @@ public class FocusManager {
 
         if (clicked != null && clicked.isFocusable()) {
             setFocus(clicked);
-        } else if (clicked == null) {
+        } else {
             clearFocus();
         }
     }
@@ -104,6 +107,12 @@ public class FocusManager {
      */
     public void onWidgetRemoved(Widget widget) {
         if (focusedWidget == widget) {
+            clearFocus();
+        }
+    }
+
+    public void onWidgetStateChanged(Widget widget) {
+        if (widget == focusedWidget && (widget == null || !widget.isFocusable())) {
             clearFocus();
         }
     }

@@ -90,7 +90,8 @@ public class MCJournalApp {
 
             if (window.isResized()) {
                 camera.updateProjection(window.getAspectRatio());
-                screenManager.onResize(window.getWidth(), window.getHeight());
+                screenManager.onResize(window.getFramebufferWidth(), window.getFramebufferHeight(),
+                                       window.getWindowWidth(), window.getWindowHeight());
                 window.setResized(false);
             }
 
@@ -184,7 +185,8 @@ public class MCJournalApp {
         if (screenManager != null && settings != null) {
             screenManager.getScaleManager().setRequestedScale(settings.guiScale);
             if (window != null && screenManager.getCurrentScreen() != null) {
-                screenManager.onResize(window.getWidth(), window.getHeight());
+                screenManager.onResize(window.getFramebufferWidth(), window.getFramebufferHeight(),
+                                       window.getWindowWidth(), window.getWindowHeight());
             }
         }
         if (window != null) {

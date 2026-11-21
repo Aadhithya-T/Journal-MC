@@ -169,7 +169,7 @@ mc-journal/
 │       │   ├── landmark/          # WorldLandmark and LandmarkRegistry
 │       │   └── time/              # Persistent WorldClock
 │       ├── client/                # MCJournalApp, GameRenderer, WorldSession, BlockPlacementManager
-│       └── test/                  # 34 automated unit & integration test suites
+│       └── test/                  # 35 automated unit & integration test suites
 └── saves/                         # Binary .jmc region files & world metadata
 ```
 

@@ -12,6 +12,11 @@ public class WorldSelectScreen extends Screen {
     private WorldSaveManager.SavedWorld currentWorld;
     private boolean isWorldSelected = true;
     private TextField searchField;
+    private Button playBtn;
+    private Button createBtn;
+    private Button editBtn;
+    private Button deleteBtn;
+    private Button cancelBtn;
     private long lastCardClickTime = 0;
 
     // Cached layout geometry computed in init() and shared across render() and mouseClicked()
@@ -46,22 +51,67 @@ public class WorldSelectScreen extends Screen {
 
     @Override
     public void init(int width, int height) {
+        String savedQuery = (searchField != null) ? searchField.getText() : null;
+        int savedCaret = (searchField != null) ? searchField.getCaretPosition() : 0;
+        boolean wasFocused = (searchField != null && focusManager.getFocusedWidget() == searchField);
+
         super.init(width, height);
         this.currentWorld = WorldSaveManager.loadWorld();
         this.isWorldSelected = (currentWorld != null);
 
+        // 1. Search Field
+        searchField = new TextField(1, 0, 0, 100, 18);
+        searchField.setPlaceholder("Search worlds...");
+        if (savedQuery != null) {
+            searchField.setText(savedQuery);
+            searchField.setCaretPosition(savedCaret);
+        }
+        addWidget(searchField);
+        if (wasFocused) {
+            focusManager.setFocus(searchField);
+        }
+
+        // 2. Action Buttons
+        playBtn = new Button(2, "Play World", 0, 0, 100, GuiLayout.ROW_HEIGHT, this::launchSelectedWorld);
+        addWidget(playBtn);
+
+        createBtn = new Button(3, "Create New World", 0, 0, 100, GuiLayout.ROW_HEIGHT, () -> {
+            if (app != null) app.setScreen(new WorldCreateScreen(app));
+        });
+        addWidget(createBtn);
+
+        editBtn = new Button(4, "Edit", 0, 0, 100, GuiLayout.ROW_HEIGHT, () -> {
+            if (currentWorld != null && app != null) {
+                app.setScreen(new WorldEditScreen(app, currentWorld));
+            }
+        });
+        addWidget(editBtn);
+
+        deleteBtn = new Button(5, "Delete", 0, 0, 100, GuiLayout.ROW_HEIGHT, this::promptDeleteWorld);
+        addWidget(deleteBtn);
+
+        cancelBtn = new Button(6, "Cancel", 0, 0, 100, GuiLayout.ROW_HEIGHT, () -> {
+            if (app != null) app.setScreen(new TitleScreen(app));
+        });
+        addWidget(cancelBtn);
+
+        layout();
+    }
+
+    @Override
+    public void layout() {
         // Single shared content column for search, world card, and both button rows
         GuiLayout.Column column = GuiLayout.contentColumn(width, 316, 16);
         this.colX = column.x;
         this.colW = column.width;
 
         // 1. Header Zone: Reserved height ensuring title and search box never collide
-        // Title at y=8; search field cleanly separated below title
         int searchY = 30;
         int searchH = 18;
-        searchField = new TextField(1, colX, searchY, colW, searchH);
-        searchField.setPlaceholder("Search worlds...");
-        addWidget(searchField);
+        if (searchField != null) {
+            searchField.setPosition(colX, searchY);
+            searchField.setSize(colW, searchH);
+        }
 
         // 2. World Card Geometry (stored once for render and mouse interaction)
         this.cardX = colX;
@@ -77,34 +127,46 @@ public class WorldSelectScreen extends Screen {
 
         // --- ROW 1 (Play World | Create New World) ---
         GuiLayout.ButtonSlot[] r1 = GuiLayout.distributeRow(colX, colW, 2, gutter);
-        Button playBtn = new Button(2, "Play World", r1[0].x(), row1Y, r1[0].width(), btnH, this::launchSelectedWorld);
-        playBtn.setEnabled(isPlayable());
-        addWidget(playBtn);
+        if (playBtn != null) {
+            playBtn.setPosition(r1[0].x(), row1Y);
+            playBtn.setSize(r1[0].width(), btnH);
+            playBtn.setEnabled(isPlayable());
+        }
 
-        Button createBtn = new Button(3, "Create New World", r1[1].x(), row1Y, r1[1].width(), btnH, () -> {
-            if (app != null) app.setScreen(new WorldCreateScreen(app));
-        });
-        addWidget(createBtn);
+        if (createBtn != null) {
+            createBtn.setPosition(r1[1].x(), row1Y);
+            createBtn.setSize(r1[1].width(), btnH);
+        }
 
         // --- ROW 2 (Edit | Delete | Cancel) ---
         GuiLayout.ButtonSlot[] r2 = GuiLayout.distributeRow(colX, colW, 3, gutter);
+        if (editBtn != null) {
+            editBtn.setPosition(r2[0].x(), row2Y);
+            editBtn.setSize(r2[0].width(), btnH);
+            editBtn.setEnabled(currentWorld != null);
+        }
 
-        Button editBtn = new Button(4, "Edit", r2[0].x(), row2Y, r2[0].width(), btnH, () -> {
-            if (currentWorld != null && app != null) {
-                app.setScreen(new WorldEditScreen(app, currentWorld));
-            }
-        });
-        editBtn.setEnabled(currentWorld != null);
-        addWidget(editBtn);
+        if (deleteBtn != null) {
+            deleteBtn.setPosition(r2[1].x(), row2Y);
+            deleteBtn.setSize(r2[1].width(), btnH);
+            deleteBtn.setEnabled(currentWorld != null);
+        }
 
-        Button deleteBtn = new Button(5, "Delete", r2[1].x(), row2Y, r2[1].width(), btnH, this::promptDeleteWorld);
-        deleteBtn.setEnabled(currentWorld != null);
-        addWidget(deleteBtn);
+        if (cancelBtn != null) {
+            cancelBtn.setPosition(r2[2].x(), row2Y);
+            cancelBtn.setSize(r2[2].width(), btnH);
+        }
+    }
 
-        Button cancelBtn = new Button(6, "Cancel", r2[2].x(), row2Y, r2[2].width(), btnH, () -> {
-            if (app != null) app.setScreen(new TitleScreen(app));
-        });
-        addWidget(cancelBtn);
+    @Override
+    public void onResize(int width, int height) {
+        this.width = width;
+        this.height = height;
+        if (!isInitialized) {
+            init(width, height, font);
+        } else {
+            layout();
+        }
     }
 
     private boolean isPlayable() {

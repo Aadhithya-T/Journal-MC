@@ -93,7 +93,12 @@ public class TextField extends Widget {
     }
 
     public void setCaretPosition(int pos) {
-        this.caretPos = Math.clamp(pos, 0, text.length());
+        int clamped = Math.clamp(pos, 0, text.length());
+        if (clamped > 0 && clamped < text.length()
+                && Character.isSurrogatePair(text.charAt(clamped - 1), text.charAt(clamped))) {
+            clamped--; // Snap to code point boundary
+        }
+        this.caretPos = clamped;
         this.selectionAnchor = -1;
         resetBlink();
     }
@@ -104,12 +109,20 @@ public class TextField extends Widget {
 
     public int getSelectionStart() {
         if (!hasSelection()) return caretPos;
-        return Math.min(selectionAnchor, caretPos);
+        int sel = Math.min(selectionAnchor, caretPos);
+        if (sel > 0 && sel < text.length() && Character.isSurrogatePair(text.charAt(sel - 1), text.charAt(sel))) {
+            sel--;
+        }
+        return sel;
     }
 
     public int getSelectionEnd() {
         if (!hasSelection()) return caretPos;
-        return Math.max(selectionAnchor, caretPos);
+        int sel = Math.max(selectionAnchor, caretPos);
+        if (sel > 0 && sel < text.length() && Character.isSurrogatePair(text.charAt(sel - 1), text.charAt(sel))) {
+            sel++;
+        }
+        return sel;
     }
 
     public String getSelectedText() {
@@ -142,38 +155,61 @@ public class TextField extends Widget {
         }
     }
 
+    /**
+     * Atomically replaces selection or inserts text at caret.
+     * Validates candidate text before mutating state to ensure rejected input never deletes selection.
+     */
     public void insertText(String str) {
         if (str == null || str.isEmpty() || !isEnabled) return;
 
+        // 1. Determine replacement range without deleting
+        int selStart;
+        int selEnd;
         if (hasSelection()) {
-            deleteSelection();
+            selStart = getSelectionStart();
+            selEnd = getSelectionEnd();
+        } else {
+            selStart = caretPos;
+            selEnd = caretPos;
         }
 
+        // 2. Sanitize insertion string using Unicode code points
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < str.length(); i++) {
-            char ch = str.charAt(i);
-            if (ch >= 32 && ch != 127) {
-                sb.append(ch);
+        str.codePoints().forEach(cp -> {
+            if (Character.isValidCodePoint(cp) && !Character.isISOControl(cp)) {
+                sb.appendCodePoint(cp);
             }
-        }
+        });
         String clean = sb.toString();
+        if (clean.isEmpty()) return;
 
-        if (filter != null) {
-            String testMerged = text.substring(0, caretPos) + clean + text.substring(caretPos);
-            if (!filter.test(testMerged)) {
-                return;
-            }
-        }
-
-        int available = maxLength - text.length();
+        // 3. Length checks against maxLength without mutating text
+        String prefix = text.substring(0, selStart);
+        String suffix = text.substring(selEnd);
+        int available = maxLength - (prefix.length() + suffix.length());
         if (available <= 0) return;
+
         if (clean.length() > available) {
-            clean = clean.substring(0, available);
+            int trimLen = available;
+            if (trimLen > 0 && Character.isHighSurrogate(clean.charAt(trimLen - 1))) {
+                trimLen--;
+            }
+            if (trimLen <= 0) return;
+            clean = clean.substring(0, trimLen);
         }
 
-        text = text.substring(0, caretPos) + clean + text.substring(caretPos);
-        caretPos += clean.length();
-        selectionAnchor = -1;
+        // 4. Construct complete candidate
+        String candidate = prefix + clean + suffix;
+
+        // 5. Atomic filter validation: if rejected, abort and preserve original text and selection
+        if (filter != null && !filter.test(candidate)) {
+            return;
+        }
+
+        // 6. Commit atomic replacement
+        this.text = candidate;
+        this.caretPos = selStart + clean.length();
+        this.selectionAnchor = -1;
         clampDisplayOffset();
         resetBlink();
 
@@ -198,12 +234,12 @@ public class TextField extends Widget {
             displayOffset = caretPos;
         }
 
-        while (displayOffset < caretPos) {
+        while (displayOffset < caretPos && displayOffset < text.length()) {
             String sub = text.substring(displayOffset, caretPos);
             if (font.getStringWidth(sub, scale) <= maxW) {
                 break;
             }
-            displayOffset++;
+            displayOffset = text.offsetByCodePoints(displayOffset, 1);
         }
     }
 
@@ -258,11 +294,12 @@ public class TextField extends Widget {
         String visibleSlice = "";
         int sliceEnd = displayOffset;
         while (sliceEnd < text.length()) {
-            String test = text.substring(displayOffset, sliceEnd + 1);
+            int nextSliceEnd = text.offsetByCodePoints(sliceEnd, 1);
+            String test = text.substring(displayOffset, nextSliceEnd);
             if (font.getStringWidth(test, scale) > contentW) {
                 break;
             }
-            sliceEnd++;
+            sliceEnd = nextSliceEnd;
         }
         visibleSlice = text.substring(displayOffset, sliceEnd);
 
@@ -337,10 +374,15 @@ public class TextField extends Widget {
 
     @Override
     public boolean charTyped(char codePoint) {
+        return charTyped((int) codePoint);
+    }
+
+    @Override
+    public boolean charTyped(int codePoint) {
         if (!isFocused || !isEnabled) return false;
 
-        if (codePoint >= 32 && codePoint != 127) {
-            insertText(String.valueOf(codePoint));
+        if (Character.isValidCodePoint(codePoint) && !Character.isISOControl(codePoint)) {
+            insertText(new String(Character.toChars(codePoint)));
             return true;
         }
         return false;
@@ -397,8 +439,9 @@ public class TextField extends Widget {
                         text = text.substring(0, wordStart) + text.substring(caretPos);
                         caretPos = wordStart;
                     } else {
-                        text = text.substring(0, caretPos - 1) + text.substring(caretPos);
-                        caretPos--;
+                        int prevPos = text.offsetByCodePoints(caretPos, -1);
+                        text = text.substring(0, prevPos) + text.substring(caretPos);
+                        caretPos = prevPos;
                     }
                     clampDisplayOffset();
                     resetBlink();
@@ -414,7 +457,8 @@ public class TextField extends Widget {
                         int wordEnd = findWordBoundary(caretPos, 1);
                         text = text.substring(0, caretPos) + text.substring(wordEnd);
                     } else {
-                        text = text.substring(0, caretPos) + text.substring(caretPos + 1);
+                        int nextPos = text.offsetByCodePoints(caretPos, 1);
+                        text = text.substring(0, caretPos) + text.substring(nextPos);
                     }
                     resetBlink();
                     if (onTextChanged != null) onTextChanged.accept(text);
@@ -422,7 +466,7 @@ public class TextField extends Widget {
                 return true;
             }
             case GLFW.GLFW_KEY_LEFT -> {
-                int target = isCtrl ? findWordBoundary(caretPos, -1) : Math.max(0, caretPos - 1);
+                int target = isCtrl ? findWordBoundary(caretPos, -1) : (caretPos > 0 ? text.offsetByCodePoints(caretPos, -1) : 0);
                 if (isShift) {
                     if (selectionAnchor == -1) selectionAnchor = caretPos;
                 } else {
@@ -434,7 +478,7 @@ public class TextField extends Widget {
                 return true;
             }
             case GLFW.GLFW_KEY_RIGHT -> {
-                int target = isCtrl ? findWordBoundary(caretPos, 1) : Math.min(text.length(), caretPos + 1);
+                int target = isCtrl ? findWordBoundary(caretPos, 1) : (caretPos < text.length() ? text.offsetByCodePoints(caretPos, 1) : text.length());
                 if (isShift) {
                     if (selectionAnchor == -1) selectionAnchor = caretPos;
                 } else {

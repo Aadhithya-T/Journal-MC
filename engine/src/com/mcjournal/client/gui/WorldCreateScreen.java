@@ -12,6 +12,9 @@ import java.util.Random;
 public class WorldCreateScreen extends Screen {
     private TextField nameField;
     private TextField seedField;
+    private Button randomSeedBtn;
+    private Button createBtn;
+    private Button cancelBtn;
     private String validationError = null;
     private final Random random = new Random();
 
@@ -48,9 +51,71 @@ public class WorldCreateScreen extends Screen {
 
     @Override
     public void init(int width, int height) {
-        super.init(width, height);
-        validationError = null;
+        String savedName = (nameField != null) ? nameField.getText() : null;
+        int savedNameCaret = (nameField != null) ? nameField.getCaretPosition() : 0;
+        String savedSeed = (seedField != null) ? seedField.getText() : null;
+        int savedSeedCaret = (seedField != null) ? seedField.getCaretPosition() : 0;
+        boolean seedWasFocused = (seedField != null && focusManager.getFocusedWidget() == seedField);
 
+        super.init(width, height);
+        if (savedName == null) {
+            validationError = null;
+        }
+
+        // 1. World Name TextField
+        nameField = new TextField(1, 0, 0, 100, 20);
+        nameField.setPlaceholder("Enter world name...");
+        nameField.setMaxLength(28);
+        nameField.setText(savedName != null ? savedName : "New Adventure");
+        if (savedName != null) {
+            nameField.setCaretPosition(savedNameCaret);
+        }
+        nameField.setOnTextChanged(text -> {
+            if (validationError != null && !text.trim().isEmpty()) {
+                validationError = null;
+            }
+        });
+        nameField.setOnEnterPressed(this::createWorld);
+        addWidget(nameField);
+
+        // 2. Seed Field & Randomize Button
+        seedField = new TextField(2, 0, 0, 100, 20);
+        seedField.setPlaceholder("Leave blank for random seed...");
+        seedField.setMaxLength(20);
+        seedField.setText(savedSeed != null ? savedSeed : String.valueOf(Math.abs(random.nextLong() % 100000000L)));
+        if (savedSeed != null) {
+            seedField.setCaretPosition(savedSeedCaret);
+        }
+        seedField.setOnEnterPressed(this::createWorld);
+        addWidget(seedField);
+
+        randomSeedBtn = new Button(3, "Random", 0, 0, 60, 20, () -> {
+            long newSeed = Math.abs(random.nextLong() % 100000000L);
+            seedField.setText(String.valueOf(newSeed));
+        });
+        randomSeedBtn.setTooltip("Generate a new random seed");
+        addWidget(randomSeedBtn);
+
+        // 3. Action Buttons at Bottom
+        createBtn = new Button(4, "Create New World", 0, 0, 100, GuiLayout.ROW_HEIGHT, this::createWorld);
+        addWidget(createBtn);
+
+        cancelBtn = new Button(5, "Cancel", 0, 0, 100, GuiLayout.ROW_HEIGHT, () -> {
+            if (app != null) app.setScreen(new WorldSelectScreen(app));
+        });
+        addWidget(cancelBtn);
+
+        if (seedWasFocused) {
+            focusManager.setFocus(seedField);
+        } else {
+            focusManager.setFocus(nameField);
+        }
+
+        layout();
+    }
+
+    @Override
+    public void layout() {
         // Shared content column
         GuiLayout.Column column = GuiLayout.contentColumn(width, 316, 16);
         this.formX = column.x;
@@ -60,18 +125,10 @@ public class WorldCreateScreen extends Screen {
         // 1. World Name TextField
         this.nameLabelY = startY;
         int nameFieldY = nameLabelY + 12;
-        nameField = new TextField(1, formX, nameFieldY, formW, 20);
-        nameField.setPlaceholder("Enter world name...");
-        nameField.setMaxLength(28);
-        nameField.setText("New Adventure");
-        nameField.setOnTextChanged(text -> {
-            if (validationError != null && !text.trim().isEmpty()) {
-                validationError = null;
-            }
-        });
-        nameField.setOnEnterPressed(this::createWorld);
-        addWidget(nameField);
-        focusManager.setFocus(nameField);
+        if (nameField != null) {
+            nameField.setPosition(formX, nameFieldY);
+            nameField.setSize(formW, 20);
+        }
 
         // 2. Seed Field & Randomize Button
         int gutter = GuiLayout.GUTTER;
@@ -80,28 +137,22 @@ public class WorldCreateScreen extends Screen {
         this.seedLabelY = nameFieldY + 22;
         int seedFieldY = seedLabelY + 12;
 
-        seedField = new TextField(2, formX, seedFieldY, seedFieldW, 20);
-        seedField.setPlaceholder("Leave blank for random seed...");
-        seedField.setMaxLength(20);
-        seedField.setText(String.valueOf(Math.abs(random.nextLong() % 100000000L)));
-        seedField.setOnEnterPressed(this::createWorld);
-        addWidget(seedField);
+        if (seedField != null) {
+            seedField.setPosition(formX, seedFieldY);
+            seedField.setSize(seedFieldW, 20);
+        }
 
-        Button randomSeedBtn = new Button(3, "Random", formX + seedFieldW + gutter, seedFieldY, seedBtnW, 20, () -> {
-            long newSeed = Math.abs(random.nextLong() % 100000000L);
-            seedField.setText(String.valueOf(newSeed));
-        });
-        randomSeedBtn.setTooltip("Generate a new random seed");
-        addWidget(randomSeedBtn);
+        if (randomSeedBtn != null) {
+            randomSeedBtn.setPosition(formX + seedFieldW + gutter, seedFieldY);
+            randomSeedBtn.setSize(seedBtnW, 20);
+        }
 
-        // 3. Two-Line Cards Geometry (derived dynamically from text style heights)
-        // Line 1 (BODY) + Gap + Line 2 (CAPTION) + Top/Bottom Padding
+        // 3. Two-Line Cards Geometry
         int padY = 5;
         int lineGap = 3;
-        int bodyH = 12;    // Fallback baseline height, actual drawing positioned relative
+        int bodyH = 12;
         int captionH = 10;
         this.cardH = padY * 2 + bodyH + lineGap + captionH;
-
         this.card1Y = seedFieldY + 26;
         this.card2Y = card1Y + cardH + 6;
 
@@ -110,15 +161,28 @@ public class WorldCreateScreen extends Screen {
         int btnW = GuiLayout.buttonWidth(formW, 2, gutter);
         int btnY = height - 28;
 
-        Button createBtn = new Button(4, "Create New World", formX, btnY, btnW, btnH, this::createWorld);
-        addWidget(createBtn);
+        if (createBtn != null) {
+            createBtn.setPosition(formX, btnY);
+            createBtn.setSize(btnW, btnH);
+        }
 
         int btn2X = formX + btnW + gutter;
         int btn2W = formW - btnW - gutter;
-        Button cancelBtn = new Button(5, "Cancel", btn2X, btnY, btn2W, btnH, () -> {
-            if (app != null) app.setScreen(new WorldSelectScreen(app));
-        });
-        addWidget(cancelBtn);
+        if (cancelBtn != null) {
+            cancelBtn.setPosition(btn2X, btnY);
+            cancelBtn.setSize(btn2W, btnH);
+        }
+    }
+
+    @Override
+    public void onResize(int width, int height) {
+        this.width = width;
+        this.height = height;
+        if (!isInitialized) {
+            init(width, height, font);
+        } else {
+            layout();
+        }
     }
 
     public void createWorld() {

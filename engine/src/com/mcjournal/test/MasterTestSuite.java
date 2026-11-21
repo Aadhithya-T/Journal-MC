@@ -60,6 +60,9 @@ public class MasterTestSuite {
         // GUI Typography and Layout Overhaul: Phase 4 Overlap Diagnostics
         runSuite("GUI Overhaul: Phase 4 Layout and Overlap Diagnostics", () -> GuiPhase4OverlapDiagnosticTest.main(new String[0]));
 
+        // GUI Deep Review: Texture Binding, HiDPI/Scaling, Resize State, Focus, Unicode & Atomic Editing
+        runSuite("GUI Deep Review: Reliability, Focus, HiDPI & Unicode Regression Suite", () -> GuiDeepReviewRegressionTest.main(new String[0]));
+
         // Non-Mining & Exploration: Block Protection, Pickup & Item Invariants
         runSuite("Non-Mining & Exploration: Block Protection, Pickup & Item Invariants", () -> NonMiningExplorationTest.main(new String[0]));
 

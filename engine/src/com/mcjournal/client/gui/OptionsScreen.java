@@ -10,6 +10,13 @@ import org.lwjgl.glfw.GLFW;
  */
 public class OptionsScreen extends Screen {
     private final Screen parentScreen;
+    private Button fovBtn;
+    private Button fpsBtn;
+    private Button renderDistBtn;
+    private Button showFpsBtn;
+    private Button fogBtn;
+    private Button guiScaleBtn;
+    private Button doneBtn;
 
     public OptionsScreen(MCJournalApp app, Screen parentScreen) {
         super(app);
@@ -29,6 +36,64 @@ public class OptionsScreen extends Screen {
     public void init(int width, int height) {
         super.init(width, height);
 
+        GameSettings settings = (app != null) ? app.getSettings() : new GameSettings();
+
+        // --- ROW 1: FOV & Max FPS ---
+        fovBtn = new Button(1, "FOV: " + (int) settings.fov + "°", 0, 0, 150, 20, () -> {
+            settings.cycleFov();
+            if (app != null && app.getCamera() != null) app.getCamera().setFov(settings.fov);
+            if (app != null && app.getCamera() != null && app.getWindow() != null) {
+                app.getCamera().updateProjection(app.getWindow().getAspectRatio());
+            }
+            init(this.width, this.height);
+        });
+        addWidget(fovBtn);
+
+        fpsBtn = new Button(2, "Max FPS: " + settings.getFpsDisplayString(), 0, 0, 150, 20, () -> {
+            settings.cycleFpsLimit();
+            if (app != null) app.applySettings();
+            init(this.width, this.height);
+        });
+        addWidget(fpsBtn);
+
+        // --- ROW 2: Render Distance & Show FPS ---
+        renderDistBtn = new Button(3, "Render Dist: " + settings.renderDistance + " Chunks", 0, 0, 150, 20, () -> {
+            settings.cycleRenderDistance();
+            if (app != null) app.applySettings();
+            init(this.width, this.height);
+        });
+        addWidget(renderDistBtn);
+
+        showFpsBtn = new Button(4, "Show FPS: " + (settings.showFps ? "ON" : "OFF"), 0, 0, 150, 20, () -> {
+            settings.toggleShowFps();
+            init(this.width, this.height);
+        });
+        addWidget(showFpsBtn);
+
+        // --- ROW 3: Fog Mode & GUI Scale ---
+        fogBtn = new Button(5, "Fog: " + settings.getFogModeString(), 0, 0, 150, 20, () -> {
+            settings.cycleFogMode();
+            init(this.width, this.height);
+        });
+        addWidget(fogBtn);
+
+        guiScaleBtn = new Button(6, "GUI Scale: " + settings.getGuiScaleDisplayString(), 0, 0, 150, 20, () -> {
+            settings.cycleGuiScale();
+            if (app != null) app.applySettings();
+            init(this.width, this.height);
+        });
+        addWidget(guiScaleBtn);
+
+        // --- Done Button (Bottom Center) ---
+        doneBtn = new Button(10, "Done", 0, 0, 200, 20, this::saveAndExit);
+        addWidget(doneBtn);
+        focusManager.setFocus(doneBtn);
+
+        layout();
+    }
+
+    @Override
+    public void layout() {
         int btnW = 150;
         int btnH = 20;
         int gap = 8;
@@ -36,60 +101,48 @@ public class OptionsScreen extends Screen {
         int startX = GuiLayout.centerX(width, totalRowW);
         int startY = Math.max(34, height / 2 - 80);
 
-        GameSettings settings = (app != null) ? app.getSettings() : new GameSettings();
+        if (fovBtn != null) {
+            fovBtn.setPosition(startX, startY);
+            fovBtn.setSize(btnW, btnH);
+        }
+        if (fpsBtn != null) {
+            fpsBtn.setPosition(startX + btnW + gap, startY);
+            fpsBtn.setSize(btnW, btnH);
+        }
+        if (renderDistBtn != null) {
+            renderDistBtn.setPosition(startX, startY + 24);
+            renderDistBtn.setSize(btnW, btnH);
+        }
+        if (showFpsBtn != null) {
+            showFpsBtn.setPosition(startX + btnW + gap, startY + 24);
+            showFpsBtn.setSize(btnW, btnH);
+        }
+        if (fogBtn != null) {
+            fogBtn.setPosition(startX, startY + 48);
+            fogBtn.setSize(btnW, btnH);
+        }
+        if (guiScaleBtn != null) {
+            guiScaleBtn.setPosition(startX + btnW + gap, startY + 48);
+            guiScaleBtn.setSize(btnW, btnH);
+        }
 
-        // --- ROW 1: FOV & Max FPS ---
-        Button fovBtn = new Button(1, "FOV: " + (int) settings.fov + "°", startX, startY, btnW, btnH, () -> {
-            settings.cycleFov();
-            if (app != null && app.getCamera() != null) app.getCamera().setFov(settings.fov);
-            if (app != null && app.getCamera() != null && app.getWindow() != null) {
-                app.getCamera().updateProjection(app.getWindow().getAspectRatio());
-            }
-            init(width, height);
-        });
-        addWidget(fovBtn);
-
-        Button fpsBtn = new Button(2, "Max FPS: " + settings.getFpsDisplayString(), startX + btnW + gap, startY, btnW, btnH, () -> {
-            settings.cycleFpsLimit();
-            if (app != null) app.applySettings();
-            init(width, height);
-        });
-        addWidget(fpsBtn);
-
-        // --- ROW 2: Render Distance & Show FPS ---
-        Button renderDistBtn = new Button(3, "Render Dist: " + settings.renderDistance + " Chunks", startX, startY + 24, btnW, btnH, () -> {
-            settings.cycleRenderDistance();
-            if (app != null) app.applySettings();
-            init(width, height);
-        });
-        addWidget(renderDistBtn);
-
-        Button showFpsBtn = new Button(4, "Show FPS: " + (settings.showFps ? "ON" : "OFF"), startX + btnW + gap, startY + 24, btnW, btnH, () -> {
-            settings.toggleShowFps();
-            init(width, height);
-        });
-        addWidget(showFpsBtn);
-
-        // --- ROW 3: Fog Mode & GUI Scale ---
-        Button fogBtn = new Button(5, "Fog: " + settings.getFogModeString(), startX, startY + 48, btnW, btnH, () -> {
-            settings.cycleFogMode();
-            init(width, height);
-        });
-        addWidget(fogBtn);
-
-        Button guiScaleBtn = new Button(6, "GUI Scale: " + settings.getGuiScaleDisplayString(), startX + btnW + gap, startY + 48, btnW, btnH, () -> {
-            settings.cycleGuiScale();
-            if (app != null) app.applySettings();
-            init(width, height);
-        });
-        addWidget(guiScaleBtn);
-
-        // --- Done Button (Bottom Center) ---
         int doneW = 200;
         int doneX = GuiLayout.centerX(width, doneW);
-        Button doneBtn = new Button(10, "Done", doneX, height - 30, doneW, btnH, this::saveAndExit);
-        addWidget(doneBtn);
-        focusManager.setFocus(doneBtn);
+        if (doneBtn != null) {
+            doneBtn.setPosition(doneX, height - 30);
+            doneBtn.setSize(doneW, btnH);
+        }
+    }
+
+    @Override
+    public void onResize(int width, int height) {
+        this.width = width;
+        this.height = height;
+        if (!isInitialized) {
+            init(width, height, font);
+        } else {
+            layout();
+        }
     }
 
     public void saveAndExit() {

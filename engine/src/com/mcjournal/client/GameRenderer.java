@@ -183,11 +183,13 @@ public class GameRenderer {
             // 5. In-Game HUD (Rendered in logical GUI coordinates)
             if (!screenManager.hasScreen() && settings.showHud && hudRenderer != null) {
                 GuiScaleManager scaleManager = screenManager.getScaleManager();
-                scaleManager.update(window.getWidth(), window.getHeight(), window.getWidth(), window.getHeight());
+                scaleManager.update(window.getFramebufferWidth(), window.getFramebufferHeight(),
+                                     window.getWindowWidth(), window.getWindowHeight());
 
                 guiRenderer.begin(scaleManager.getGuiWidth(), scaleManager.getGuiHeight(),
                         scaleManager.getViewportX(), scaleManager.getViewportY(),
-                        scaleManager.getViewportWidth(), scaleManager.getViewportHeight());
+                        scaleManager.getViewportWidth(), scaleManager.getViewportHeight(),
+                        scaleManager.getFramebufferHeight());
                 try {
                     int renderedCount = (chunkRenderer != null) ? chunkRenderer.getLastRenderedChunks() : 0;
                     int loadedCount = (chunkRenderer != null) ? chunkRenderer.getLoadedMeshCount() : 0;
@@ -209,9 +211,9 @@ public class GameRenderer {
         } else {
             // Authentic Minecraft dirt background (Title / Menus)
             if (atlas != null) {
-                guiRenderer.begin(window.getWidth(), window.getHeight());
+                guiRenderer.begin(window.getFramebufferWidth(), window.getFramebufferHeight());
                 try {
-                    guiRenderer.drawDirtBackground(atlas.getTextureId(), window.getWidth(), window.getHeight());
+                    guiRenderer.drawDirtBackground(atlas.getTextureId(), window.getFramebufferWidth(), window.getFramebufferHeight());
                 } finally {
                     guiRenderer.end();
                 }
@@ -219,7 +221,9 @@ public class GameRenderer {
         }
 
         // 6. Active Screen Menu Overlay
-        screenManager.render(guiRenderer, fontRenderer, input, (float) deltaTime, window.getWidth(), window.getHeight());
+        screenManager.render(guiRenderer, fontRenderer, input, (float) deltaTime,
+                window.getFramebufferWidth(), window.getFramebufferHeight(),
+                window.getWindowWidth(), window.getWindowHeight());
 
         // Latch frame statistics for the debug overlay
         EngineMetrics.getInstance().endFrame();

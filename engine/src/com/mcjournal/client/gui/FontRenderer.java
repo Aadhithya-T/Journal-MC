@@ -396,6 +396,13 @@ public class FontRenderer {
                 continue;
             }
 
+            // Treat supplementary surrogate pairs as single glyph fallback
+            if (Character.isHighSurrogate(ch) && i + 1 < text.length() && Character.isLowSurrogate(text.charAt(i + 1))) {
+                i++;
+                totalWidth += glyphWidth[32] * intScale;
+                continue;
+            }
+
             int c = getGlyphIndex(ch);
             totalWidth += glyphWidth[c] * intScale;
         }
@@ -484,6 +491,21 @@ public class FontRenderer {
                     activeColor = defaultColor;
                 }
                 i++; // Skip format code character
+                continue;
+            }
+
+            // Treat supplementary surrogate pairs as single glyph fallback
+            if (Character.isHighSurrogate(ch) && i + 1 < text.length() && Character.isLowSurrogate(text.charAt(i + 1))) {
+                i++;
+                int c = 32;
+                int w = glyphWidth[c] * intScale;
+                int h = glyphHeight[c] * intScale;
+                int effectiveColor = isShadow ? (((activeColor & 0xFCFCFC) >> 2) | 0x111111) : activeColor;
+                float r = ((effectiveColor >> 16) & 0xFF) / 255.0f;
+                float g = ((effectiveColor >> 8) & 0xFF) / 255.0f;
+                float b = (effectiveColor & 0xFF) / 255.0f;
+                gui.drawTexturedQuad(textureId, curX, y, w, h, glyphU0[c], glyphV0[c], glyphU1[c], glyphV1[c], r, g, b, 1.0f);
+                curX += w;
                 continue;
             }
 

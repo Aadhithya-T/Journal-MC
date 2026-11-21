@@ -60,6 +60,7 @@ public abstract class Screen {
     public void addWidget(Widget widget) {
         if (widget != null && !widgets.contains(widget)) {
             widgets.add(widget);
+            widget.setFocusManager(this.focusManager);
             if (widget instanceof Button btn && !buttons.contains(btn)) {
                 buttons.add(btn);
             }
@@ -78,12 +79,19 @@ public abstract class Screen {
         return widgets;
     }
 
+    protected boolean isInitialized = false;
+
+    public boolean isInitialized() {
+        return isInitialized;
+    }
+
     public void init(int width, int height) {
         this.width = width;
         this.height = height;
         this.widgets.clear();
         this.buttons.clear();
         this.focusManager.clearFocus();
+        this.isInitialized = true;
     }
 
     public void init(int width, int height, FontRenderer font) {
@@ -91,6 +99,26 @@ public abstract class Screen {
             this.font = font;
         }
         init(width, height);
+    }
+
+    /**
+     * Called when the screen dimensions change.
+     * Preserves existing widgets and state while recalculating positions and sizes.
+     */
+    public void onResize(int width, int height) {
+        this.width = width;
+        this.height = height;
+        if (!isInitialized) {
+            init(width, height, font);
+        } else {
+            layout();
+        }
+    }
+
+    /**
+     * Repositions and resizes widgets without destroying their state.
+     */
+    public void layout() {
     }
 
     /**
@@ -216,10 +244,14 @@ public abstract class Screen {
     }
 
     public void charTyped(char character) {
+        charTyped((int) character);
+    }
+
+    public void charTyped(int codePoint) {
         syncLegacyButtons();
         Widget focused = focusManager.getFocusedWidget();
         if (focused != null && focused.isVisible() && focused.isEnabled()) {
-            focused.charTyped(character);
+            focused.charTyped(codePoint);
         }
     }
 

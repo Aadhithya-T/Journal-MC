@@ -61,6 +61,7 @@ public class GuiRenderer {
     private int prevBlendDstAlpha;
     private int prevActiveTexture;
     private int prevTextureBinding;
+    private int prevTexture0Binding;
     private int prevVao;
     private int prevVbo;
     private int prevProgram;
@@ -101,6 +102,12 @@ public class GuiRenderer {
     }
 
     private void initWhiteTexture() {
+        int prevActive = glGetInteger(GL_ACTIVE_TEXTURE);
+        int prevBinding = glGetInteger(GL_TEXTURE_BINDING_2D);
+
+        glActiveTexture(GL_TEXTURE0);
+        int prevTex0 = glGetInteger(GL_TEXTURE_BINDING_2D);
+
         whiteTextureId = glGenTextures();
         glBindTexture(GL_TEXTURE_2D, whiteTextureId);
 
@@ -116,14 +123,20 @@ public class GuiRenderer {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        glBindTexture(GL_TEXTURE_2D, 0);
+        glBindTexture(GL_TEXTURE_2D, prevTex0);
+        glActiveTexture(prevActive);
+        glBindTexture(GL_TEXTURE_2D, prevBinding);
     }
 
     public void begin(int screenWidth, int screenHeight) {
-        begin(screenWidth, screenHeight, 0, 0, screenWidth, screenHeight);
+        begin(screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, screenHeight);
     }
 
     public void begin(int logicalWidth, int logicalHeight, int viewportX, int viewportY, int viewportW, int viewportH) {
+        begin(logicalWidth, logicalHeight, viewportX, viewportY, viewportW, viewportH, 0);
+    }
+
+    public void begin(int logicalWidth, int logicalHeight, int viewportX, int viewportY, int viewportW, int viewportH, int framebufferHeight) {
         if (isDrawing) {
             // Safe recovery if previous begin was not properly closed
             end();
@@ -140,7 +153,15 @@ public class GuiRenderer {
         prevBlendSrcAlpha = glGetInteger(GL_BLEND_SRC_ALPHA);
         prevBlendDstAlpha = glGetInteger(GL_BLEND_DST_ALPHA);
         prevActiveTexture = glGetInteger(GL_ACTIVE_TEXTURE);
-        prevTextureBinding = glGetInteger(GL_TEXTURE_BINDING_2D);
+        if (prevActiveTexture == GL_TEXTURE0) {
+            prevTexture0Binding = glGetInteger(GL_TEXTURE_BINDING_2D);
+            prevTextureBinding = prevTexture0Binding;
+        } else {
+            glActiveTexture(GL_TEXTURE0);
+            prevTexture0Binding = glGetInteger(GL_TEXTURE_BINDING_2D);
+            glActiveTexture(prevActiveTexture);
+            prevTextureBinding = glGetInteger(GL_TEXTURE_BINDING_2D);
+        }
         prevVao = glGetInteger(GL_VERTEX_ARRAY_BINDING);
         prevVbo = glGetInteger(GL_ARRAY_BUFFER_BINDING);
         prevProgram = glGetInteger(GL_CURRENT_PROGRAM);
@@ -152,8 +173,9 @@ public class GuiRenderer {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(false);
 
-        // Configure viewport in OpenGL coordinates (Y=0 at bottom)
-        int fbH = (prevViewport[3] > 0) ? prevViewport[3] : (viewportY + viewportH);
+        // Configure viewport in OpenGL coordinates (Y=0 at bottom).
+        // Uses explicit framebufferHeight when provided; falls back to prevViewport[3] or bounds
+        int fbH = (framebufferHeight > 0) ? framebufferHeight : ((prevViewport[3] > 0) ? prevViewport[3] : (viewportY + viewportH));
         int glY = fbH - (viewportY + viewportH);
         glViewport(viewportX, glY, viewportW, viewportH);
 
@@ -206,7 +228,11 @@ public class GuiRenderer {
         try {
             flush();
         } finally {
-            // Restore previous bindings and shader
+            // Restore texture 0 binding first (flush temporarily uses GL_TEXTURE0)
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, prevTexture0Binding);
+
+            // Restore previous active texture unit and its binding
             glActiveTexture(prevActiveTexture);
             glBindTexture(GL_TEXTURE_2D, prevTextureBinding);
             glBindBuffer(GL_ARRAY_BUFFER, prevVbo);

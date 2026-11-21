@@ -18,6 +18,7 @@ public abstract class Widget {
     protected boolean isHovered = false;
     protected boolean isFocused = false;
     protected boolean isFocusable = true;
+    protected FocusManager focusManager = null;
 
     protected String tooltipText = null;
 
@@ -78,6 +79,10 @@ public abstract class Widget {
     }
 
     public boolean charTyped(char codePoint) {
+        return charTyped((int) codePoint);
+    }
+
+    public boolean charTyped(int codePoint) {
         return false;
     }
 
@@ -165,11 +170,25 @@ public abstract class Widget {
         return isVisible;
     }
 
+    public void setFocusManager(FocusManager focusManager) {
+        this.focusManager = focusManager;
+    }
+
+    public FocusManager getFocusManager() {
+        return focusManager;
+    }
+
     public void setVisible(boolean visible) {
         this.isVisible = visible;
         if (!visible) {
             isHovered = false;
-            isFocused = false;
+            if (isFocused) {
+                if (focusManager != null) {
+                    focusManager.clearFocus();
+                } else {
+                    isFocused = false;
+                }
+            }
         }
     }
 
@@ -181,7 +200,13 @@ public abstract class Widget {
         this.isEnabled = enabled;
         if (!enabled) {
             isHovered = false;
-            isFocused = false;
+            if (isFocused) {
+                if (focusManager != null) {
+                    focusManager.clearFocus();
+                } else {
+                    isFocused = false;
+                }
+            }
         }
     }
 
@@ -205,7 +230,13 @@ public abstract class Widget {
 
     public void setFocusable(boolean focusable) {
         this.isFocusable = focusable;
-        if (!focusable) isFocused = false;
+        if (!focusable && isFocused) {
+            if (focusManager != null) {
+                focusManager.clearFocus();
+            } else {
+                isFocused = false;
+            }
+        }
     }
 
     public String getTooltipText() {

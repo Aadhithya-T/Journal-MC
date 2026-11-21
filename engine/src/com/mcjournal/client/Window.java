@@ -14,16 +14,20 @@ import static org.lwjgl.system.MemoryUtil.*;
 
 public class Window {
     private long handle;
-    private int width;
-    private int height;
+    private int windowWidth;
+    private int windowHeight;
+    private int framebufferWidth;
+    private int framebufferHeight;
     private String title;
     private boolean resized;
     private boolean isCursorLocked = false;
 
     public Window(String title, int width, int height) {
         this.title = title;
-        this.width = width;
-        this.height = height;
+        this.windowWidth = width;
+        this.windowHeight = height;
+        this.framebufferWidth = width;
+        this.framebufferHeight = height;
         this.resized = false;
     }
 
@@ -42,31 +46,45 @@ public class Window {
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 
-        handle = glfwCreateWindow(width, height, title, NULL, NULL);
+        handle = glfwCreateWindow(windowWidth, windowHeight, title, NULL, NULL);
         if (handle == NULL) {
             throw new RuntimeException("Failed to create the GLFW window");
         }
 
-        glfwSetFramebufferSizeCallback(handle, (window, w, h) -> {
-            this.width = w;
-            this.height = h;
+        glfwSetWindowSizeCallback(handle, (window, w, h) -> {
+            this.windowWidth = Math.max(1, w);
+            this.windowHeight = Math.max(1, h);
             this.resized = true;
-            glViewport(0, 0, w, h);
         });
 
-        // Center the window on primary monitor
+        glfwSetFramebufferSizeCallback(handle, (window, w, h) -> {
+            this.framebufferWidth = Math.max(1, w);
+            this.framebufferHeight = Math.max(1, h);
+            this.resized = true;
+            glViewport(0, 0, this.framebufferWidth, this.framebufferHeight);
+        });
+
+        // Query initial physical framebuffer and logical window sizes
         try (MemoryStack stack = stackPush()) {
-            IntBuffer pWidth = stack.mallocInt(1);
-            IntBuffer pHeight = stack.mallocInt(1);
+            IntBuffer pWinW = stack.mallocInt(1);
+            IntBuffer pWinH = stack.mallocInt(1);
+            IntBuffer pFbW = stack.mallocInt(1);
+            IntBuffer pFbH = stack.mallocInt(1);
 
-            glfwGetWindowSize(handle, pWidth, pHeight);
+            glfwGetWindowSize(handle, pWinW, pWinH);
+            glfwGetFramebufferSize(handle, pFbW, pFbH);
+
+            this.windowWidth = Math.max(1, pWinW.get(0));
+            this.windowHeight = Math.max(1, pWinH.get(0));
+            this.framebufferWidth = Math.max(1, pFbW.get(0));
+            this.framebufferHeight = Math.max(1, pFbH.get(0));
+
             GLFWVidMode vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-
             if (vidmode != null) {
                 glfwSetWindowPos(
                     handle,
-                    (vidmode.width() - pWidth.get(0)) / 2,
-                    (vidmode.height() - pHeight.get(0)) / 2
+                    (vidmode.width() - this.windowWidth) / 2,
+                    (vidmode.height() - this.windowHeight) / 2
                 );
             }
         }
@@ -132,16 +150,38 @@ public class Window {
         return handle;
     }
 
+    /**
+     * Returns framebuffer width in physical pixels (OpenGL viewport).
+     */
     public int getWidth() {
-        return width;
+        return framebufferWidth;
     }
 
+    /**
+     * Returns framebuffer height in physical pixels (OpenGL viewport).
+     */
     public int getHeight() {
-        return height;
+        return framebufferHeight;
+    }
+
+    public int getFramebufferWidth() {
+        return framebufferWidth;
+    }
+
+    public int getFramebufferHeight() {
+        return framebufferHeight;
+    }
+
+    public int getWindowWidth() {
+        return windowWidth;
+    }
+
+    public int getWindowHeight() {
+        return windowHeight;
     }
 
     public float getAspectRatio() {
-        return (float) width / (float) (height > 0 ? height : 1);
+        return (float) framebufferWidth / (float) (framebufferHeight > 0 ? framebufferHeight : 1);
     }
 
     public boolean isResized() {

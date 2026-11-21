@@ -11,6 +11,9 @@ import org.lwjgl.glfw.GLFW;
 public class WorldEditScreen extends Screen {
     private final WorldSaveManager.SavedWorld world;
     private TextField nameField;
+    private Button saveBtn;
+    private Button deleteBtn;
+    private Button cancelBtn;
 
     private int formX;
     private int formW;
@@ -48,7 +51,42 @@ public class WorldEditScreen extends Screen {
 
     @Override
     public void init(int width, int height) {
+        String savedName = (nameField != null) ? nameField.getText() : null;
+        int savedCaret = (nameField != null) ? nameField.getCaretPosition() : 0;
+        boolean wasFocused = (nameField != null && focusManager.getFocusedWidget() == nameField);
+
         super.init(width, height);
+
+        // 1. World Name TextField
+        nameField = new TextField(1, 0, 0, 100, GuiLayout.ROW_HEIGHT);
+        nameField.setPlaceholder("Enter world name...");
+        nameField.setMaxLength(28);
+        String initialName = (savedName != null) ? savedName : ((world != null && world.name != null) ? world.name : "New Adventure");
+        nameField.setText(initialName);
+        if (savedName != null) {
+            nameField.setCaretPosition(savedCaret);
+        }
+        nameField.setOnEnterPressed(this::saveAndExit);
+        addWidget(nameField);
+        if (wasFocused || savedName == null) {
+            focusManager.setFocus(nameField);
+        }
+
+        // 2. Action Buttons at Bottom (Save | Delete | Cancel)
+        saveBtn = new Button(2, "Save", 0, 0, 100, GuiLayout.ROW_HEIGHT, this::saveAndExit);
+        addWidget(saveBtn);
+
+        deleteBtn = new Button(3, "Delete", 0, 0, 100, GuiLayout.ROW_HEIGHT, this::promptDeleteWorld);
+        addWidget(deleteBtn);
+
+        cancelBtn = new Button(4, "Cancel", 0, 0, 100, GuiLayout.ROW_HEIGHT, this::cancelAndExit);
+        addWidget(cancelBtn);
+
+        layout();
+    }
+
+    @Override
+    public void layout() {
         FontRenderer fr = getFont();
 
         GuiLayout.Column column = GuiLayout.contentColumn(width, 316, 16);
@@ -58,36 +96,48 @@ public class WorldEditScreen extends Screen {
         this.nameLabelY = Math.max(30, height / 2 - 76);
         int nameFieldY = nameLabelY + 12;
 
-        // 1. World Name TextField
-        nameField = new TextField(1, formX, nameFieldY, formW, GuiLayout.ROW_HEIGHT);
-        nameField.setPlaceholder("Enter world name...");
-        nameField.setMaxLength(28);
-        String initialName = (world != null && world.name != null) ? world.name : "New Adventure";
-        nameField.setText(initialName);
-        nameField.setOnEnterPressed(this::saveAndExit);
-        addWidget(nameField);
-        focusManager.setFocus(nameField);
+        if (nameField != null) {
+            nameField.setPosition(formX, nameFieldY);
+            nameField.setSize(formW, GuiLayout.ROW_HEIGHT);
+        }
 
-        // 2. Info Card Geometry
+        // Info Card Geometry
         int padY = 6;
         int bodyH = Math.round(fr.getLineHeight(TextStyle.BODY));
         int capH = Math.round(fr.getLineHeight(TextStyle.CAPTION));
         this.cardH = padY * 2 + bodyH + 4 + capH + 4 + capH;
         this.cardY = nameFieldY + GuiLayout.ROW_HEIGHT + 14;
 
-        // 3. Action Buttons at Bottom (Save | Delete | Cancel)
+        // Action Buttons at Bottom (Save | Delete | Cancel)
         int btnH = GuiLayout.ROW_HEIGHT;
         int btnY = height - GuiLayout.BOTTOM_MARGIN;
         GuiLayout.ButtonSlot[] slots = GuiLayout.distributeRow(formX, formW, 3, GuiLayout.GUTTER);
 
-        Button saveBtn = new Button(2, "Save", slots[0].x(), btnY, slots[0].width(), btnH, this::saveAndExit);
-        addWidget(saveBtn);
+        if (saveBtn != null) {
+            saveBtn.setPosition(slots[0].x(), btnY);
+            saveBtn.setSize(slots[0].width(), btnH);
+        }
 
-        Button deleteBtn = new Button(3, "Delete", slots[1].x(), btnY, slots[1].width(), btnH, this::promptDeleteWorld);
-        addWidget(deleteBtn);
+        if (deleteBtn != null) {
+            deleteBtn.setPosition(slots[1].x(), btnY);
+            deleteBtn.setSize(slots[1].width(), btnH);
+        }
 
-        Button cancelBtn = new Button(4, "Cancel", slots[2].x(), btnY, slots[2].width(), btnH, this::cancelAndExit);
-        addWidget(cancelBtn);
+        if (cancelBtn != null) {
+            cancelBtn.setPosition(slots[2].x(), btnY);
+            cancelBtn.setSize(slots[2].width(), btnH);
+        }
+    }
+
+    @Override
+    public void onResize(int width, int height) {
+        this.width = width;
+        this.height = height;
+        if (!isInitialized) {
+            init(width, height, font);
+        } else {
+            layout();
+        }
     }
 
     public void saveAndExit() {

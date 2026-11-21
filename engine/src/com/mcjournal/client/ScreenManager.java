@@ -65,10 +65,11 @@ public class ScreenManager {
             screenStack.push(screen);
             if (window != null) {
                 window.lockCursor(false);
-                scaleManager.update(window.getWidth(), window.getHeight(), window.getWidth(), window.getHeight());
+                scaleManager.update(window.getFramebufferWidth(), window.getFramebufferHeight(),
+                                     window.getWindowWidth(), window.getWindowHeight());
             }
-            int initW = screen.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : (window != null ? window.getWidth() : scaleManager.getFramebufferWidth());
-            int initH = screen.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getHeight() : scaleManager.getFramebufferHeight());
+            int initW = screen.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : (window != null ? window.getFramebufferWidth() : scaleManager.getFramebufferWidth());
+            int initH = screen.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getFramebufferHeight() : scaleManager.getFramebufferHeight());
             screen.init(initW, initH, lastFontRenderer);
             screen.onOpened();
         } else {
@@ -96,11 +97,12 @@ public class ScreenManager {
 
         if (window != null) {
             window.lockCursor(false);
-            scaleManager.update(window.getWidth(), window.getHeight(), window.getWidth(), window.getHeight());
+            scaleManager.update(window.getFramebufferWidth(), window.getFramebufferHeight(),
+                                 window.getWindowWidth(), window.getWindowHeight());
         }
 
-        int initW = child.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : (window != null ? window.getWidth() : scaleManager.getFramebufferWidth());
-        int initH = child.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getHeight() : scaleManager.getFramebufferHeight());
+        int initW = child.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : (window != null ? window.getFramebufferWidth() : scaleManager.getFramebufferWidth());
+        int initH = child.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : (window != null ? window.getFramebufferHeight() : scaleManager.getFramebufferHeight());
         child.init(initW, initH, lastFontRenderer);
         child.onOpened();
     }
@@ -168,8 +170,10 @@ public class ScreenManager {
             }
             double guiX = scaleManager.windowToGuiX(mouseX);
             double guiY = scaleManager.windowToGuiY(mouseY);
+            currentScreen.update(guiX, guiY);
             return currentScreen.mouseClicked(guiX, guiY, button);
         } else {
+            currentScreen.update(mouseX, mouseY);
             return currentScreen.mouseClicked(mouseX, mouseY, button);
         }
     }
@@ -196,25 +200,31 @@ public class ScreenManager {
         }
     }
 
-    public void onResize(int width, int height) {
-        scaleManager.update(width, height, width, height);
+    public void onResize(int fbWidth, int fbHeight, int winWidth, int winHeight) {
+        scaleManager.update(fbWidth, fbHeight, winWidth, winHeight);
         for (Screen screen : screenStack) {
-            if (screen.usesLogicalCoordinates()) {
-                screen.init(scaleManager.getGuiWidth(), scaleManager.getGuiHeight(), lastFontRenderer);
-            } else {
-                screen.init(width, height, lastFontRenderer);
-            }
+            int newW = screen.usesLogicalCoordinates() ? scaleManager.getGuiWidth() : fbWidth;
+            int newH = screen.usesLogicalCoordinates() ? scaleManager.getGuiHeight() : fbHeight;
+            screen.onResize(newW, newH);
         }
     }
 
-    public void render(GuiRenderer guiRenderer, FontRenderer fontRenderer, InputHandler input, float deltaTime, int width, int height) {
+    public void onResize(int width, int height) {
+        int winW = (window != null) ? window.getWindowWidth() : width;
+        int winH = (window != null) ? window.getWindowHeight() : height;
+        onResize(width, height, winW, winH);
+    }
+
+    public void render(GuiRenderer guiRenderer, FontRenderer fontRenderer, InputHandler input, float deltaTime,
+                       int fbWidth, int fbHeight, int winWidth, int winHeight) {
         this.lastFontRenderer = fontRenderer;
         if (currentScreen != null && guiRenderer != null && fontRenderer != null && input != null) {
-            scaleManager.update(width, height, width, height);
+            scaleManager.update(fbWidth, fbHeight, winWidth, winHeight);
             if (currentScreen.usesLogicalCoordinates()) {
                 guiRenderer.begin(scaleManager.getGuiWidth(), scaleManager.getGuiHeight(),
                         scaleManager.getViewportX(), scaleManager.getViewportY(),
-                        scaleManager.getViewportWidth(), scaleManager.getViewportHeight());
+                        scaleManager.getViewportWidth(), scaleManager.getViewportHeight(),
+                        scaleManager.getFramebufferHeight());
                 try {
                     double mx = scaleManager.windowToGuiX(input.getMouseX());
                     double my = scaleManager.windowToGuiY(input.getMouseY());
@@ -223,7 +233,7 @@ public class ScreenManager {
                     guiRenderer.end();
                 }
             } else {
-                guiRenderer.begin(width, height);
+                guiRenderer.begin(fbWidth, fbHeight);
                 try {
                     currentScreen.render(guiRenderer, fontRenderer, input.getMouseX(), input.getMouseY(), deltaTime);
                 } finally {
@@ -231,5 +241,11 @@ public class ScreenManager {
                 }
             }
         }
+    }
+
+    public void render(GuiRenderer guiRenderer, FontRenderer fontRenderer, InputHandler input, float deltaTime, int width, int height) {
+        int winW = (window != null) ? window.getWindowWidth() : width;
+        int winH = (window != null) ? window.getWindowHeight() : height;
+        render(guiRenderer, fontRenderer, input, deltaTime, width, height, winW, winH);
     }
 }

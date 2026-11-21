@@ -33,8 +33,8 @@ public class InputHandler {
 
         glfwSetCharCallback(windowHandle, (window, codepoint) -> {
             if (app != null && app.getCurrentScreen() != null) {
-                if (Character.isBmpCodePoint(codepoint) && !Character.isISOControl(codepoint)) {
-                    app.getCurrentScreen().charTyped((char) codepoint);
+                if (Character.isValidCodePoint(codepoint) && !Character.isISOControl(codepoint)) {
+                    app.getCurrentScreen().charTyped(codepoint);
                 }
             }
         });

@@ -18,6 +18,7 @@ import org.lwjgl.glfw.GLFW;
  */
 public class JournalStatsScreen extends Screen {
     private final Screen parentScreen;
+    private Button backBtn;
 
     public JournalStatsScreen(MCJournalApp app, Screen parentScreen) {
         super(app);
@@ -37,14 +38,35 @@ public class JournalStatsScreen extends Screen {
     public void init(int width, int height) {
         super.init(width, height);
 
+        backBtn = new Button(1, "Back", 0, 0, 200, 20, this::returnToParent);
+        addWidget(backBtn);
+        focusManager.setFocus(backBtn);
+
+        layout();
+    }
+
+    @Override
+    public void layout() {
         int btnW = Math.min(200, width - 24);
         int btnH = 20;
         int btnX = GuiLayout.centerX(width, btnW);
         int btnY = height - 28;
 
-        Button backBtn = new Button(1, "Back", btnX, btnY, btnW, btnH, this::returnToParent);
-        addWidget(backBtn);
-        focusManager.setFocus(backBtn);
+        if (backBtn != null) {
+            backBtn.setPosition(btnX, btnY);
+            backBtn.setSize(btnW, btnH);
+        }
+    }
+
+    @Override
+    public void onResize(int width, int height) {
+        this.width = width;
+        this.height = height;
+        if (!isInitialized) {
+            init(width, height, font);
+        } else {
+            layout();
+        }
     }
 
     public void returnToParent() {

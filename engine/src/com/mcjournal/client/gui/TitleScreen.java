@@ -19,6 +19,9 @@ public class TitleScreen extends Screen {
     private final String currentSplash;
 
     private final JournalLogoRenderer logoRenderer = new JournalLogoRenderer();
+    private Button singleplayerBtn;
+    private Button optionsBtn;
+    private Button quitBtn;
 
     public TitleScreen(MCJournalApp app) {
         super(app);
@@ -43,31 +46,58 @@ public class TitleScreen extends Screen {
         super.init(width, height);
         logoRenderer.init();
 
-        int btnWidth = 200;
-        int btnHeight = 20;
-        int centerX = GuiLayout.centerX(width, btnWidth);
-
-        // Position menu buttons comfortably below logo
-        int startY = Math.max(70, height / 2 - 5);
-
-        // 1. Singleplayer Button (Row 1)
-        Button singleplayerBtn = new Button(1, "Singleplayer", centerX, startY, btnWidth, btnHeight, () -> {
+        singleplayerBtn = new Button(1, "Singleplayer", 0, 0, 200, 20, () -> {
             if (app != null) app.setScreen(new WorldSelectScreen(app));
         });
         addWidget(singleplayerBtn);
         focusManager.setFocus(singleplayerBtn);
 
-        // 2. Options... & Quit Game (Row 2, split 2-column)
-        int splitW = GuiLayout.buttonWidth(btnWidth, 2, 4); // 98px
-        Button optionsBtn = new Button(2, "Options...", centerX, startY + 24, splitW, btnHeight, () -> {
+        optionsBtn = new Button(2, "Options...", 0, 0, 98, 20, () -> {
             if (app != null) app.setScreen(new OptionsScreen(app, this));
         });
         addWidget(optionsBtn);
 
-        Button quitBtn = new Button(3, "Quit Game", centerX + splitW + 4, startY + 24, splitW, btnHeight, () -> {
+        quitBtn = new Button(3, "Quit Game", 0, 0, 98, 20, () -> {
             if (app != null) app.quitGame();
         });
         addWidget(quitBtn);
+
+        layout();
+    }
+
+    @Override
+    public void layout() {
+        int btnWidth = 200;
+        int btnHeight = 20;
+        int centerX = GuiLayout.centerX(width, btnWidth);
+        int startY = Math.max(70, height / 2 - 5);
+
+        if (singleplayerBtn != null) {
+            singleplayerBtn.setPosition(centerX, startY);
+            singleplayerBtn.setSize(btnWidth, btnHeight);
+        }
+
+        int splitW = GuiLayout.buttonWidth(btnWidth, 2, 4);
+        if (optionsBtn != null) {
+            optionsBtn.setPosition(centerX, startY + 24);
+            optionsBtn.setSize(splitW, btnHeight);
+        }
+
+        if (quitBtn != null) {
+            quitBtn.setPosition(centerX + splitW + 4, startY + 24);
+            quitBtn.setSize(splitW, btnHeight);
+        }
+    }
+
+    @Override
+    public void onResize(int width, int height) {
+        this.width = width;
+        this.height = height;
+        if (!isInitialized) {
+            init(width, height, font);
+        } else {
+            layout();
+        }
     }
 
     @Override

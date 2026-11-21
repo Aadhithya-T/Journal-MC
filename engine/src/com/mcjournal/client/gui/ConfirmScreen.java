@@ -21,6 +21,8 @@ public class ConfirmScreen extends Screen {
     private final boolean dangerMode;
     private final Runnable onConfirm;
     private final Runnable onCancel;
+    private Button confirmBtn;
+    private Button cancelBtn;
 
     public ConfirmScreen(MCJournalApp app, String title, String message, Runnable onConfirm, Runnable onCancel) {
         this(app, title, message, "Confirm", "Cancel", false, onConfirm, onCancel);
@@ -76,25 +78,47 @@ public class ConfirmScreen extends Screen {
     public void init(int width, int height) {
         super.init(width, height);
 
-        // Content column and button row matching WorldCreateScreen & WorldEditScreen
+        confirmBtn = new Button(1, confirmText, 0, 0, 100, GuiLayout.ROW_HEIGHT, this::handleConfirm);
+        addWidget(confirmBtn);
+
+        cancelBtn = new Button(2, cancelText, 0, 0, 100, GuiLayout.ROW_HEIGHT, this::handleCancel);
+        addWidget(cancelBtn);
+
+        if (dangerMode) {
+            focusManager.setFocus(cancelBtn);
+        } else {
+            focusManager.setFocus(confirmBtn);
+        }
+
+        layout();
+    }
+
+    @Override
+    public void layout() {
         GuiLayout.Column col = GuiLayout.contentColumn(width, 320, GuiLayout.MARGIN);
         int btnH = GuiLayout.ROW_HEIGHT;
         int btnY = height - GuiLayout.BOTTOM_MARGIN;
         GuiLayout.ButtonSlot[] slots = GuiLayout.distributeRow(col.x, col.width, 2, 8);
 
-        // 1. Confirm Button
-        Button confirmBtn = new Button(1, confirmText, slots[0].x(), btnY, slots[0].width(), btnH, this::handleConfirm);
-        addWidget(confirmBtn);
+        if (confirmBtn != null) {
+            confirmBtn.setPosition(slots[0].x(), btnY);
+            confirmBtn.setSize(slots[0].width(), btnH);
+        }
 
-        // 2. Cancel Button
-        Button cancelBtn = new Button(2, cancelText, slots[1].x(), btnY, slots[1].width(), btnH, this::handleCancel);
-        addWidget(cancelBtn);
+        if (cancelBtn != null) {
+            cancelBtn.setPosition(slots[1].x(), btnY);
+            cancelBtn.setSize(slots[1].width(), btnH);
+        }
+    }
 
-        // Focus cancel by default in dangerMode for safety; otherwise confirm
-        if (dangerMode) {
-            focusManager.setFocus(cancelBtn);
+    @Override
+    public void onResize(int width, int height) {
+        this.width = width;
+        this.height = height;
+        if (!isInitialized) {
+            init(width, height, font);
         } else {
-            focusManager.setFocus(confirmBtn);
+            layout();
         }
     }
 

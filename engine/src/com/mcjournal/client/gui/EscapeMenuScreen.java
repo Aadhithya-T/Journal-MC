@@ -8,6 +8,11 @@ import org.lwjgl.glfw.GLFW;
  * centralized input dispatch, and screen navigation to Journal & Stats.
  */
 public class EscapeMenuScreen extends Screen {
+    private Button resumeBtn;
+    private Button journalBtn;
+    private Button optionsBtn;
+    private Button quitBtn;
+
     public EscapeMenuScreen(MCJournalApp app) {
         super(app);
     }
@@ -21,35 +26,68 @@ public class EscapeMenuScreen extends Screen {
     public void init(int width, int height) {
         super.init(width, height);
 
-        int btnW = Math.min(200, width - 24);
-        int btnH = 20;
-        int centerX = GuiLayout.centerX(width, btnW);
-        int startY = Math.max(50, height / 2 - 44);
-
         // 1. Back to Game (Resume)
-        Button resumeBtn = new Button(1, "Back to Game", centerX, startY, btnW, btnH, () -> {
+        resumeBtn = new Button(1, "Back to Game", 0, 0, 200, 20, () -> {
             if (app != null) app.resumeGame();
         });
         addWidget(resumeBtn);
         focusManager.setFocus(resumeBtn);
 
         // 2. Journal & Stats
-        Button journalBtn = new Button(2, "Journal & Stats", centerX, startY + 24, btnW, btnH, () -> {
+        journalBtn = new Button(2, "Journal & Stats", 0, 0, 200, 20, () -> {
             if (app != null) app.setScreen(new JournalStatsScreen(app, this));
         });
         addWidget(journalBtn);
 
         // 3. Options...
-        Button optionsBtn = new Button(3, "Options...", centerX, startY + 48, btnW, btnH, () -> {
+        optionsBtn = new Button(3, "Options...", 0, 0, 200, 20, () -> {
             if (app != null) app.setScreen(new OptionsScreen(app, this));
         });
         addWidget(optionsBtn);
 
         // 4. Save and Quit to Title
-        Button quitBtn = new Button(4, "Save and Quit to Title", centerX, startY + 72, btnW, btnH, () -> {
+        quitBtn = new Button(4, "Save and Quit to Title", 0, 0, 200, 20, () -> {
             if (app != null) app.saveAndQuitToTitle();
         });
         addWidget(quitBtn);
+
+        layout();
+    }
+
+    @Override
+    public void layout() {
+        int btnW = Math.min(200, width - 24);
+        int btnH = 20;
+        int centerX = GuiLayout.centerX(width, btnW);
+        int startY = Math.max(50, height / 2 - 44);
+
+        if (resumeBtn != null) {
+            resumeBtn.setPosition(centerX, startY);
+            resumeBtn.setSize(btnW, btnH);
+        }
+        if (journalBtn != null) {
+            journalBtn.setPosition(centerX, startY + 24);
+            journalBtn.setSize(btnW, btnH);
+        }
+        if (optionsBtn != null) {
+            optionsBtn.setPosition(centerX, startY + 48);
+            optionsBtn.setSize(btnW, btnH);
+        }
+        if (quitBtn != null) {
+            quitBtn.setPosition(centerX, startY + 72);
+            quitBtn.setSize(btnW, btnH);
+        }
+    }
+
+    @Override
+    public void onResize(int width, int height) {
+        this.width = width;
+        this.height = height;
+        if (!isInitialized) {
+            init(width, height, font);
+        } else {
+            layout();
+        }
     }
 
     @Override
